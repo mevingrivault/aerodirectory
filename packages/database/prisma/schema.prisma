@@ -1,0 +1,338 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  VISITOR
+  MEMBER
+  MODERATOR
+  ADMIN
+}
+
+enum AerodromeStatus {
+  OPEN
+  CLOSED
+  RESTRICTED
+  SEASONAL
+}
+
+enum SurfaceType {
+  ASPHALT
+  CONCRETE
+  GRASS
+  GRAVEL
+  DIRT
+  WATER
+  OTHER
+}
+
+enum FrequencyType {
+  TWR
+  AFIS
+  ATIS
+  APP
+  UNICOM
+  OTHER
+}
+
+enum FuelType {
+  AVGAS_100LL
+  UL91
+  JET_A1
+}
+
+enum PaymentType {
+  CARD
+  CASH
+  TOTAL_CARD
+  BP_CARD
+  OTHER
+}
+
+enum VisitStatus {
+  SEEN
+  VISITED
+  FAVORITE
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  EMAIL_CHANGE
+  TOTP_ENABLE
+  TOTP_DISABLE
+  ACCOUNT_CREATE
+  ACCOUNT_DELETE
+  ROLE_CHANGE
+  COMMENT_CREATE
+  COMMENT_DELETE
+  CORRECTION_PROPOSE
+  REPORT_CREATE
+  ADMIN_ACTION
+}
+
+// ─── User ────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String
+  totpSecret    String?
+  totpEnabled   Boolean   @default(false)
+  role          Role      @default(MEMBER)
+  displayName   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  visits           Visit[]
+  comments         Comment[]
+  corrections      Correction[]
+  reports          Report[]
+  aircraftProfiles AircraftProfile[]
+  auditLogs        AuditLog[]
+  emailTokens      EmailToken[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model EmailToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  type      String // "verify" | "reset"
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("email_tokens")
+}
+
+// ─── Aerodrome ───────────────────────────────────────────
+
+model Aerodrome {
+  id               String          @id @default(cuid())
+  name             String
+  icaoCode         String?         @unique
+  latitude         Float
+  longitude        Float
+  elevation        Int? // feet
+  city             String?
+  region           String?
+  department       String?
+  status           AerodromeStatus @default(OPEN)
+  aipLink          String?
+  vacLink          String?
+  websiteUrl       String?
+  description      String?
+  hasRestaurant    Boolean         @default(false)
+  hasBikes         Boolean         @default(false)
+  hasTransport     Boolean         @default(false)
+  hasAccommodation Boolean         @default(false)
+  hasMaintenance   Boolean         @default(false)
+  hasHangars       Boolean         @default(false)
+  nightOperations  Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  runways     Runway[]
+  frequencies Frequency[]
+  fuels       Fuel[]
+  visits      Visit[]
+  comments    Comment[]
+  corrections Correction[]
+  reports     Report[]
+
+  // PostGIS point stored as geometry column via raw SQL migration
+  // We use lat/lng floats for Prisma and a generated column for PostGIS queries
+
+  @@index([icaoCode])
+  @@index([name])
+  @@index([city])
+  @@index([region])
+  @@map("aerodromes")
+}
+
+model Runway {
+  id          String      @id @default(cuid())
+  aerodromeId String
+  identifier  String // e.g. "09/27"
+  length      Int // meters
+  width       Int? // meters
+  surface     SurfaceType
+  lighting    Boolean     @default(false)
+  remarks     String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("runways")
+}
+
+model Frequency {
+  id          String        @id @default(cuid())
+  aerodromeId String
+  type        FrequencyType
+  mhz         Float
+  callsign    String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("frequencies")
+}
+
+model Fuel {
+  id                String      @id @default(cuid())
+  aerodromeId       String
+  type              FuelType
+  available         Boolean     @default(true)
+  selfService       Boolean     @default(false)
+  availabilityHours String? // e.g. "08:00-18:00"
+  paymentType       PaymentType @default(CARD)
+  remarks           String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("fuels")
+}
+
+// ─── Collaborative features ─────────────────────────────
+
+model Visit {
+  id          String      @id @default(cuid())
+  userId      String
+  aerodromeId String
+  status      VisitStatus @default(VISITED)
+  visitedAt   DateTime    @default(now())
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, aerodromeId])
+  @@map("visits")
+}
+
+model Comment {
+  id            String        @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  content       String
+  contentStatus ContentStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@index([aerodromeId])
+  @@map("comments")
+}
+
+model Correction {
+  id            String        @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  field         String
+  currentValue  String?
+  proposedValue String
+  reason        String?
+  contentStatus ContentStatus @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("corrections")
+}
+
+model Report {
+  id            String        @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  targetType    String // "comment" | "correction"
+  targetId      String
+  reason        String
+  contentStatus ContentStatus @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+// ─── Flight Planner ──────────────────────────────────────
+
+model AircraftProfile {
+  id               String       @id @default(cuid())
+  userId           String
+  name             String // e.g. "My C172"
+  tas              Float // knots
+  fuelConsumption  Float // liters per hour
+  hourlyCost       Float // euros per hour
+  fuelRange        Float // nautical miles
+  minRunwayLength  Int // meters
+  allowedSurfaces  SurfaceType[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("aircraft_profiles")
+}
+
+// ─── Audit Log ───────────────────────────────────────────
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  action    AuditAction
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

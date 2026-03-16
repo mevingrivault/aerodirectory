@@ -1,0 +1,40 @@
+{
+  "name": "@aerodirectory/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main",
+    "start:prod": "node dist/main",
+    "lint": "tsc --noEmit",
+    "test": "echo 'No tests yet'"
+  },
+  "dependencies": {
+    "@aerodirectory/database": "workspace:*",
+    "@aerodirectory/shared": "workspace:*",
+    "@nestjs/common": "^10.4.12",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/core": "^10.4.12",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/platform-fastify": "^10.4.12",
+    "@nestjs/throttler": "^6.3.0",
+    "argon2": "^0.41.1",
+    "@fastify/cookie": "^10.0.2",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/csrf-protection": "^7.0.2",
+    "@fastify/helmet": "^12.0.1",
+    "class-transformer": "^0.5.1",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.9",
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.6.3"
+  }
+}
