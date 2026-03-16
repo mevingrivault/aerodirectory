@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,8 @@ import {
   Eye,
   Heart,
   MessageSquare,
+  ArrowLeft,
+  Navigation,
 } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -38,6 +41,8 @@ interface AerodromeDetail {
   city: string | null;
   region: string | null;
   department: string | null;
+  countryCode: string;
+  aerodromeType: string;
   status: string;
   description: string | null;
   aipLink: string | null;
@@ -50,6 +55,8 @@ interface AerodromeDetail {
   hasMaintenance: boolean;
   hasHangars: boolean;
   nightOperations: boolean;
+  source: string | null;
+  lastSyncedAt: string | null;
   runways: {
     id: string;
     identifier: string;
@@ -77,12 +84,30 @@ interface AerodromeDetail {
   _count: { visits: number; comments: number };
 }
 
+interface NearbyAerodrome {
+  id: string;
+  name: string;
+  icaoCode: string | null;
+  distanceKm: number;
+}
+
 interface Comment {
   id: string;
   content: string;
   createdAt: string;
   user: { id: string; displayName: string | null };
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  SMALL_AIRPORT: "Small Airport",
+  INTERNATIONAL_AIRPORT: "International Airport",
+  GLIDER_SITE: "Glider Site",
+  ULTRALIGHT_FIELD: "Ultralight Field",
+  HELIPORT: "Heliport",
+  MILITARY: "Military",
+  SEAPLANE_BASE: "Seaplane Base",
+  OTHER: "Other",
+};
 
 export default function AerodromeDetailPage() {
   const params = useParams();
@@ -105,7 +130,22 @@ export default function AerodromeDetailPage() {
   });
 
   const ad = aerodromeRes?.data;
+
+  // Fetch nearby aerodromes once we have coordinates
+  const { data: nearbyRes } = useQuery({
+    queryKey: ["nearby", ad?.latitude, ad?.longitude],
+    queryFn: () =>
+      apiClient.get<NearbyAerodrome[]>("/aerodromes/nearby", {
+        lat: ad!.latitude.toString(),
+        lng: ad!.longitude.toString(),
+        radiusKm: "50",
+        limit: "6",
+      }),
+    enabled: !!ad,
+  });
+
   const comments = commentsRes?.data ?? [];
+  const nearbyAerodromes = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
 
   const handleVisit = async (status: string) => {
     await apiClient.put(`/visits/${id}`, { status });
@@ -149,9 +189,17 @@ export default function AerodromeDetailPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Back link */}
+      <Link
+        href="/search"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to search
+      </Link>
+
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
           <h1 className="text-3xl font-bold">{ad.name}</h1>
           {ad.icaoCode && (
             <Badge variant="secondary" className="text-lg">
@@ -161,15 +209,27 @@ export default function AerodromeDetailPage() {
           <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
             {ad.status}
           </Badge>
+          <Badge variant="outline">
+            {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+          </Badge>
         </div>
         <p className="text-muted-foreground flex items-center gap-1">
           <MapPin className="h-4 w-4" />
           {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
-          {ad.elevation && ` — ${ad.elevation} ft`}
+          {ad.elevation != null && ` — ${ad.elevation} ft`}
         </p>
         <p className="text-sm text-muted-foreground mt-1">
           {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
         </p>
+
+        {/* Source info */}
+        {ad.source && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Data source: {ad.source}
+            {ad.lastSyncedAt &&
+              ` — Last synced: ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
+          </p>
+        )}
 
         {/* Visit buttons (authenticated only) */}
         {user && (
@@ -306,6 +366,38 @@ export default function AerodromeDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Nearby Aerodromes */}
+        {nearbyAerodromes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Navigation className="h-5 w-5" /> Nearby Aerodromes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {nearbyAerodromes.map((n) => (
+                  <Link
+                    key={n.id}
+                    href={`/aerodrome/${n.id}`}
+                    className="flex items-center justify-between rounded-md border p-2 hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-sm">
+                      {n.name}
+                      {n.icaoCode && (
+                        <span className="ml-1 text-muted-foreground">({n.icaoCode})</span>
+                      )}
+                    </span>
+                    <span className="text-xs font-medium text-primary">
+                      {n.distanceKm.toFixed(0)} km
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Links */}
         {(ad.aipLink || ad.vacLink || ad.websiteUrl) && (

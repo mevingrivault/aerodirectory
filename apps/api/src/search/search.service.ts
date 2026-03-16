@@ -27,6 +27,11 @@ export class SearchService {
       where.status = filters.status;
     }
 
+    // Aerodrome type filter
+    if (filters.aerodromeType) {
+      where.aerodromeType = filters.aerodromeType;
+    }
+
     // Amenity filters
     if (filters.hasRestaurant !== undefined) {
       where.hasRestaurant = filters.hasRestaurant;

@@ -16,9 +16,11 @@ import {
   AerodromeCreateSchema,
   AerodromeUpdateSchema,
   PaginationSchema,
+  NearbySchema,
   type AerodromeCreateInput,
   type AerodromeUpdateInput,
   type PaginationInput,
+  type NearbyInput,
 } from "@aerodirectory/shared";
 
 @Controller("aerodromes")
@@ -35,6 +37,20 @@ export class AerodromeController {
       query.limit,
     );
     return paginated(data, total, query.page, query.limit);
+  }
+
+  @Public()
+  @Get("nearby")
+  async nearby(
+    @Query(new ZodValidationPipe(NearbySchema)) query: NearbyInput,
+  ) {
+    const data = await this.aerodromes.findNearby(
+      query.lat,
+      query.lng,
+      query.radiusKm,
+      query.limit,
+    );
+    return ok(data);
   }
 
   @Public()
