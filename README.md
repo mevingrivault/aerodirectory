@@ -8,13 +8,29 @@ Collaborative directory of French aerodromes. Browse airfields, discover pilot s
 aerodirectory/
 ├── apps/
 │   ├── api/          # NestJS + Fastify REST API
+│   │   └── src/services/
+│   │       ├── openaip/          # openAIP API client
+│   │       ├── importers/openaip/ # openAIP importer + normalizer
+│   │       └── airspace/         # OpenAir parser (placeholder)
 │   └── web/          # Next.js 15 App Router frontend
 ├── packages/
 │   ├── shared/       # Zod schemas, TypeScript types, constants
 │   └── database/     # Prisma schema + client + seed data
+├── scripts/
+│   ├── setup.mjs     # Automated dev setup
+│   └── import-openaip.ts  # openAIP data import CLI
 ├── docker-compose.yml
 └── pnpm-workspace.yaml
 ```
+
+### Data flow
+
+```
+openAIP API  →  import script  →  PostgreSQL  →  NestJS API  →  Next.js frontend
+                (pnpm import:openaip)             (our DB)       (reads DB only)
+```
+
+The frontend and API **never** call openAIP directly at runtime. All user-facing data comes from our local database.
 
 ### Stack
 
@@ -23,6 +39,7 @@ aerodirectory/
 | Frontend | Next.js 15, TypeScript, Tailwind, shadcn/ui, MapLibre GL, TanStack Query |
 | Backend | NestJS 10 + Fastify, Zod validation, JWT auth |
 | Database | PostgreSQL 16 + PostGIS |
+| Data source | openAIP (initial import) |
 | Cache | Redis 7 |
 | Storage | S3-compatible (SeaweedFS in dev — Apache 2.0) |
 | Auth | Argon2id, TOTP (RFC 6238), JWT |
@@ -38,6 +55,7 @@ aerodirectory/
 - Audit logging for all sensitive events
 - Zod input validation on all endpoints
 - Role-based access control (VISITOR / MEMBER / MODERATOR / ADMIN)
+- openAIP API key never exposed to frontend
 
 ## Getting Started
 
@@ -81,7 +99,7 @@ pnpm db:generate
 # Run migrations
 pnpm db:migrate
 
-# Seed sample data
+# Seed sample data (5 demo aerodromes)
 pnpm db:seed
 
 # Start development servers
@@ -92,8 +110,88 @@ pnpm dev
 - Web: http://localhost:3000
 - Mailpit: http://localhost:8025
 - SeaweedFS S3 API: http://localhost:8333
-- SeaweedFS Filer: http://localhost:8888
-- SeaweedFS Master: http://localhost:9333
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `OPENAIP_API_KEY` | openAIP API key for data import | For import only |
+| `JWT_SECRET` | JWT signing secret | Yes |
+| `JWT_REFRESH_SECRET` | JWT refresh token secret | Yes |
+| `PORT` | API server port (default 4000) | No |
+| `CORS_ORIGINS` | Allowed CORS origins | No |
+| `NEXT_PUBLIC_API_URL` | API URL for frontend | Yes |
+
+### Getting an openAIP API Key
+
+1. Sign up at https://www.openaip.net/users/signup
+2. Go to your account settings and generate an API key
+3. Add it to your `.env` file:
+   ```
+   OPENAIP_API_KEY=ae04f0a4c8ebdae9528c4e2aedbf39c9
+   ```
+
+## Importing Data from openAIP
+
+The openAIP import fetches all French aerodromes and stores them locally.
+
+```bash
+# Make sure your .env has OPENAIP_API_KEY set
+# Make sure PostgreSQL is running and migrated
+
+pnpm import:openaip
+```
+
+### How the sync works
+
+1. Fetches all airports for France from the openAIP API (paginated)
+2. Normalizes each airport: trims strings, uppercases ICAO, converts elevation to feet, maps surface/frequency types to our enums
+3. Upserts each airport using `source + sourceId` as the unique key
+4. Replaces runway and frequency data per airport (inside a transaction)
+5. Skips airports whose data hasn't changed (hash comparison)
+
+The import is **idempotent** — running it multiple times is safe and won't create duplicates. Changed records are updated, unchanged records are skipped.
+
+### What is imported
+
+| Field | Source |
+|-------|--------|
+| Name, ICAO, coordinates, elevation | openAIP airport data |
+| Runways (identifier, length, width, surface, lighting) | openAIP runway data |
+| Frequencies (type, MHz, callsign) | openAIP frequency data |
+| Airport type (small, international, glider, etc.) | openAIP type code |
+
+## Database Entities
+
+| Table | Description |
+|-------|-------------|
+| `aerodromes` | Core aerodrome data with source tracking |
+| `runways` | Runway details per aerodrome |
+| `frequencies` | Radio frequencies per aerodrome |
+| `fuels` | Fuel availability per aerodrome |
+| `airspaces` | Airspace data (future — table exists, no data yet) |
+| `users` | User accounts with auth |
+| `visits` | User visit tracking (Pokédex) |
+| `comments` | User comments on aerodromes |
+| `corrections` | Data correction proposals |
+| `reports` | Content reports |
+| `aircraft_profiles` | Flight planner profiles |
+| `audit_logs` | Security audit trail |
+
+## Pages & Features
+
+| Page | Route | Description |
+|------|-------|-------------|
+| Home | `/` | Landing page |
+| Search | `/search` | Search & filter aerodromes, nearby discovery |
+| Map | `/map` | Interactive map with color-coded markers by type |
+| Detail | `/aerodrome/[id]` | Full aerodrome info, runways, frequencies, nearby |
+| Pokédex | `/pokedex` | Pilot logbook & badges |
+| Planner | `/planner` | Flight planner with aircraft profiles |
+| Login | `/login` | Authentication |
+| Register | `/register` | Account creation |
+| Profile | `/profile` | User profile & 2FA setup |
 
 ## API Endpoints
 
@@ -109,6 +207,7 @@ pnpm dev
 
 ### Aerodromes
 - `GET /api/v1/aerodromes` — List (paginated)
+- `GET /api/v1/aerodromes/nearby?lat=&lng=&radiusKm=` — Nearby search
 - `GET /api/v1/aerodromes/:id` — Detail
 - `GET /api/v1/aerodromes/icao/:code` — By ICAO code
 - `POST /api/v1/aerodromes` — Create (ADMIN/MOD)
@@ -117,6 +216,11 @@ pnpm dev
 
 ### Search
 - `GET /api/v1/search` — Full-text + filter + geospatial search
+  - `q` — free text (name, ICAO, city)
+  - `aerodromeType` — filter by type
+  - `lat`, `lng`, `radiusKm` — geospatial filter
+  - `sortBy` — name, distance, icaoCode, city
+  - `hasRestaurant`, `nightOperations`, `fuel`, `surface`, `minRunwayLength`
 
 ### Visits (Pokédex)
 - `GET /api/v1/visits` — My visits
@@ -140,6 +244,22 @@ pnpm dev
 
 ### Health
 - `GET /api/v1/health` — Health check
+
+## Out of Scope (this iteration)
+
+- SIA ingestion
+- OurAirports ingestion
+- Multi-source data reconciliation
+- Airspace import (table exists, parser placeholder ready)
+- NOTAM / weather integration
+- Advanced collaborative editing
+- Photo uploads
+- Admin backoffice
+
+## References
+
+- [openAIP API Documentation](https://www.openaip.net/docs)
+- [OpenAir File Format](https://github.com/naviter/seeyou_file_formats/blob/main/OpenAir_File_Format_Support.md)
 
 ## License
 

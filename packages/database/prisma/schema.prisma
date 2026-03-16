@@ -23,6 +23,17 @@ enum AerodromeStatus {
   SEASONAL
 }
 
+enum AerodromeType {
+  SMALL_AIRPORT
+  INTERNATIONAL_AIRPORT
+  GLIDER_SITE
+  ULTRALIGHT_FIELD
+  HELIPORT
+  MILITARY
+  SEAPLANE_BASE
+  OTHER
+}
+
 enum SurfaceType {
   ASPHALT
   CONCRETE
@@ -39,6 +50,9 @@ enum FrequencyType {
   ATIS
   APP
   UNICOM
+  GROUND
+  CTAF
+  FIS
   OTHER
 }
 
@@ -140,6 +154,8 @@ model Aerodrome {
   city             String?
   region           String?
   department       String?
+  countryCode      String          @default("FR")
+  aerodromeType    AerodromeType   @default(SMALL_AIRPORT)
   status           AerodromeStatus @default(OPEN)
   aipLink          String?
   vacLink          String?
@@ -152,8 +168,15 @@ model Aerodrome {
   hasMaintenance   Boolean         @default(false)
   hasHangars       Boolean         @default(false)
   nightOperations  Boolean         @default(false)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+
+  // ─── Source tracking ──────────────────────────
+  source         String? // e.g. "openaip", "sia", "manual"
+  sourceId       String? // external unique ID from data source
+  sourceRawHash  String? // hash of raw payload for change detection
+  lastSyncedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   runways     Runway[]
   frequencies Frequency[]
@@ -163,13 +186,13 @@ model Aerodrome {
   corrections Correction[]
   reports     Report[]
 
-  // PostGIS point stored as geometry column via raw SQL migration
-  // We use lat/lng floats for Prisma and a generated column for PostGIS queries
-
+  @@unique([source, sourceId])
   @@index([icaoCode])
   @@index([name])
   @@index([city])
   @@index([region])
+  @@index([countryCode])
+  @@index([aerodromeType])
   @@map("aerodromes")
 }
 
@@ -333,4 +356,24 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Airspace (future use) ──────────────────────────────
+
+model Airspace {
+  id         String  @id @default(cuid())
+  name       String
+  class      String // A, B, C, D, E, G, CTR, TMA, etc.
+  lowerLimit String // e.g. "SFC", "FL065", "3500ft AMSL"
+  upperLimit String // e.g. "FL195", "6000ft AMSL"
+  geometry   Json // GeoJSON polygon
+  source     String? // e.g. "openaip", "openair"
+  sourceId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, sourceId])
+  @@index([class])
+  @@map("airspaces")
 }
