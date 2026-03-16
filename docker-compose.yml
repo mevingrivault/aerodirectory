@@ -27,17 +27,40 @@ services:
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+  # SeaweedFS — S3-compatible object storage (Apache 2.0 license)
+  # Master: coordinates the cluster
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:latest
+    command: master -ip=seaweedfs-master -ip.bind=0.0.0.0
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9333:9333"   # Master HTTP
+      - "19333:19333" # Master gRPC
     volumes:
-      - minio_data:/data
+      - seaweedfs_master:/data
+
+  # Volume: stores actual file data
+  seaweedfs-volume:
+    image: chrislusf/seaweedfs:latest
+    command: volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -port=8080
+    ports:
+      - "8082:8080"   # Volume HTTP
+    depends_on:
+      - seaweedfs-master
+    volumes:
+      - seaweedfs_volume:/data
+
+  # Filer + S3 gateway: provides S3-compatible API
+  seaweedfs-filer:
+    image: chrislusf/seaweedfs:latest
+    command: filer -master=seaweedfs-master:9333 -ip.bind=0.0.0.0 -s3 -s3.port=8333
+    ports:
+      - "8888:8888"   # Filer HTTP
+      - "8333:8333"   # S3 API
+    depends_on:
+      - seaweedfs-master
+      - seaweedfs-volume
+    volumes:
+      - seaweedfs_filer:/data
 
   # Optional: email testing
   mailpit:
@@ -48,4 +71,6 @@ services:
 
 volumes:
   pgdata:
-  minio_data:
+  seaweedfs_master:
+  seaweedfs_volume:
+  seaweedfs_filer:
