@@ -7,7 +7,7 @@
  * Child collections (runways, frequencies) are replaced per airport inside a transaction.
  */
 
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@aerodirectory/database";
 import { OpenAipClient } from "../../openaip/openaip.client";
 import {
   normalizeOpenAipAirport,

@@ -12,7 +12,7 @@
  *   - PostgreSQL running with the latest migrations applied
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@aerodirectory/database";
 import { syncOpenAipFranceAirports } from "../apps/api/src/services/importers/openaip/openaip.importer";
 
 async function main() {
