@@ -12,12 +12,26 @@ export const SURFACE_TYPES = [
   "OTHER",
 ] as const;
 
+export const AERODROME_TYPES = [
+  "SMALL_AIRPORT",
+  "INTERNATIONAL_AIRPORT",
+  "GLIDER_SITE",
+  "ULTRALIGHT_FIELD",
+  "HELIPORT",
+  "MILITARY",
+  "SEAPLANE_BASE",
+  "OTHER",
+] as const;
+
 export const FREQUENCY_TYPES = [
   "TWR",
   "AFIS",
   "ATIS",
   "APP",
   "UNICOM",
+  "GROUND",
+  "CTAF",
+  "FIS",
   "OTHER",
 ] as const;
 

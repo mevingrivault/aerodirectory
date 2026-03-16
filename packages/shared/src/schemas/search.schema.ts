@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   SURFACE_TYPES,
   FUEL_TYPES,
+  AERODROME_TYPES,
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   MAX_SEARCH_RADIUS_KM,
@@ -14,6 +15,7 @@ export const PaginationSchema = z.object({
 
 export const AerodromeSearchSchema = PaginationSchema.extend({
   q: z.string().max(200).trim().optional(),
+  aerodromeType: z.enum(AERODROME_TYPES).optional(),
   minRunwayLength: z.coerce.number().int().positive().optional(),
   surface: z.enum(SURFACE_TYPES).optional(),
   fuel: z.enum(FUEL_TYPES).optional(),
@@ -33,5 +35,13 @@ export const AerodromeSearchSchema = PaginationSchema.extend({
     .default("name"),
 });
 
+export const NearbySchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  radiusKm: z.coerce.number().positive().max(MAX_SEARCH_RADIUS_KM).default(50),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+});
+
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type AerodromeSearchInput = z.infer<typeof AerodromeSearchSchema>;
+export type NearbyInput = z.infer<typeof NearbySchema>;
