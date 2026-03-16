@@ -11,6 +11,8 @@ dist/
 .env
 .env.local
 .env.*.local
+# Keep .env.development committed (safe dev defaults)
+!.env.development
 
 # IDE
 .vscode/
