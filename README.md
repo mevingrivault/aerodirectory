@@ -47,7 +47,20 @@ aerodirectory/
 - pnpm >= 9
 - Docker & Docker Compose
 
-### Setup
+### Quick Setup (automatic)
+
+```bash
+# Start PostgreSQL
+docker compose up -d postgres
+
+# Run the automated setup (installs deps, creates .env files, migrates, seeds)
+pnpm install && pnpm setup
+
+# Start development servers
+pnpm dev
+```
+
+### Manual Setup
 
 ```bash
 # Start infrastructure
@@ -55,6 +68,12 @@ docker compose up -d
 
 # Install dependencies
 pnpm install
+
+# Copy environment file and distribute to all packages
+# (or just run pnpm setup which does this automatically)
+cp .env.development .env
+cp .env.development packages/database/.env
+cp .env.development apps/api/.env
 
 # Generate Prisma client
 pnpm db:generate
