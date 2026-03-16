@@ -24,7 +24,7 @@ aerodirectory/
 | Backend | NestJS 10 + Fastify, Zod validation, JWT auth |
 | Database | PostgreSQL 16 + PostGIS |
 | Cache | Redis 7 |
-| Storage | S3-compatible (MinIO in dev) |
+| Storage | S3-compatible (SeaweedFS in dev — Apache 2.0) |
 | Auth | Argon2id, TOTP (RFC 6238), JWT |
 
 ### Security (OWASP ASVS L2)
@@ -72,7 +72,9 @@ pnpm dev
 - API: http://localhost:4000
 - Web: http://localhost:3000
 - Mailpit: http://localhost:8025
-- MinIO Console: http://localhost:9001
+- SeaweedFS S3 API: http://localhost:8333
+- SeaweedFS Filer: http://localhost:8888
+- SeaweedFS Master: http://localhost:9333
 
 ## API Endpoints
 
