@@ -1,0 +1,21 @@
+{
+  "name": "aerodirectory",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Collaborative Directory of French Aerodromes",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @aerodirectory/database prisma:generate",
+    "db:migrate": "pnpm --filter @aerodirectory/database prisma:migrate",
+    "db:seed": "pnpm --filter @aerodirectory/database prisma:seed"
+  }
+}
