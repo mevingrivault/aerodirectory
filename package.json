@@ -21,8 +21,6 @@
     "import:openaip": "tsx scripts/import-openaip.ts"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
-    "@prisma/client": "^6.2.0",
-    "prisma": "^6.2.0"
+    "tsx": "^4.19.2"
   }
 }
