@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
@@ -14,12 +14,27 @@ interface AerodromeMarker {
   latitude: number;
   longitude: number;
   status: string;
+  aerodromeType: string;
+  elevation: number | null;
+  runways: { identifier: string; length: number; surface: string }[];
 }
+
+const TYPE_COLORS: Record<string, string> = {
+  INTERNATIONAL_AIRPORT: "#3b82f6",
+  SMALL_AIRPORT: "#22c55e",
+  GLIDER_SITE: "#a855f7",
+  ULTRALIGHT_FIELD: "#f97316",
+  HELIPORT: "#ef4444",
+  MILITARY: "#6b7280",
+  SEAPLANE_BASE: "#06b6d4",
+  OTHER: "#6b7280",
+};
 
 export default function MapPage() {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [query, setQuery] = useState("");
   const [mapLoaded, setMapLoaded] = useState(false);
 
@@ -34,6 +49,11 @@ export default function MapPage() {
   });
 
   const aerodromes = data?.data ?? [];
+
+  const navigateToDetail = useCallback(
+    (id: string) => router.push(`/aerodrome/${id}`),
+    [router],
+  );
 
   // Initialize map
   useEffect(() => {
@@ -73,6 +93,12 @@ export default function MapPage() {
 
       map.addControl(new maplibregl.default.NavigationControl(), "top-right");
 
+      popupRef.current = new maplibregl.default.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 8,
+      });
+
       map.on("load", () => {
         setMapLoaded(true);
       });
@@ -82,6 +108,10 @@ export default function MapPage() {
 
     return () => {
       cancelled = true;
+      if (popupRef.current) {
+        popupRef.current.remove();
+        popupRef.current = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -97,7 +127,7 @@ export default function MapPage() {
 
     // Remove existing source if present
     if (map.getSource("aerodromes")) {
-      map.removeLayer("aerodrome-points");
+      if (map.getLayer("aerodrome-points")) map.removeLayer("aerodrome-points");
       map.removeSource("aerodromes");
     }
 
@@ -114,6 +144,11 @@ export default function MapPage() {
           name: ad.name,
           icaoCode: ad.icaoCode || "",
           status: ad.status,
+          aerodromeType: ad.aerodromeType || "OTHER",
+          elevation: ad.elevation ?? "",
+          runways: ad.runways
+            ?.map((r) => `${r.identifier} (${r.length}m)`)
+            .join(", ") ?? "",
         },
       })),
     };
@@ -128,36 +163,66 @@ export default function MapPage() {
       type: "circle",
       source: "aerodromes",
       paint: {
-        "circle-radius": 6,
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          5, 4,
+          8, 6,
+          12, 10,
+        ],
         "circle-color": [
           "match",
-          ["get", "status"],
-          "OPEN", "#22c55e",
-          "CLOSED", "#ef4444",
-          "RESTRICTED", "#f59e0b",
-          "#6b7280",
+          ["get", "aerodromeType"],
+          "INTERNATIONAL_AIRPORT", TYPE_COLORS.INTERNATIONAL_AIRPORT,
+          "SMALL_AIRPORT", TYPE_COLORS.SMALL_AIRPORT,
+          "GLIDER_SITE", TYPE_COLORS.GLIDER_SITE,
+          "ULTRALIGHT_FIELD", TYPE_COLORS.ULTRALIGHT_FIELD,
+          "HELIPORT", TYPE_COLORS.HELIPORT,
+          "MILITARY", TYPE_COLORS.MILITARY,
+          "SEAPLANE_BASE", TYPE_COLORS.SEAPLANE_BASE,
+          TYPE_COLORS.OTHER,
         ],
         "circle-stroke-width": 2,
         "circle-stroke-color": "#ffffff",
       },
     });
 
-    // Click handler
+    // Click handler — navigate to detail
     map.on("click", "aerodrome-points", (e) => {
       const feature = e.features?.[0];
       if (feature?.properties?.["id"]) {
-        router.push(`/aerodrome/${feature.properties["id"]}`);
+        navigateToDetail(feature.properties["id"]);
       }
     });
 
-    // Hover cursor
-    map.on("mouseenter", "aerodrome-points", () => {
+    // Hover — show popup
+    map.on("mouseenter", "aerodrome-points", (e) => {
       map.getCanvas().style.cursor = "pointer";
+      const feature = e.features?.[0];
+      if (feature && popupRef.current) {
+        const props = feature.properties ?? {};
+        const coords = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+        const icao = props["icaoCode"] ? ` (${props["icaoCode"]})` : "";
+        const elevation = props["elevation"] ? ` — ${props["elevation"]} ft` : "";
+        const rwy = props["runways"] ? `<div style="font-size:11px;color:#888;margin-top:2px">${props["runways"]}</div>` : "";
+
+        popupRef.current
+          .setLngLat(coords)
+          .setHTML(
+            `<div style="font-weight:600">${props["name"]}${icao}</div>` +
+              `<div style="font-size:12px;color:#666">${props["status"]}${elevation}</div>` +
+              rwy,
+          )
+          .addTo(map);
+      }
     });
+
     map.on("mouseleave", "aerodrome-points", () => {
       map.getCanvas().style.cursor = "";
+      popupRef.current?.remove();
     });
-  }, [aerodromes, mapLoaded, router]);
+  }, [aerodromes, mapLoaded, navigateToDetail]);
 
   return (
     <div className="relative h-[calc(100vh-4rem)]">
@@ -177,6 +242,20 @@ export default function MapPage() {
             {aerodromes.length} aerodrome{aerodromes.length !== 1 ? "s" : ""} shown
           </div>
         )}
+      </div>
+
+      {/* Legend */}
+      <div className="absolute right-4 bottom-8 z-10 rounded-md bg-background/95 backdrop-blur shadow-md p-3 text-xs">
+        <div className="font-semibold mb-1.5">Type</div>
+        {Object.entries(TYPE_COLORS).map(([type, color]) => (
+          <div key={type} className="flex items-center gap-1.5 mb-0.5">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full border border-white"
+              style={{ backgroundColor: color }}
+            />
+            <span>{type.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+          </div>
+        ))}
       </div>
 
       {/* Map container */}
