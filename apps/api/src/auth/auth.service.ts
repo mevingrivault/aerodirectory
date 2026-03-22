@@ -304,7 +304,11 @@ export class AuthService {
   ): Promise<UserProfile> {
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { displayName: input.displayName ?? null },
+      data: {
+        displayName: input.displayName ?? null,
+        homeAerodromeId: input.homeAerodromeId,
+      },
+      include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
     return this.toProfile(user);
   }
@@ -347,6 +351,7 @@ export class AuthService {
   async getProfile(userId: string): Promise<UserProfile> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
+      include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
     return this.toProfile(user);
   }
@@ -359,6 +364,7 @@ export class AuthService {
     emailVerified: Date | null;
     totpEnabled: boolean;
     createdAt: Date;
+    homeAerodrome?: { id: string; name: string; icaoCode: string | null } | null;
   }): UserProfile {
     return {
       id: user.id,
@@ -368,6 +374,7 @@ export class AuthService {
       emailVerified: user.emailVerified?.toISOString() ?? null,
       totpEnabled: user.totpEnabled,
       createdAt: user.createdAt.toISOString(),
+      homeAerodrome: user.homeAerodrome ?? null,
     };
   }
 }

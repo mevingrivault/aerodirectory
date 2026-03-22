@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Key, Mail, CheckCircle, Pencil, Lock } from "lucide-react";
+import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X } from "lucide-react";
 import type { TotpSetupResponse } from "@aerodirectory/shared";
+
+interface AerodromeOption {
+  id: string;
+  name: string;
+  icaoCode: string | null;
+  city: string | null;
+}
 
 type AlertType = "success" | "error";
 
@@ -43,6 +51,29 @@ export default function ProfilePage() {
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [pwAlert, setPwAlert] = useState<{ type: AlertType; msg: string } | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
+
+  // Home aerodrome state
+  const [homeSearch, setHomeSearch] = useState("");
+  const [showHomeSuggestions, setShowHomeSuggestions] = useState(false);
+  const [homeAlert, setHomeAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const homeSearchRef = useRef<HTMLDivElement>(null);
+
+  const { data: homeSuggestionsRes } = useQuery({
+    queryKey: ["aerodrome-search-home", homeSearch],
+    queryFn: () => apiClient.get<AerodromeOption[]>("/aerodromes/map", { q: homeSearch }),
+    enabled: homeSearch.length >= 2,
+  });
+  const homeSuggestions = (homeSuggestionsRes?.data ?? []).slice(0, 6);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (homeSearchRef.current && !homeSearchRef.current.contains(e.target as Node)) {
+        setShowHomeSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   if (!user) {
     return (
@@ -99,6 +130,32 @@ export default function ProfilePage() {
       setPwAlert({ type: "error", msg });
     } finally {
       setPwLoading(false);
+    }
+  };
+
+  // ─── Home aerodrome ─────────────────────────────────────
+
+  const handleSelectHomeAerodrome = async (ad: AerodromeOption) => {
+    setShowHomeSuggestions(false);
+    setHomeSearch("");
+    setHomeAlert(null);
+    try {
+      await apiClient.put("/auth/profile", { homeAerodromeId: ad.id });
+      await refreshProfile();
+      setHomeAlert({ type: "success", msg: `Aérodrome de rattachement défini : ${ad.name}.` });
+    } catch {
+      setHomeAlert({ type: "error", msg: "Impossible de mettre à jour l'aérodrome de rattachement." });
+    }
+  };
+
+  const handleClearHomeAerodrome = async () => {
+    setHomeAlert(null);
+    try {
+      await apiClient.put("/auth/profile", { homeAerodromeId: null });
+      await refreshProfile();
+      setHomeAlert({ type: "success", msg: "Aérodrome de rattachement retiré." });
+    } catch {
+      setHomeAlert({ type: "error", msg: "Impossible de mettre à jour l'aérodrome de rattachement." });
     }
   };
 
@@ -226,6 +283,79 @@ export default function ProfilePage() {
               {pwLoading ? "Modification..." : "Changer le mot de passe"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Home aerodrome */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <MapPin className="h-5 w-5" /> Aérodrome de Rattachement
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {homeAlert && <Alert type={homeAlert.type} msg={homeAlert.msg} />}
+
+          {user.homeAerodrome ? (
+            <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                <span className="font-medium">{user.homeAerodrome.name}</span>
+                {user.homeAerodrome.icaoCode && (
+                  <Badge variant="secondary">{user.homeAerodrome.icaoCode}</Badge>
+                )}
+              </div>
+              <button
+                onClick={handleClearHomeAerodrome}
+                className="text-muted-foreground hover:text-destructive transition-colors"
+                title="Retirer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground mb-3">
+              Aucun aérodrome de rattachement défini.
+            </p>
+          )}
+
+          <div ref={homeSearchRef} className="relative mt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Rechercher un aérodrome par nom ou ICAO..."
+                value={homeSearch}
+                onChange={(e) => {
+                  setHomeSearch(e.target.value);
+                  setShowHomeSuggestions(true);
+                }}
+                onFocus={() => homeSearch.length >= 2 && setShowHomeSuggestions(true)}
+              />
+            </div>
+            {showHomeSuggestions && homeSuggestions.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 rounded-md border bg-background shadow-lg">
+                {homeSuggestions.map((ad) => (
+                  <button
+                    key={ad.id}
+                    className="w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors"
+                    onMouseDown={() => handleSelectHomeAerodrome(ad)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium">{ad.name}</span>
+                      {ad.icaoCode && (
+                        <Badge variant="secondary" className="text-xs">{ad.icaoCode}</Badge>
+                      )}
+                    </div>
+                    {ad.city && (
+                      <div className="text-xs text-muted-foreground ml-5">{ad.city}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

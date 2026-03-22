@@ -74,4 +74,5 @@ export interface UserProfile {
   emailVerified: string | null;
   totpEnabled: boolean;
   createdAt: string;
+  homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
 }

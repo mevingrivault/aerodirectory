@@ -49,6 +49,7 @@ export const ChangePasswordSchema = z.object({
 
 export const UpdateProfileSchema = z.object({
   displayName: z.string().min(2).max(50).trim().optional(),
+  homeAerodromeId: z.string().cuid().nullable().optional(),
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;

@@ -110,11 +110,13 @@ model User {
   passwordHash  String
   totpSecret    String?
   totpEnabled   Boolean   @default(false)
-  role          Role      @default(MEMBER)
-  displayName   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  role                Role      @default(MEMBER)
+  displayName         String?
+  homeAerodromeId     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
+  homeAerodrome    Aerodrome?        @relation("UserHomeAerodrome", fields: [homeAerodromeId], references: [id])
   visits           Visit[]
   comments         Comment[]
   corrections      Correction[]
@@ -185,6 +187,7 @@ model Aerodrome {
   comments    Comment[]
   corrections Correction[]
   reports     Report[]
+  homeUsers   User[]       @relation("UserHomeAerodrome")
 
   @@unique([source, sourceId])
   @@index([icaoCode])
