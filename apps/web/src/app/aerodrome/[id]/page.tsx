@@ -22,13 +22,12 @@ import {
   Moon,
   ExternalLink,
   Star,
-  Eye,
   Heart,
   MessageSquare,
   ArrowLeft,
   Navigation,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 
 interface AerodromeDetail {
@@ -149,11 +148,30 @@ export default function AerodromeDetailPage() {
     enabled: !!ad,
   });
 
+  const { data: visitsRes, refetch: refetchVisit } = useQuery({
+    queryKey: ["visits"],
+    queryFn: () => apiClient.get<{ aerodromeId: string; status: string }[]>("/visits"),
+    enabled: !!user,
+  });
+
+  const currentVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+
+  // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
+  useEffect(() => {
+    if (user && currentVisitStatus === null) {
+      apiClient.put(`/visits/${id}`, { status: "SEEN" }).then(() => refetchVisit());
+    }
+  }, [user, id, currentVisitStatus]);
+
   const comments = commentsRes?.data ?? [];
   const nearbyAerodromes = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
 
   const handleVisit = async (status: string) => {
-    await apiClient.put(`/visits/${id}`, { status });
+    let nextStatus = status;
+    if (status === "FAVORITE" && currentVisitStatus === "FAVORITE") nextStatus = "VISITED";
+    else if (status === "VISITED" && currentVisitStatus === "VISITED") nextStatus = "SEEN";
+    await apiClient.put(`/visits/${id}`, { status: nextStatus });
+    refetchVisit();
   };
 
   const handleComment = async (e: React.FormEvent) => {
@@ -239,15 +257,30 @@ export default function AerodromeDetailPage() {
         {/* Visit buttons (authenticated only) */}
         {user && (
           <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline" onClick={() => handleVisit("SEEN")}>
-              <Eye className="mr-1 h-4 w-4" /> Vu
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => handleVisit("VISITED")}>
-              <Star className="mr-1 h-4 w-4" /> Visité
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => handleVisit("FAVORITE")}>
-              <Heart className="mr-1 h-4 w-4" /> Favori
-            </Button>
+            {(() => {
+              const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
+              const isFavorite = currentVisitStatus === "FAVORITE";
+              return (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
+                    onClick={() => handleVisit("VISITED")}
+                  >
+                    <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
+                    onClick={() => handleVisit("FAVORITE")}
+                  >
+                    <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
+                  </Button>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

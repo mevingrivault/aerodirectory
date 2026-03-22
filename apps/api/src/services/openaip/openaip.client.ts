@@ -28,7 +28,7 @@ export interface OpenAipAirport {
   icaoCode?: string;
   iataCode?: string;
   altIdentifier?: string;
-  type: number; // 0-9
+  type: number; // 0-17, see openAIP docs
   country: string; // ISO 2-letter
   geometry: {
     type: "Point";
@@ -41,7 +41,11 @@ export interface OpenAipAirport {
   };
   runways?: OpenAipRunway[];
   frequencies?: OpenAipFrequency[];
-  fuelTypes?: number[]; // 0=AVGAS, 1=UL91, 2=JET_A1, 3=JET_A1+JP4, 4=JET_B, ...
+  services?: {
+    fuelTypes?: number[]; // 0=SuperPLUS, 1=AVGAS, 2=JetA, 3=JetA1, 4=JetB, 5=Diesel, 6=UL91
+    handlingFacilities?: number[];
+    passengerFacilities?: number[];
+  };
   magneticDeclination?: number;
   ppr?: boolean;
   private?: boolean;

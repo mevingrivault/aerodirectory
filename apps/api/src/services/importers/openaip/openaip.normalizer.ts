@@ -6,7 +6,7 @@
  * - Normalizing ICAO to uppercase
  * - Converting coordinates to decimal
  * - Converting elevation to feet
- * - Mapping surface/frequency/airport types to our enums
+ * - Mapping surface/frequency/airport/fuel types to our enums
  * - Safely handling missing fields
  */
 
@@ -59,17 +59,26 @@ export interface NormalizedFuel {
 
 // ─── Type mappings ────────────────────────────────────────
 
+// Source: https://www.openaip.net/docs — airport type enum
 const AIRPORT_TYPE_MAP: Record<number, AerodromeType> = {
-  0: "OTHER",
-  1: "GLIDER_SITE",
-  2: "SMALL_AIRPORT",
-  3: "ULTRALIGHT_FIELD",
-  4: "OTHER", // hang glider → OTHER
-  5: "INTERNATIONAL_AIRPORT",
-  6: "HELIPORT",
-  7: "MILITARY",
-  8: "OTHER", // closed
-  9: "SEAPLANE_BASE",
+  0: "SMALL_AIRPORT",        // Airport (civil)
+  1: "GLIDER_SITE",          // Glider site
+  2: "SMALL_AIRPORT",        // Airfield civil
+  3: "INTERNATIONAL_AIRPORT",// International airport
+  4: "HELIPORT",             // Heliport civil
+  5: "MILITARY",             // Military aerodrome
+  6: "ULTRALIGHT_FIELD",     // Ultra light flying site (ULM)
+  7: "OTHER",                // Agricultural landing strip
+  8: "OTHER",                // Closed (status handled separately)
+  9: "OTHER",                // Airport / aerodrome unknown
+  10: "SEAPLANE_BASE",       // Airfield water
+  11: "OTHER",               // Hang gliding
+  12: "OTHER",               // Para gliding
+  13: "OTHER",               // Ballooning
+  14: "OTHER",               // Dropzone
+  15: "SMALL_AIRPORT",       // Light aircraft only
+  16: "SMALL_AIRPORT",       // Private
+  17: "MILITARY",            // Military helipad
 };
 
 const SURFACE_TYPE_MAP: Record<number, SurfaceType> = {
@@ -81,18 +90,15 @@ const SURFACE_TYPE_MAP: Record<number, SurfaceType> = {
   5: "WATER",
 };
 
-// OpenAIP fuel type codes → our FuelType enum (null = not mappable, skip)
+// OpenAIP services.fuelTypes codes → our FuelType enum (null = not in our schema, skip)
 const FUEL_TYPE_MAP: Record<number, FuelType | null> = {
-  0: "AVGAS_100LL", // AVGAS
-  1: "UL91",        // UL91
-  2: "JET_A1",     // JET A1
-  3: "JET_A1",     // JET A1 + JP4
-  4: "JET_A1",     // JET B
-  5: null,         // MOGAS E10 — not in our schema
-  6: null,         // MOGAS 95
-  7: null,         // MOGAS 98
-  8: null,         // MOGAS 100
-  9: null,         // other
+  0: null,         // Super PLUS — not in our schema
+  1: "AVGAS_100LL", // AVGAS
+  2: "JET_A1",     // Jet A
+  3: "JET_A1",     // Jet A1
+  4: "JET_A1",     // Jet B
+  5: null,         // Diesel — not in our schema
+  6: "UL91",       // AVGAS UL91
 };
 
 const FREQUENCY_TYPE_MAP: Record<number, FrequencyType> = {
@@ -150,7 +156,7 @@ export function normalizeOpenAipAirport(
     frequencies: (raw.frequencies ?? [])
       .map(normalizeFrequency)
       .filter((f): f is NormalizedFrequency => f !== null),
-    fuels: normalizeFuels(raw.fuelTypes ?? []),
+    fuels: normalizeFuels(raw.services?.fuelTypes ?? []),
   };
 }
 

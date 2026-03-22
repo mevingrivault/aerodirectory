@@ -161,8 +161,13 @@ export class AerodromeService {
         aerodromeType: true,
         status: true,
         elevation: true,
+        hasRestaurant: true,
+        hasMaintenance: true,
         runways: {
           select: { identifier: true, length: true, surface: true },
+        },
+        fuels: {
+          select: { type: true },
         },
       },
     });

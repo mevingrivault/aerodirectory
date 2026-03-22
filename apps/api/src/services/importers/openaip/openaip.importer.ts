@@ -147,7 +147,7 @@ async function upsertAirport(
         });
       }
 
-      // Replace fuels (sourced from OpenAIP only — preserves any manually added fuels? No: full replace)
+      // Replace fuels (sourced from OpenAIP)
       await tx.fuel.deleteMany({ where: { aerodromeId: existing.id } });
       if (fuels.length > 0) {
         await tx.fuel.createMany({
