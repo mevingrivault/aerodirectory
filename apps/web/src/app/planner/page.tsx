@@ -104,12 +104,12 @@ export default function PlannerPage() {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
         <Navigation className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Flight Planner</h1>
+        <h1 className="text-2xl font-bold mb-2">Planificateur de Vol</h1>
         <p className="text-muted-foreground">
           <Link href="/login" className="text-primary hover:underline">
-            Sign in
+            Connectez-vous
           </Link>{" "}
-          to use the flight planner.
+          pour utiliser le planificateur de vol.
         </p>
       </div>
     );
@@ -119,7 +119,7 @@ export default function PlannerPage() {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
         <Navigation className="h-8 w-8 text-primary" />
-        Flight Planner
+        Planificateur de Vol
       </h1>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -128,7 +128,7 @@ export default function PlannerPage() {
           {/* Aircraft Profiles */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Aircraft Profiles</CardTitle>
+              <CardTitle className="text-lg">Profils Aéronef</CardTitle>
               <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
                 <Plus className="h-4 w-4" />
               </Button>
@@ -137,7 +137,7 @@ export default function PlannerPage() {
               {showForm && (
                 <form onSubmit={handleCreateProfile} className="space-y-3 mb-4 rounded-md border p-3">
                   <Input
-                    placeholder="Aircraft name (e.g. C172)"
+                    placeholder="Nom de l'aéronef (ex. C172)"
                     value={profileForm.name}
                     onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
                     required
@@ -152,42 +152,42 @@ export default function PlannerPage() {
                     />
                     <Input
                       type="number"
-                      placeholder="Fuel (L/h)"
+                      placeholder="Conso (L/h)"
                       value={profileForm.fuelConsumption}
                       onChange={(e) => setProfileForm((f) => ({ ...f, fuelConsumption: e.target.value }))}
                       required
                     />
                     <Input
                       type="number"
-                      placeholder="Cost (€/h)"
+                      placeholder="Coût (€/h)"
                       value={profileForm.hourlyCost}
                       onChange={(e) => setProfileForm((f) => ({ ...f, hourlyCost: e.target.value }))}
                       required
                     />
                     <Input
                       type="number"
-                      placeholder="Range (NM)"
+                      placeholder="Autonomie (NM)"
                       value={profileForm.fuelRange}
                       onChange={(e) => setProfileForm((f) => ({ ...f, fuelRange: e.target.value }))}
                       required
                     />
                     <Input
                       type="number"
-                      placeholder="Min RWY (m)"
+                      placeholder="Piste min. (m)"
                       value={profileForm.minRunwayLength}
                       onChange={(e) => setProfileForm((f) => ({ ...f, minRunwayLength: e.target.value }))}
                       required
                     />
                   </div>
                   <Button type="submit" size="sm" className="w-full">
-                    Save Profile
+                    Enregistrer
                   </Button>
                 </form>
               )}
 
               {profiles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Create an aircraft profile to start planning.
+                  Créez un profil aéronef pour commencer à planifier.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -225,7 +225,7 @@ export default function PlannerPage() {
           {/* Departure point */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Departure Point</CardTitle>
+              <CardTitle className="text-lg">Point de Départ</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
@@ -252,7 +252,7 @@ export default function PlannerPage() {
                 disabled={!selectedProfileId}
               >
                 <Plane className="mr-2 h-4 w-4" />
-                Calculate Routes
+                Calculer les Routes
               </Button>
             </CardContent>
           </Card>
@@ -263,13 +263,13 @@ export default function PlannerPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">
-                Reachable Aerodromes ({results.length})
+                Aérodromes Accessibles ({results.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {results.length === 0 ? (
                 <p className="text-muted-foreground">
-                  Select a profile and calculate to see reachable aerodromes.
+                  Sélectionnez un profil et calculez pour voir les aérodromes accessibles.
                 </p>
               ) : (
                 <div className="space-y-2">

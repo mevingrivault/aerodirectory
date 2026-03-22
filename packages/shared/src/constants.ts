@@ -49,7 +49,7 @@ export const BADGES = [
 ] as const;
 
 export const DISCLAIMER =
-  "Information provided for reference only. Always consult official AIP and NOTAM before flight.";
+  "Informations fournies à titre indicatif uniquement. Consultez toujours l'AIP officiel et les NOTAM avant le vol.";
 
 export const MAX_COMMENT_LENGTH = 2000;
 export const MAX_SEARCH_RADIUS_KM = 500;

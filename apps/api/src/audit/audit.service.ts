@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { AuditAction } from "@aerodirectory/database";
+import { AuditAction, Prisma } from "@aerodirectory/database";
 
 export interface AuditLogEntry {
   userId?: string;
@@ -23,7 +23,7 @@ export class AuditService {
           action: entry.action,
           ip: entry.ip,
           userAgent: entry.userAgent,
-          metadata: entry.metadata ?? undefined,
+          metadata: entry.metadata as Prisma.InputJsonValue | undefined,
         },
       })
       .catch((err) => {

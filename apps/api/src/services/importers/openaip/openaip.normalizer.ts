@@ -15,6 +15,7 @@ import type {
   OpenAipRunway,
   OpenAipFrequency,
 } from "../../openaip/openaip.client";
+import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType } from "@aerodirectory/database";
 
 // ─── Output types matching our Prisma schema ──────────────
 
@@ -25,8 +26,8 @@ export interface NormalizedAerodrome {
   longitude: number;
   elevation: number | null; // feet
   countryCode: string;
-  aerodromeType: string;
-  status: string;
+  aerodromeType: AerodromeType;
+  status: AerodromeStatus;
   source: string;
   sourceId: string;
   sourceRawHash: string;
@@ -39,12 +40,12 @@ export interface NormalizedRunway {
   identifier: string;
   length: number; // meters
   width: number | null; // meters
-  surface: string;
+  surface: SurfaceType;
   lighting: boolean;
 }
 
 export interface NormalizedFrequency {
-  type: string;
+  type: FrequencyType;
   mhz: number;
   callsign: string | null;
   notes: string | null;
@@ -52,7 +53,7 @@ export interface NormalizedFrequency {
 
 // ─── Type mappings ────────────────────────────────────────
 
-const AIRPORT_TYPE_MAP: Record<number, string> = {
+const AIRPORT_TYPE_MAP: Record<number, AerodromeType> = {
   0: "OTHER",
   1: "GLIDER_SITE",
   2: "SMALL_AIRPORT",
@@ -65,7 +66,7 @@ const AIRPORT_TYPE_MAP: Record<number, string> = {
   9: "SEAPLANE_BASE",
 };
 
-const SURFACE_TYPE_MAP: Record<number, string> = {
+const SURFACE_TYPE_MAP: Record<number, SurfaceType> = {
   0: "ASPHALT",
   1: "CONCRETE",
   2: "GRASS",
@@ -74,7 +75,7 @@ const SURFACE_TYPE_MAP: Record<number, string> = {
   5: "WATER",
 };
 
-const FREQUENCY_TYPE_MAP: Record<number, string> = {
+const FREQUENCY_TYPE_MAP: Record<number, FrequencyType> = {
   0: "APP",     // approach
   1: "GROUND",  // apron
   2: "APP",     // arrival
@@ -118,7 +119,7 @@ export function normalizeOpenAipAirport(
     elevation,
     countryCode: (raw.country || "FR").toUpperCase(),
     aerodromeType: AIRPORT_TYPE_MAP[raw.type] ?? "OTHER",
-    status: raw.type === 8 ? "CLOSED" : "OPEN",
+    status: (raw.type === 8 ? "CLOSED" : "OPEN") as AerodromeStatus,
     source: "openaip",
     sourceId: raw._id,
     sourceRawHash: simpleHash(JSON.stringify(raw)),

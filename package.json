@@ -11,7 +11,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "bootstrap": "node scripts/setup.mjs",
-    "dev": "pnpm db:generate && pnpm --parallel -r dev",
+    "dev": "pnpm db:generate && pnpm --filter @aerodirectory/shared build && pnpm --parallel -r dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",

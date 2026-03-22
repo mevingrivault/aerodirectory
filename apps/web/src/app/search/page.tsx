@@ -30,14 +30,19 @@ interface AerodromeResult {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  SMALL_AIRPORT: "Small Airport",
+  SMALL_AIRPORT: "Aérodrome",
   INTERNATIONAL_AIRPORT: "International",
-  GLIDER_SITE: "Glider Site",
-  ULTRALIGHT_FIELD: "Ultralight",
-  HELIPORT: "Heliport",
-  MILITARY: "Military",
-  SEAPLANE_BASE: "Seaplane",
-  OTHER: "Other",
+  GLIDER_SITE: "Vol à voile",
+  ULTRALIGHT_FIELD: "ULM",
+  HELIPORT: "Héliport",
+  MILITARY: "Militaire",
+  SEAPLANE_BASE: "Hydravion",
+  OTHER: "Autre",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  OPEN: "OUVERT",
+  CLOSED: "FERMÉ",
 };
 
 export default function SearchPage() {
@@ -84,7 +89,7 @@ export default function SearchPage() {
           setPage(1);
         },
         () => {
-          alert("Could not get your location. Please enable location services.");
+          alert("Impossible d'obtenir votre position. Activez la géolocalisation.");
         },
       );
     }
@@ -102,7 +107,7 @@ export default function SearchPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Search Aerodromes</h1>
+      <h1 className="text-3xl font-bold mb-6">Rechercher des Aérodromes</h1>
 
       {/* Search bar */}
       <div className="flex gap-3 mb-6">
@@ -110,7 +115,7 @@ export default function SearchPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-10"
-            placeholder="Search by name, ICAO code, or city..."
+            placeholder="Rechercher par nom, code OACI ou ville..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -127,7 +132,7 @@ export default function SearchPage() {
           size="sm"
           onClick={handleNearby}
         >
-          <MapPin className="mr-1 h-3 w-3" /> Nearby
+          <MapPin className="mr-1 h-3 w-3" /> À proximité
         </Button>
         <Button
           variant={filters["hasRestaurant"] ? "default" : "outline"}
@@ -141,21 +146,21 @@ export default function SearchPage() {
           size="sm"
           onClick={() => toggleFilter("fuel", "AVGAS_100LL")}
         >
-          <Fuel className="mr-1 h-3 w-3" /> 100LL Fuel
+          <Fuel className="mr-1 h-3 w-3" /> Carburant 100LL
         </Button>
         <Button
           variant={filters["nightOperations"] ? "default" : "outline"}
           size="sm"
           onClick={() => toggleFilter("nightOperations", "true")}
         >
-          Night Ops
+          Vols de nuit
         </Button>
         <Button
           variant={filters["aerodromeType"] ? "default" : "outline"}
           size="sm"
           onClick={() => toggleFilter("aerodromeType", "SMALL_AIRPORT")}
         >
-          <Plane className="mr-1 h-3 w-3" /> Small Airports
+          <Plane className="mr-1 h-3 w-3" /> Petits Aérodromes
         </Button>
         {filters["minRunwayLength"] ? (
           <Button
@@ -163,7 +168,7 @@ export default function SearchPage() {
             size="sm"
             onClick={() => toggleFilter("minRunwayLength", "800")}
           >
-            Min {filters["minRunwayLength"]}m runway
+            Piste min. {filters["minRunwayLength"]}m
           </Button>
         ) : (
           <Button
@@ -174,7 +179,7 @@ export default function SearchPage() {
               setPage(1);
             }}
           >
-            Min 800m Runway
+            Piste min. 800m
           </Button>
         )}
       </div>
@@ -182,16 +187,16 @@ export default function SearchPage() {
       {/* Results count */}
       {meta && (
         <p className="text-sm text-muted-foreground mb-4">
-          {meta.total} aerodrome{meta.total !== 1 ? "s" : ""} found
+          {meta.total} aérodrome{meta.total !== 1 ? "s" : ""} trouvé{meta.total !== 1 ? "s" : ""}
         </p>
       )}
 
       {/* Results list */}
       {isLoading ? (
-        <div className="py-12 text-center text-muted-foreground">Searching...</div>
+        <div className="py-12 text-center text-muted-foreground">Recherche en cours...</div>
       ) : results.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">
-          No aerodromes found. Try adjusting your search.
+          Aucun aérodrome trouvé. Modifiez vos critères de recherche.
         </div>
       ) : (
         <div className="space-y-3">
@@ -211,7 +216,7 @@ export default function SearchPage() {
                       <Badge
                         variant={ad.status === "OPEN" ? "success" : "warning"}
                       >
-                        {ad.status}
+                        {STATUS_LABELS[ad.status] ?? ad.status}
                       </Badge>
                       {ad.aerodromeType && ad.aerodromeType !== "SMALL_AIRPORT" && (
                         <Badge variant="outline">
@@ -224,9 +229,9 @@ export default function SearchPage() {
                       {ad.elevation ? ` — ${ad.elevation} ft` : ""}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      {ad.runways.map((r) => (
+                      {ad.runways.map((r, i) => (
                         <span
-                          key={r.identifier}
+                          key={`${r.identifier}-${i}`}
                           className="text-xs text-muted-foreground"
                         >
                           {r.identifier} ({r.length}m, {r.surface})
@@ -242,7 +247,7 @@ export default function SearchPage() {
                     )}
                     {ad.fuels?.some((f) => f.available) && (
                       <Badge variant="outline">
-                        <Fuel className="mr-1 h-3 w-3" /> Fuel
+                        <Fuel className="mr-1 h-3 w-3" /> Carburant
                       </Badge>
                     )}
                     {ad.distanceKm !== undefined && (
@@ -270,7 +275,7 @@ export default function SearchPage() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm text-muted-foreground">
-            Page {page} of {meta.totalPages}
+            Page {page} sur {meta.totalPages}
           </span>
           <Button
             variant="outline"

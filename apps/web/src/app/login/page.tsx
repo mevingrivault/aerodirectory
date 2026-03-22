@@ -32,7 +32,7 @@ export default function LoginPage() {
         router.push("/");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Échec de la connexion");
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export default function LoginPage() {
       await verifyTotp(totpCode);
       router.push("/");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Invalid TOTP code");
+      setError(err instanceof Error ? err.message : "Code TOTP invalide");
     } finally {
       setLoading(false);
     }
@@ -58,11 +58,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Plane className="mx-auto h-8 w-8 text-primary mb-2" />
-          <CardTitle>{needsTotp ? "Two-Factor Authentication" : "Sign In"}</CardTitle>
+          <CardTitle>{needsTotp ? "Authentification à Deux Facteurs" : "Connexion"}</CardTitle>
           <CardDescription>
             {needsTotp
-              ? "Enter the 6-digit code from your authenticator app"
-              : "Sign in to your AeroDirectory account"}
+              ? "Saisissez le code à 6 chiffres de votre application d'authentification"
+              : "Connectez-vous à votre compte AeroDirectory"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -76,7 +76,7 @@ export default function LoginPage() {
             <form onSubmit={handleTotp} className="space-y-4">
               <div>
                 <label htmlFor="totp" className="text-sm font-medium">
-                  TOTP Code
+                  Code TOTP
                 </label>
                 <Input
                   id="totp"
@@ -91,20 +91,20 @@ export default function LoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Verifying..." : "Verify"}
+                {loading ? "Vérification..." : "Vérifier"}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label htmlFor="email" className="text-sm font-medium">
-                  Email
+                  E-mail
                 </label>
                 <Input
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="pilot@example.com"
+                  placeholder="pilote@exemple.fr"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -112,7 +112,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <label htmlFor="password" className="text-sm font-medium">
-                  Password
+                  Mot de passe
                 </label>
                 <Input
                   id="password"
@@ -124,15 +124,15 @@ export default function LoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Connexion..." : "Se Connecter"}
               </Button>
             </form>
           )}
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Pas encore de compte ?{" "}
             <Link href="/register" className="text-primary hover:underline">
-              Register
+              S&apos;inscrire
             </Link>
           </p>
         </CardContent>

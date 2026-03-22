@@ -6,26 +6,26 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 const features = [
   {
     icon: Search,
-    title: "Search Aerodromes",
-    description: "Browse all French aerodromes with advanced filters — runway length, fuel, restaurants, and more.",
+    title: "Rechercher des Aérodromes",
+    description: "Parcourez tous les aérodromes français avec des filtres avancés — longueur de piste, carburant, restaurant, et plus encore.",
     href: "/search",
   },
   {
     icon: Map,
-    title: "Interactive Map",
-    description: "Explore airfields on a full-screen map with OpenStreetMap tiles and real-time filtering.",
+    title: "Carte Interactive",
+    description: "Explorez les terrains sur une carte plein écran avec les tuiles OpenStreetMap et un filtrage en temps réel.",
     href: "/map",
   },
   {
     icon: BookOpen,
-    title: "Pilot Logbook",
-    description: "Track visited airfields in Pokédex mode, earn badges, and see your aviation stats.",
+    title: "Carnet de Vol",
+    description: "Suivez les terrains visités en mode Pokédex, obtenez des badges et consultez vos statistiques de vol.",
     href: "/pokedex",
   },
   {
     icon: Navigation,
-    title: "Flight Planner",
-    description: "Define your aircraft profile and find reachable aerodromes with cost and time estimates.",
+    title: "Planificateur de Vol",
+    description: "Définissez votre profil avion et trouvez les aérodromes accessibles avec des estimations de coût et de temps.",
     href: "/planner",
   },
 ];
@@ -40,23 +40,23 @@ export default function HomePage() {
             <Plane className="h-10 w-10 text-primary" />
           </div>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
-            Discover French Aerodromes
+            Découvrez les Aérodromes Français
           </h1>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground mb-8">
-            The collaborative directory for pilots. Browse airfields, discover services,
-            share experiences, and plan your next flight.
+            L&apos;annuaire collaboratif pour les pilotes. Parcourez les terrains, découvrez les services,
+            partagez vos expériences et planifiez votre prochain vol.
           </p>
           <div className="flex justify-center gap-4">
             <Button size="lg" asChild>
               <Link href="/search">
                 <Search className="mr-2 h-5 w-5" />
-                Explore Aerodromes
+                Explorer les Aérodromes
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
               <Link href="/map">
                 <Map className="mr-2 h-5 w-5" />
-                Open Map
+                Ouvrir la Carte
               </Link>
             </Button>
           </div>
@@ -86,10 +86,10 @@ export default function HomePage() {
       <section className="border-t bg-muted/30 py-12">
         <div className="container mx-auto px-4 text-center">
           <Shield className="mx-auto h-8 w-8 text-primary mb-3" />
-          <h2 className="text-xl font-semibold mb-2">Secure & GDPR Compliant</h2>
+          <h2 className="text-xl font-semibold mb-2">Sécurisé et Conforme RGPD</h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Argon2id password hashing, TOTP two-factor authentication, encrypted connections,
-            strict CSP, and full audit logging. Your data is protected.
+            Hachage Argon2id, authentification à deux facteurs TOTP, connexions chiffrées,
+            CSP stricte et journalisation complète. Vos données sont protégées.
           </p>
         </div>
       </section>

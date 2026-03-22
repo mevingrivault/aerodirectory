@@ -62,6 +62,8 @@ export default function MapPage() {
       if (cancelled || !mapContainer.current) return;
 
       // Import CSS
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — CSS import has no type declarations
       import("maplibre-gl/dist/maplibre-gl.css");
 
       const map = new maplibregl.default.Map({
@@ -229,21 +231,21 @@ export default function MapPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-10 bg-background/95 backdrop-blur shadow-md"
-            placeholder="Search aerodromes on map..."
+            placeholder="Rechercher des aérodromes sur la carte..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         {aerodromes.length > 0 && (
           <div className="mt-1 rounded-md bg-background/95 backdrop-blur shadow-md p-2 text-xs text-muted-foreground">
-            {aerodromes.length} aerodrome{aerodromes.length !== 1 ? "s" : ""} shown
+            {aerodromes.length} aérodrome{aerodromes.length !== 1 ? "s" : ""} affiché{aerodromes.length !== 1 ? "s" : ""}
           </div>
         )}
       </div>
 
       {/* Legend */}
       <div className="absolute right-4 bottom-8 z-10 rounded-md bg-background/95 backdrop-blur shadow-md p-3 text-xs">
-        <div className="font-semibold mb-1.5">Type</div>
+        <div className="font-semibold mb-1.5">Types</div>
         {Object.entries(TYPE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5 mb-0.5">
             <span

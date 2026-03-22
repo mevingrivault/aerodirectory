@@ -8,10 +8,10 @@ import { Footer } from "@/components/layout/footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AeroDirectory - French Aerodromes Directory",
+  title: "AeroDirectory - Annuaire des Aérodromes Français",
   description:
-    "Collaborative directory of French aerodromes. Browse airfields, discover services, share experiences, and plan flights.",
-  keywords: ["aerodrome", "France", "aviation", "airfield", "pilot"],
+    "Annuaire collaboratif des aérodromes français. Parcourez les terrains, découvrez les services, partagez vos expériences et planifiez vos vols.",
+  keywords: ["aérodrome", "France", "aviation", "terrain", "pilote"],
 };
 
 export default function RootLayout({

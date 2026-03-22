@@ -27,7 +27,7 @@ export default function RegisterPage() {
       await register(email, password, displayName || undefined);
       router.push("/");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : "Échec de l'inscription");
     } finally {
       setLoading(false);
     }
@@ -38,8 +38,8 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Plane className="mx-auto h-8 w-8 text-primary mb-2" />
-          <CardTitle>Create Account</CardTitle>
-          <CardDescription>Join the AeroDirectory community</CardDescription>
+          <CardTitle>Créer un Compte</CardTitle>
+          <CardDescription>Rejoignez la communauté AeroDirectory</CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -50,25 +50,25 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="displayName" className="text-sm font-medium">
-                Display Name
+                Nom d&apos;affichage
               </label>
               <Input
                 id="displayName"
                 type="text"
-                placeholder="Captain Sky"
+                placeholder="Capitaine Ciel"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
             </div>
             <div>
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                E-mail
               </label>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="pilot@example.com"
+                placeholder="pilote@exemple.fr"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -76,7 +76,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                Mot de passe
               </label>
               <Input
                 id="password"
@@ -87,17 +87,17 @@ export default function RegisterPage() {
                 required
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Min 12 chars, with upper, lower, digit, and special character.
+                12 caractères min., avec majuscule, minuscule, chiffre et caractère spécial.
               </p>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create Account"}
+              {loading ? "Création en cours..." : "Créer mon Compte"}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
+            Déjà inscrit ?{" "}
             <Link href="/login" className="text-primary hover:underline">
-              Sign In
+              Se Connecter
             </Link>
           </p>
         </CardContent>
