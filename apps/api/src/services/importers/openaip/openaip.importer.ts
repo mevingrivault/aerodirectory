@@ -95,7 +95,7 @@ async function upsertAirport(
   prisma: PrismaClient,
   airport: NormalizedAerodrome,
 ): Promise<"created" | "updated" | "skipped"> {
-  const { runways, frequencies, ...aerodromeData } = airport;
+  const { runways, frequencies, fuels, ...aerodromeData } = airport;
 
   // Check if this airport already exists by source+sourceId
   const existing = await prisma.aerodrome.findUnique({
@@ -146,6 +146,14 @@ async function upsertAirport(
           data: frequencies.map((f) => ({ ...f, aerodromeId: existing.id })),
         });
       }
+
+      // Replace fuels (sourced from OpenAIP only — preserves any manually added fuels? No: full replace)
+      await tx.fuel.deleteMany({ where: { aerodromeId: existing.id } });
+      if (fuels.length > 0) {
+        await tx.fuel.createMany({
+          data: fuels.map((f) => ({ ...f, aerodromeId: existing.id })),
+        });
+      }
     });
 
     return "updated";
@@ -165,6 +173,7 @@ async function upsertAirport(
       icaoCode: icaoToSet,
       runways: runways.length > 0 ? { create: runways } : undefined,
       frequencies: frequencies.length > 0 ? { create: frequencies } : undefined,
+      fuels: fuels.length > 0 ? { create: fuels } : undefined,
     },
   });
 

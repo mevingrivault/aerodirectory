@@ -41,6 +41,7 @@ export interface OpenAipAirport {
   };
   runways?: OpenAipRunway[];
   frequencies?: OpenAipFrequency[];
+  fuelTypes?: number[]; // 0=AVGAS, 1=UL91, 2=JET_A1, 3=JET_A1+JP4, 4=JET_B, ...
   magneticDeclination?: number;
   ppr?: boolean;
   private?: boolean;

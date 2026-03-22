@@ -15,7 +15,7 @@ import type {
   OpenAipRunway,
   OpenAipFrequency,
 } from "../../openaip/openaip.client";
-import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType } from "@aerodirectory/database";
+import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType, FuelType } from "@aerodirectory/database";
 
 // ─── Output types matching our Prisma schema ──────────────
 
@@ -34,6 +34,7 @@ export interface NormalizedAerodrome {
   lastSyncedAt: Date;
   runways: NormalizedRunway[];
   frequencies: NormalizedFrequency[];
+  fuels: NormalizedFuel[];
 }
 
 export interface NormalizedRunway {
@@ -49,6 +50,11 @@ export interface NormalizedFrequency {
   mhz: number;
   callsign: string | null;
   notes: string | null;
+}
+
+export interface NormalizedFuel {
+  type: FuelType;
+  available: boolean;
 }
 
 // ─── Type mappings ────────────────────────────────────────
@@ -73,6 +79,20 @@ const SURFACE_TYPE_MAP: Record<number, SurfaceType> = {
   3: "DIRT", // sand/earth
   4: "GRAVEL",
   5: "WATER",
+};
+
+// OpenAIP fuel type codes → our FuelType enum (null = not mappable, skip)
+const FUEL_TYPE_MAP: Record<number, FuelType | null> = {
+  0: "AVGAS_100LL", // AVGAS
+  1: "UL91",        // UL91
+  2: "JET_A1",     // JET A1
+  3: "JET_A1",     // JET A1 + JP4
+  4: "JET_A1",     // JET B
+  5: null,         // MOGAS E10 — not in our schema
+  6: null,         // MOGAS 95
+  7: null,         // MOGAS 98
+  8: null,         // MOGAS 100
+  9: null,         // other
 };
 
 const FREQUENCY_TYPE_MAP: Record<number, FrequencyType> = {
@@ -130,6 +150,7 @@ export function normalizeOpenAipAirport(
     frequencies: (raw.frequencies ?? [])
       .map(normalizeFrequency)
       .filter((f): f is NormalizedFrequency => f !== null),
+    fuels: normalizeFuels(raw.fuelTypes ?? []),
   };
 }
 
@@ -147,6 +168,19 @@ function normalizeRunway(raw: OpenAipRunway): NormalizedRunway | null {
     surface: SURFACE_TYPE_MAP[surfaceCode] ?? "OTHER",
     lighting: raw.pilotCtrlLighting ?? false,
   };
+}
+
+function normalizeFuels(fuelTypeCodes: number[]): NormalizedFuel[] {
+  const seen = new Set<FuelType>();
+  const result: NormalizedFuel[] = [];
+  for (const code of fuelTypeCodes) {
+    const fuelType = FUEL_TYPE_MAP[code];
+    if (fuelType && !seen.has(fuelType)) {
+      seen.add(fuelType);
+      result.push({ type: fuelType, available: true });
+    }
+  }
+  return result;
 }
 
 function normalizeFrequency(raw: OpenAipFrequency): NormalizedFrequency | null {

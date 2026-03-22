@@ -245,6 +245,7 @@ model Fuel {
 
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
+  @@unique([aerodromeId, type])
   @@map("fuels")
 }
 
