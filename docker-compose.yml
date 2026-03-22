@@ -64,7 +64,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@aerodirectory.local
+      PGADMIN_DEFAULT_EMAIL: admin@aerodirectory.fr
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"
