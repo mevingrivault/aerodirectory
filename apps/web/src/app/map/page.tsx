@@ -42,10 +42,7 @@ export default function MapPage() {
   const { data } = useQuery({
     queryKey: ["map-aerodromes", query],
     queryFn: () =>
-      apiClient.get<AerodromeMarker[]>("/search", {
-        limit: "500",
-        ...(query ? { q: query } : {}),
-      }),
+      apiClient.get<AerodromeMarker[]>("/aerodromes/map", query ? { q: query } : undefined),
   });
 
   const aerodromes = data?.data ?? [];

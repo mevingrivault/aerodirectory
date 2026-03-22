@@ -40,6 +40,13 @@ export class AerodromeController {
   }
 
   @Public()
+  @Get("map")
+  async mapMarkers(@Query("q") q?: string) {
+    const data = await this.aerodromes.findAllMarkers(q);
+    return ok(data);
+  }
+
+  @Public()
   @Get("nearby")
   async nearby(
     @Query(new ZodValidationPipe(NearbySchema)) query: NearbyInput,

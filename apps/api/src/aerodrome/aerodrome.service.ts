@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { Prisma } from "@aerodirectory/database";
 import type {
   AerodromeCreateInput,
   AerodromeUpdateInput,
@@ -136,6 +137,35 @@ export class AerodromeService {
   async delete(id: string) {
     await this.findById(id);
     await this.prisma.aerodrome.delete({ where: { id } });
+  }
+
+  async findAllMarkers(q?: string) {
+    const where: Prisma.AerodromeWhereInput = q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { icaoCode: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : {};
+
+    return this.prisma.aerodrome.findMany({
+      where,
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        icaoCode: true,
+        latitude: true,
+        longitude: true,
+        aerodromeType: true,
+        status: true,
+        elevation: true,
+        runways: {
+          select: { identifier: true, length: true, surface: true },
+        },
+      },
+    });
   }
 
   async list(page: number, limit: number) {
