@@ -3,7 +3,7 @@
 /**
  * AeroDirectory — Automated Development Setup
  *
- * Usage: node scripts/setup.mjs
+ * Usage: pnpm init   (or: node scripts/setup.mjs)
  *
  * This script:
  * 1. Copies .env.development → .env, packages/database/.env, apps/api/.env
