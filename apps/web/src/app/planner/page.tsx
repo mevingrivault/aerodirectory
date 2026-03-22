@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatNm, formatFlightTime, formatEuros } from "@/lib/utils";
-import { Navigation, Plane, Plus, Trash2 } from "lucide-react";
+import { Navigation, Plane, Plus, Trash2, Search, MapPin } from "lucide-react";
 import Link from "next/link";
 import type { PlannerResult } from "@aerodirectory/shared";
 
@@ -23,6 +23,21 @@ interface AircraftProfile {
   minRunwayLength: number;
   allowedSurfaces: string[];
 }
+
+interface AerodromeOption {
+  id: string;
+  name: string;
+  icaoCode: string | null;
+  latitude: number;
+  longitude: number;
+  city: string | null;
+}
+
+const SORT_OPTIONS = [
+  { value: "time", label: "Temps de vol" },
+  { value: "distance", label: "Distance" },
+  { value: "cost", label: "Coût estimé" },
+];
 
 export default function PlannerPage() {
   const { user } = useAuth();
@@ -41,9 +56,16 @@ export default function PlannerPage() {
 
   // Planning state
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-  const [departureLat, setDepartureLat] = useState("48.8566");
-  const [departureLng, setDepartureLng] = useState("2.3522");
-  const [results, setResults] = useState<PlannerResult[]>([]);
+  const [sortBy, setSortBy] = useState("time");
+  const [results, setResults] = useState<PlannerResult[] | null>(null);
+  const [calcError, setCalcError] = useState("");
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // Departure aerodrome search
+  const [departureSearch, setDepartureSearch] = useState("");
+  const [departureAerodrome, setDepartureAerodrome] = useState<AerodromeOption | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const { data: profilesRes } = useQuery({
     queryKey: ["profiles"],
@@ -51,7 +73,26 @@ export default function PlannerPage() {
     enabled: !!user,
   });
 
+  const { data: suggestionsRes } = useQuery({
+    queryKey: ["aerodrome-search", departureSearch],
+    queryFn: () =>
+      apiClient.get<AerodromeOption[]>("/aerodromes/map", { q: departureSearch }),
+    enabled: departureSearch.length >= 2 && !departureAerodrome,
+  });
+
   const profiles = profilesRes?.data ?? [];
+  const suggestions = (suggestionsRes?.data ?? []).slice(0, 8);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const createProfileMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -89,15 +130,35 @@ export default function PlannerPage() {
     });
   };
 
+  const handleSelectDeparture = (ad: AerodromeOption) => {
+    setDepartureAerodrome(ad);
+    setDepartureSearch(ad.icaoCode ? `${ad.icaoCode} — ${ad.name}` : ad.name);
+    setShowSuggestions(false);
+  };
+
+  const handleClearDeparture = () => {
+    setDepartureAerodrome(null);
+    setDepartureSearch("");
+  };
+
   const handleCalculate = async () => {
-    if (!selectedProfileId) return;
-    const res = await apiClient.post<PlannerResult[]>("/planner/calculate", {
-      profileId: selectedProfileId,
-      departureLat: parseFloat(departureLat),
-      departureLng: parseFloat(departureLng),
-      sortBy: "time",
-    });
-    setResults(res.data);
+    if (!selectedProfileId || !departureAerodrome) return;
+    setIsCalculating(true);
+    setCalcError("");
+    try {
+      const res = await apiClient.post<PlannerResult[]>("/planner/calculate", {
+        profileId: selectedProfileId,
+        departureLat: departureAerodrome.latitude,
+        departureLng: departureAerodrome.longitude,
+        sortBy,
+      });
+      setResults(res.data);
+    } catch (err: unknown) {
+      setCalcError(err instanceof Error ? err.message : "Erreur lors du calcul des routes.");
+      setResults(null);
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   if (!user) {
@@ -202,7 +263,7 @@ export default function PlannerPage() {
                       <div>
                         <div className="font-medium">{p.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          TAS {p.tas}kt · {p.fuelConsumption}L/h · {formatEuros(p.hourlyCost)}/h
+                          TAS {p.tas}kt · {p.fuelConsumption}L/h · {formatEuros(p.hourlyCost)}/h · {p.fuelRange}NM
                         </div>
                       </div>
                       <Button
@@ -222,37 +283,96 @@ export default function PlannerPage() {
             </CardContent>
           </Card>
 
-          {/* Departure point */}
+          {/* Departure & options */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Point de Départ</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Latitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={departureLat}
-                  onChange={(e) => setDepartureLat(e.target.value)}
-                />
+            <CardContent className="space-y-4">
+              {/* Aerodrome search */}
+              <div ref={searchRef} className="relative">
+                <label className="text-sm font-medium mb-1 block">Aérodrome de départ</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Rechercher par nom ou ICAO..."
+                    value={departureSearch}
+                    onChange={(e) => {
+                      setDepartureSearch(e.target.value);
+                      setDepartureAerodrome(null);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => departureSearch.length >= 2 && setShowSuggestions(true)}
+                  />
+                  {departureAerodrome && (
+                    <button
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                      onClick={handleClearDeparture}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {showSuggestions && suggestions.length > 0 && !departureAerodrome && (
+                  <div className="absolute z-20 w-full mt-1 rounded-md border bg-background shadow-lg">
+                    {suggestions.map((ad) => (
+                      <button
+                        key={ad.id}
+                        className="w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors"
+                        onMouseDown={() => handleSelectDeparture(ad)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium">{ad.name}</span>
+                          {ad.icaoCode && (
+                            <Badge variant="secondary" className="text-xs">{ad.icaoCode}</Badge>
+                          )}
+                        </div>
+                        {ad.city && (
+                          <div className="text-xs text-muted-foreground ml-5">{ad.city}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {departureAerodrome && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-primary">
+                  <MapPin className="inline h-3 w-3 mr-1" />
+                  {departureAerodrome.latitude.toFixed(4)}°N, {departureAerodrome.longitude.toFixed(4)}°E
+                </div>
+              )}
+
+              {/* Sort */}
               <div>
-                <label className="text-sm font-medium">Longitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={departureLng}
-                  onChange={(e) => setDepartureLng(e.target.value)}
-                />
+                <label className="text-sm font-medium mb-1 block">Trier par</label>
+                <div className="flex gap-1">
+                  {SORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setSortBy(opt.value)}
+                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                        sortBy === opt.value
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "hover:bg-accent/50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
               <Button
                 className="w-full"
                 onClick={handleCalculate}
-                disabled={!selectedProfileId}
+                disabled={!selectedProfileId || !departureAerodrome || isCalculating}
               >
                 <Plane className="mr-2 h-4 w-4" />
-                Calculer les Routes
+                {isCalculating ? "Calcul en cours..." : "Calculer les Routes"}
               </Button>
             </CardContent>
           </Card>
@@ -263,14 +383,31 @@ export default function PlannerPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">
-                Aérodromes Accessibles ({results.length})
+                Aérodromes Accessibles
+                {results !== null && results.length > 0 && (
+                  <span className="ml-2 text-base font-normal text-muted-foreground">
+                    ({results.length})
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {results.length === 0 ? (
-                <p className="text-muted-foreground">
-                  Sélectionnez un profil et calculez pour voir les aérodromes accessibles.
-                </p>
+              {calcError && (
+                <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  {calcError}
+                </div>
+              )}
+              {results === null ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Navigation className="mx-auto h-10 w-10 mb-3 opacity-30" />
+                  <p>Sélectionnez un profil, un aérodrome de départ et calculez pour voir les destinations accessibles.</p>
+                </div>
+              ) : results.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Plane className="mx-auto h-10 w-10 mb-3 opacity-30" />
+                  <p>Aucun aérodrome accessible avec ce profil depuis ce point de départ.</p>
+                  <p className="text-xs mt-1">Vérifiez l&apos;autonomie et les exigences de piste du profil.</p>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {results.slice(0, 50).map((r) => (
@@ -288,14 +425,19 @@ export default function PlannerPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-3 text-sm">
-                          <span>{formatNm(r.distanceNm)}</span>
-                          <span>{formatFlightTime(r.timeHours)}</span>
-                          <span>{r.fuelUsedLiters}L</span>
+                          <span className="text-muted-foreground">{formatNm(r.distanceNm)}</span>
+                          <span className="text-muted-foreground">{formatFlightTime(r.timeHours)}</span>
+                          <span className="text-muted-foreground">{r.fuelUsedLiters}L</span>
                           <Badge variant="outline">{formatEuros(r.estimatedCost)}</Badge>
                         </div>
                       </div>
                     </Link>
                   ))}
+                  {results.length > 50 && (
+                    <p className="text-center text-sm text-muted-foreground pt-2">
+                      + {results.length - 50} autres aérodromes
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

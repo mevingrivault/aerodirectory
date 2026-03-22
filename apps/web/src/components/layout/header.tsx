@@ -42,7 +42,7 @@ export function Header() {
           {user && (
             <>
               <Link
-                href="/pokedex"
+                href="/aerodex"
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <BookOpen className="h-4 w-4" />
@@ -63,7 +63,7 @@ export function Header() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link
-                href="/profile"
+                href="/membre"
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               >
                 <User className="h-4 w-4" />

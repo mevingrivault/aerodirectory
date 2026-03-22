@@ -18,6 +18,8 @@ import type {
   AuthTokens,
   TotpSetupResponse,
   UserProfile,
+  UpdateProfileInput,
+  ChangePasswordInput,
 } from "@aerodirectory/shared";
 
 @Injectable()
@@ -296,10 +298,68 @@ export class AuthService {
 
   // ─── Profile ────────────────────────────────────────────
 
+  async updateProfile(
+    userId: string,
+    input: UpdateProfileInput,
+  ): Promise<UserProfile> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { displayName: input.displayName ?? null },
+    });
+    return this.toProfile(user);
+  }
+
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+
+    const valid = await argon2.verify(user.passwordHash, input.currentPassword);
+    if (!valid) {
+      throw new UnauthorizedException("Mot de passe actuel incorrect");
+    }
+
+    const newHash = await argon2.hash(input.newPassword, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+
+    await this.audit.log({
+      userId,
+      action: "PASSWORD_CHANGE",
+      ip,
+      userAgent,
+    });
+  }
+
   async getProfile(userId: string): Promise<UserProfile> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
     });
+    return this.toProfile(user);
+  }
+
+  private toProfile(user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    role: string;
+    emailVerified: Date | null;
+    totpEnabled: boolean;
+    createdAt: Date;
+  }): UserProfile {
     return {
       id: user.id,
       email: user.email,

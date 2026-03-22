@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import type { VisitUpsertInput, PokedexStats, Badge } from "@aerodirectory/shared";
+import type { VisitUpsertInput, AerodexStats, Badge } from "@aerodirectory/shared";
 import { BADGES } from "@aerodirectory/shared";
 
 @Injectable()
@@ -50,7 +50,7 @@ export class VisitService {
     });
   }
 
-  async getPokedexStats(userId: string): Promise<PokedexStats> {
+  async getAerodexStats(userId: string): Promise<AerodexStats> {
     const visits = await this.prisma.visit.findMany({
       where: { userId },
       include: {

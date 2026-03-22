@@ -19,8 +19,8 @@ const features = [
   {
     icon: BookOpen,
     title: "Carnet de Vol",
-    description: "Suivez les terrains visités en mode Pokédex, obtenez des badges et consultez vos statistiques de vol.",
-    href: "/pokedex",
+    description: "Suivez les terrains visités avec l'Aérodex, obtenez des badges et consultez vos statistiques de vol.",
+    href: "/aerodex",
   },
   {
     icon: Navigation,

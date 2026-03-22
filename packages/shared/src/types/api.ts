@@ -36,8 +36,8 @@ export interface PlannerResult {
   estimatedCost: number;
 }
 
-/** Pokédex stats */
-export interface PokedexStats {
+/** Aérodex stats */
+export interface AerodexStats {
   visitedCount: number;
   seenCount: number;
   favoriteCount: number;

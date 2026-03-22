@@ -23,8 +23,8 @@ export class VisitController {
   }
 
   @Get("stats")
-  async pokedexStats(@CurrentUser() user: { sub: string }) {
-    const stats = await this.visits.getPokedexStats(user.sub);
+  async aerodexStats(@CurrentUser() user: { sub: string }) {
+    const stats = await this.visits.getAerodexStats(user.sub);
     return ok(stats);
   }
 

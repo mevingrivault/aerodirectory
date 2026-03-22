@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Put,
   Body,
   Query,
   Req,
@@ -16,9 +17,13 @@ import {
   RegisterSchema,
   LoginSchema,
   TotpVerifySchema,
+  UpdateProfileSchema,
+  ChangePasswordSchema,
   type RegisterInput,
   type LoginInput,
   type TotpVerifyInput,
+  type UpdateProfileInput,
+  type ChangePasswordInput,
 } from "@aerodirectory/shared";
 
 @Controller("auth")
@@ -104,5 +109,24 @@ export class AuthController {
   async profile(@CurrentUser() user: { sub: string }) {
     const profile = await this.auth.getProfile(user.sub);
     return ok(profile);
+  }
+
+  @Put("profile")
+  async updateProfile(
+    @Body(new ZodValidationPipe(UpdateProfileSchema)) body: UpdateProfileInput,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const profile = await this.auth.updateProfile(user.sub, body);
+    return ok(profile);
+  }
+
+  @Post("change-password")
+  async changePassword(
+    @Body(new ZodValidationPipe(ChangePasswordSchema)) body: ChangePasswordInput,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.changePassword(user.sub, body, req.ip, req.headers["user-agent"]);
+    return ok({ changed: true });
   }
 }
