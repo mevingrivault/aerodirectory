@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DISCLAIMER } from "@aerodirectory/shared";
+import { DISCLAIMER, FUEL_LABELS } from "@aerodirectory/shared";
 import {
   Plane,
   MapPin,
@@ -26,6 +26,10 @@ import {
   MessageSquare,
   ArrowLeft,
   Navigation,
+  FileText,
+  TriangleAlert,
+  Coffee,
+  Beer,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -88,6 +92,8 @@ interface NearbyAerodrome {
   name: string;
   icaoCode: string | null;
   distanceKm: number;
+  aerodromeType: string;
+  fuels?: { type: string; available: boolean }[];
 }
 
 interface Comment {
@@ -95,6 +101,41 @@ interface Comment {
   content: string;
   createdAt: string;
   user: { id: string; displayName: string | null };
+}
+
+interface NearbyRestaurant {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distanceMeters: number;
+  accessibility: "walkable" | "nearby";
+  amenity: string; // "restaurant" | "cafe" | "bar"
+  cuisine: string[];
+  isOpenNow: boolean | null;
+  openingHours: string | null;
+  phone: string | null;
+  website: string | null;
+  address: { street: string | null; postcode: string | null; city: string | null };
+  takeaway: boolean | null;
+  delivery: boolean | null;
+  outdoorSeating: boolean | null;
+  osmType: string;
+  osmId: number;
+}
+
+interface NearbyRestaurantsResult {
+  aerodromeId: string;
+  radiusMeters: number;
+  restaurants: NearbyRestaurant[];
+  pilotServices: {
+    restaurant: {
+      available: boolean;
+      source: string;
+      walkableThresholdMeters: number;
+      matchingPlacesCount: number;
+    };
+  };
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -142,10 +183,42 @@ export default function AerodromeDetailPage() {
       apiClient.get<NearbyAerodrome[]>("/aerodromes/nearby", {
         lat: ad!.latitude.toString(),
         lng: ad!.longitude.toString(),
-        radiusKm: "50",
-        limit: "6",
+        radiusKm: "100",
+        limit: "20",
       }),
     enabled: !!ad,
+  });
+
+  const noFuel = ad ? ad.fuels.length === 0 || ad.fuels.every((f) => !f.available) : false;
+
+  const fmtDist = (km: number) => `${km.toFixed(0)} km / ${(km * 0.539957).toFixed(0)} NM`;
+
+  // Find nearest aerodrome with fuel when current one has none
+  const { data: nearbyFuelRes } = useQuery({
+    queryKey: ["nearby-fuel", ad?.latitude, ad?.longitude],
+    queryFn: () =>
+      apiClient.get<NearbyAerodrome[]>("/aerodromes/nearby", {
+        lat: ad!.latitude.toString(),
+        lng: ad!.longitude.toString(),
+        radiusKm: "200",
+        limit: "2",
+        hasFuel: "true",
+      }),
+    enabled: !!ad && noFuel,
+  });
+
+  const [restaurantRadius, setRestaurantRadius] = useState(3000);
+
+  // Always fetch at 3 km — pilot services derivation needs the full walkable zone.
+  // The radius selector filters the displayed list client-side.
+  const { data: restaurantsRes, isLoading: restaurantsLoading, isError: restaurantsError } = useQuery({
+    queryKey: ["restaurants", id],
+    queryFn: () =>
+      apiClient.get<NearbyRestaurantsResult>(`/aerodromes/${id}/restaurants`, {
+        radiusMeters: "3000",
+      }),
+    enabled: !!ad,
+    staleTime: 6 * 60 * 60 * 1000,
   });
 
   const { data: visitsRes, refetch: refetchVisit } = useQuery({
@@ -164,7 +237,9 @@ export default function AerodromeDetailPage() {
   }, [user, id, currentVisitStatus]);
 
   const comments = commentsRes?.data ?? [];
-  const nearbyAerodromes = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
+  const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
+  const nearbyAerodromes = allNearby.filter((n) => n.aerodromeType !== "ULTRALIGHT_FIELD").slice(0, 6);
+  const nearbyUlm = allNearby.filter((n) => n.aerodromeType === "ULTRALIGHT_FIELD").slice(0, 6);
 
   const handleVisit = async (status: string) => {
     let nextStatus = status;
@@ -200,8 +275,10 @@ export default function AerodromeDetailPage() {
     );
   }
 
+  const restaurantFromNearby = restaurantsRes?.data?.pilotServices?.restaurant?.available ?? false;
+
   const amenities = [
-    { icon: Utensils, label: "Restaurant", active: ad.hasRestaurant },
+    { icon: Utensils, label: "Restaurant", active: ad.hasRestaurant || restaurantFromNearby },
     { icon: Bike, label: "Vélos", active: ad.hasBikes },
     { icon: Bus, label: "Transport", active: ad.hasTransport },
     { icon: Home, label: "Hébergement", active: ad.hasAccommodation },
@@ -254,9 +331,26 @@ export default function AerodromeDetailPage() {
           </p>
         )}
 
+        {/* Action buttons */}
+        <div className="flex gap-2 mt-4 flex-wrap">
+          {/* VAC link */}
+          {ad.icaoCode && (() => {
+            const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
+            if (!pattern) return null;
+            const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
+            return (
+              <a href={vacUrl} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="outline">
+                  <FileText className="mr-1 h-4 w-4" /> Carte VAC
+                </Button>
+              </a>
+            );
+          })()}
+        </div>
+
         {/* Visit buttons (authenticated only) */}
         {user && (
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2 mt-2">
             {(() => {
               const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
               const isFavorite = currentVisitStatus === "FAVORITE";
@@ -356,14 +450,37 @@ export default function AerodromeDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {ad.fuels.length === 0 ? (
-              <p className="text-muted-foreground">Aucune donnée carburant disponible.</p>
+            {noFuel ? (
+              <div className="space-y-3">
+                <p className="text-muted-foreground">Aucune donnée carburant disponible.</p>
+                {(() => {
+                  const nearest = nearbyFuelRes?.data?.find((n) => n.id !== id);
+                  if (!nearest) return null;
+                  const fuels = nearest.fuels?.filter((f) => f.available).map((f) => FUEL_LABELS[f.type] ?? f.type).join(", ");
+                  return (
+                    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                      <p className="font-medium mb-1">Carburant le plus proche :</p>
+                      <Link
+                        href={`/aerodrome/${nearest.id}`}
+                        className="flex items-center justify-between hover:underline"
+                      >
+                        <span>
+                          {nearest.name}
+                          {nearest.icaoCode && <span className="ml-1 text-blue-600">({nearest.icaoCode})</span>}
+                          {fuels && <span className="ml-2 text-xs text-blue-600">{fuels}</span>}
+                        </span>
+                        <span className="font-medium shrink-0 ml-2">{fmtDist(nearest.distanceKm)}</span>
+                      </Link>
+                    </div>
+                  );
+                })()}
+              </div>
             ) : (
               <div className="space-y-2">
                 {ad.fuels.map((f) => (
                   <div key={f.id} className="flex items-center justify-between">
                     <span>
-                      {f.type.replace("_", " ")}
+                      {FUEL_LABELS[f.type] ?? f.type}
                       {f.selfService && " (Libre-service)"}
                     </span>
                     <div className="flex items-center gap-2">
@@ -428,7 +545,7 @@ export default function AerodromeDetailPage() {
                       )}
                     </span>
                     <span className="text-xs font-medium text-primary">
-                      {n.distanceKm.toFixed(0)} km
+                      {fmtDist(n.distanceKm)}
                     </span>
                   </Link>
                 ))}
@@ -436,6 +553,170 @@ export default function AerodromeDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Nearby ULM */}
+        {nearbyUlm.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Navigation className="h-5 w-5" /> Bases ULM à Proximité
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {nearbyUlm.map((n) => (
+                  <Link
+                    key={n.id}
+                    href={`/aerodrome/${n.id}`}
+                    className="flex items-center justify-between rounded-md border p-2 hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-sm">{n.name}</span>
+                    <span className="text-xs font-medium text-primary">
+                      {fmtDist(n.distanceKm)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Nearby Restaurants, Cafes & Bars */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Utensils className="h-5 w-5" /> Restaurants & cafés à proximité
+              </CardTitle>
+              {/* Radius selector */}
+              <div className="flex gap-1 text-xs">
+                {[1000, 3000, 5000].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRestaurantRadius(r)}
+                    className={`rounded px-2 py-1 border transition-colors ${
+                      restaurantRadius === r
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    {r / 1000} km
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {restaurantsLoading ? (
+              <p className="text-muted-foreground text-sm">Chargement...</p>
+            ) : restaurantsError ? (
+              <p className="text-muted-foreground text-sm">
+                Impossible de charger les établissements pour le moment.
+              </p>
+            ) : !(restaurantsRes?.data?.restaurants ?? []).filter((r) => r.distanceMeters <= restaurantRadius).length ? (
+              <p className="text-muted-foreground text-sm">
+                Aucun établissement trouvé dans un rayon de {restaurantRadius / 1000} km.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {restaurantsRes!.data.restaurants
+                  .filter((r) => r.distanceMeters <= restaurantRadius)
+                  .map((r) => {
+                  const dist =
+                    r.distanceMeters < 1000
+                      ? `${r.distanceMeters} m`
+                      : `${(r.distanceMeters / 1000).toFixed(1)} km`;
+                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}`;
+                  const addr = [r.address.street, r.address.postcode, r.address.city]
+                    .filter(Boolean)
+                    .join(", ");
+
+                  const AmenityIcon =
+                    r.amenity === "cafe" ? Coffee : r.amenity === "bar" ? Beer : Utensils;
+
+                  const amenityLabel =
+                    r.amenity === "cafe" ? "Café" : r.amenity === "bar" ? "Bar" : "Restaurant";
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="rounded-md border p-3 flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        {/* Name + type icon */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <AmenityIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm">{r.name}</span>
+                          {r.cuisine.length > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              {r.cuisine.join(", ")}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Address */}
+                        {addr && (
+                          <p className="text-xs text-muted-foreground mt-0.5 ml-5">{addr}</p>
+                        )}
+
+                        {/* Opening hours text */}
+                        {r.openingHours && (
+                          <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+                            {r.openingHours}
+                          </p>
+                        )}
+
+                        {/* Badges */}
+                        <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
+                          {/* Accessibility badge */}
+                          {r.accessibility === "walkable" ? (
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                              À pied
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Proche
+                            </span>
+                          )}
+                          {/* Open now badge */}
+                          {r.isOpenNow === true && (
+                            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                              Ouvert maintenant
+                            </span>
+                          )}
+                          {r.isOpenNow === false && (
+                            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-600">
+                              Fermé
+                            </span>
+                          )}
+                          {/* Amenity type badge (not shown for restaurant since it's obvious) */}
+                          {r.amenity !== "restaurant" && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {amenityLabel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right column: distance + OSM link */}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-xs font-medium text-primary">{dist}</span>
+                        <a
+                          href={mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          <ExternalLink className="h-3 w-3" /> Google Maps
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Links */}
         {(ad.aipLink || ad.vacLink || ad.websiteUrl) && (
@@ -477,6 +758,53 @@ export default function AerodromeDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* VAC Chart */}
+        {ad.icaoCode && (() => {
+          const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
+          if (!pattern) return null;
+          const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
+          return (
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileText className="h-5 w-5" /> Carte VAC — {ad.icaoCode}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* Disclaimer */}
+                <div className="flex gap-2 rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
+                  <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p>
+                    Cette carte est fournie à titre informatif uniquement et peut ne pas être à jour.{" "}
+                    <strong>Consultez toujours la documentation officielle AIP France</strong> publiée
+                    par le SIA avant tout vol. Les données présentées ne sauraient engager la
+                    responsabilité d'AéroDirectory.
+                  </p>
+                </div>
+
+                {/* PDF embed */}
+                <div className="w-full overflow-hidden rounded-md border bg-muted" style={{ height: "600px" }}>
+                  <iframe
+                    src={vacUrl}
+                    className="h-full w-full"
+                    title={`Carte VAC ${ad.icaoCode}`}
+                  />
+                </div>
+
+                {/* Fallback link */}
+                <a
+                  href={vacUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" /> Ouvrir la carte VAC sur le site du SIA
+                </a>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Comments */}
         <Card className="lg:col-span-2">

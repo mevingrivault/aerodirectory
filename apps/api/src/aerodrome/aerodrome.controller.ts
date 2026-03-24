@@ -9,6 +9,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { AerodromeService } from "./aerodrome.service";
+import { RestaurantService } from "../restaurant/restaurant.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { Public, Roles } from "../common/decorators";
@@ -23,9 +24,15 @@ import {
   type NearbyInput,
 } from "@aerodirectory/shared";
 
+const MAX_RESTAURANT_RADIUS = 10_000;
+const DEFAULT_RESTAURANT_RADIUS = 3_000;
+
 @Controller("aerodromes")
 export class AerodromeController {
-  constructor(private readonly aerodromes: AerodromeService) {}
+  constructor(
+    private readonly aerodromes: AerodromeService,
+    private readonly restaurants: RestaurantService,
+  ) {}
 
   @Public()
   @Get()
@@ -56,6 +63,7 @@ export class AerodromeController {
       query.lng,
       query.radiusKm,
       query.limit,
+      query.hasFuel,
     );
     return ok(data);
   }
@@ -100,5 +108,19 @@ export class AerodromeController {
   async remove(@Param("id") id: string) {
     await this.aerodromes.delete(id);
     return ok({ deleted: true });
+  }
+
+  @Public()
+  @Get(":id/restaurants")
+  async getNearbyRestaurants(
+    @Param("id") id: string,
+    @Query("radiusMeters") radiusMeters?: string,
+  ) {
+    const radius = radiusMeters
+      ? Math.min(Math.max(parseInt(radiusMeters, 10) || DEFAULT_RESTAURANT_RADIUS, 500), MAX_RESTAURANT_RADIUS)
+      : DEFAULT_RESTAURANT_RADIUS;
+
+    const result = await this.restaurants.getNearbyRestaurants(id, radius);
+    return ok(result);
   }
 }

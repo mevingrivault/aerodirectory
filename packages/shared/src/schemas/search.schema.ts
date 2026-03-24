@@ -40,6 +40,7 @@ export const NearbySchema = z.object({
   lng: z.coerce.number().min(-180).max(180),
   radiusKm: z.coerce.number().positive().max(MAX_SEARCH_RADIUS_KM).default(50),
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  hasFuel: z.coerce.boolean().optional(),
 });
 
 export type PaginationInput = z.infer<typeof PaginationSchema>;

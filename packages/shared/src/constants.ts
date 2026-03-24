@@ -35,7 +35,14 @@ export const FREQUENCY_TYPES = [
   "OTHER",
 ] as const;
 
-export const FUEL_TYPES = ["AVGAS_100LL", "UL91", "JET_A1"] as const;
+export const FUEL_TYPES = ["AVGAS_100LL", "UL91", "JET_A1", "SP98"] as const;
+
+export const FUEL_LABELS: Record<string, string> = {
+  AVGAS_100LL: "100LL",
+  JET_A1: "JET A1",
+  SP98: "SP98",
+  UL91: "UL91",
+};
 
 export const VISIT_STATUSES = ["SEEN", "VISITED", "FAVORITE"] as const;
 

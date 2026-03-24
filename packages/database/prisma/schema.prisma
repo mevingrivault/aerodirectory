@@ -60,6 +60,7 @@ enum FuelType {
   AVGAS_100LL
   UL91
   JET_A1
+  SP98
 }
 
 enum PaymentType {

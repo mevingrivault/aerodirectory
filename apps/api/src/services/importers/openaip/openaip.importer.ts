@@ -39,8 +39,13 @@ export async function syncOpenAipFranceAirports(
   console.log("[2/3] Normalizing airport data...");
   const normalized: NormalizedAerodrome[] = [];
   const normalizeErrors: string[] = [];
+  let excludedCount = 0;
 
   for (const raw of rawAirports) {
+    if (isMedicalSite(raw.name)) {
+      excludedCount++;
+      continue;
+    }
     try {
       normalized.push(normalizeOpenAipAirport(raw));
     } catch (error) {
@@ -49,7 +54,7 @@ export async function syncOpenAipFranceAirports(
       normalizeErrors.push(msg);
     }
   }
-  console.log(`  Normalized ${normalized.length} airports (${normalizeErrors.length} errors)\n`);
+  console.log(`  Normalized ${normalized.length} airports (${excludedCount} medical sites excluded, ${normalizeErrors.length} errors)\n`);
 
   // 3. Upsert into database
   console.log("[3/3] Upserting into database...");
@@ -178,6 +183,23 @@ async function upsertAirport(
   });
 
   return "created";
+}
+
+const MEDICAL_KEYWORDS = [
+  "hospital",
+  "hopital",
+  "hôpital",
+  "centre hospitalier",
+  "chu ",
+  "chr ",
+  "clinique",
+  "médipôle",
+  "medipole",
+];
+
+function isMedicalSite(name: string): boolean {
+  const lower = name.toLowerCase();
+  return MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 /**

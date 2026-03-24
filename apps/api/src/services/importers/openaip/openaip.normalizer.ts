@@ -70,7 +70,7 @@ const AIRPORT_TYPE_MAP: Record<number, AerodromeType> = {
   6: "ULTRALIGHT_FIELD",     // Ultra light flying site (ULM)
   7: "OTHER",                // Agricultural landing strip
   8: "OTHER",                // Closed (status handled separately)
-  9: "OTHER",                // Airport / aerodrome unknown
+  9: "SMALL_AIRPORT",        // Airport resp. Airfield IFR
   10: "SEAPLANE_BASE",       // Airfield water
   11: "OTHER",               // Hang gliding
   12: "OTHER",               // Para gliding
@@ -137,6 +137,12 @@ export function normalizeOpenAipAirport(
   const [lng, lat] = raw.geometry?.coordinates ?? [0, 0];
   const elevation = normalizeElevationToFeet(raw.elevation);
 
+  const baseType: AerodromeType = AIRPORT_TYPE_MAP[raw.type] ?? "OTHER";
+  const aerodromeType =
+    baseType === "SMALL_AIRPORT" && isLargeAirport(raw.runways ?? [])
+      ? "INTERNATIONAL_AIRPORT"
+      : baseType;
+
   return {
     name: (raw.name || "").trim(),
     icaoCode: validIcao,
@@ -144,7 +150,7 @@ export function normalizeOpenAipAirport(
     longitude: lng,
     elevation,
     countryCode: (raw.country || "FR").toUpperCase(),
-    aerodromeType: AIRPORT_TYPE_MAP[raw.type] ?? "OTHER",
+    aerodromeType,
     status: (raw.type === 8 ? "CLOSED" : "OPEN") as AerodromeStatus,
     source: "openaip",
     sourceId: raw._id,
@@ -174,6 +180,16 @@ function normalizeRunway(raw: OpenAipRunway): NormalizedRunway | null {
     surface: SURFACE_TYPE_MAP[surfaceCode] ?? "OTHER",
     lighting: raw.pilotCtrlLighting ?? false,
   };
+}
+
+/** Aéroport "grand" si au moins une piste ≥ 1500 m en asphalte ou béton */
+function isLargeAirport(runways: OpenAipRunway[]): boolean {
+  const HARD_SURFACES = new Set([0, 1]); // 0=asphalt, 1=concrete
+  return runways.some((r) => {
+    const lengthM = convertToMeters(r.dimension?.length);
+    const surface = r.surface?.mainComposite ?? -1;
+    return lengthM !== null && lengthM >= 1500 && HARD_SURFACES.has(surface);
+  });
 }
 
 function normalizeFuels(fuelTypeCodes: number[]): NormalizedFuel[] {

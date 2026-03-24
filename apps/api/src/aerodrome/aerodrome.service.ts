@@ -46,7 +46,7 @@ export class AerodromeService {
     return aerodrome;
   }
 
-  async findNearby(lat: number, lng: number, radiusKm: number, limit: number) {
+  async findNearby(lat: number, lng: number, radiusKm: number, limit: number, hasFuel?: boolean) {
     // Bounding-box pre-filter
     const kmPerDegLat = 111.0;
     const kmPerDegLng = 111.0 * Math.cos((lat * Math.PI) / 180);
@@ -57,10 +57,12 @@ export class AerodromeService {
       where: {
         latitude: { gte: lat - latDelta, lte: lat + latDelta },
         longitude: { gte: lng - lngDelta, lte: lng + lngDelta },
+        ...(hasFuel ? { fuels: { some: { available: true } } } : {}),
       },
       include: {
         runways: true,
         frequencies: true,
+        fuels: { select: { type: true, available: true } },
         _count: { select: { visits: true, comments: true } },
       },
     });
