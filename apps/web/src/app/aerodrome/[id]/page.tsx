@@ -30,6 +30,7 @@ import {
   TriangleAlert,
   Coffee,
   Beer,
+  Train,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,37 @@ interface NearbyRestaurant {
   osmId: number;
 }
 
+interface NearbyTransport {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distanceMeters: number;
+  type: "bus" | "tram" | "train" | "other";
+  subType: "station" | "stop" | "platform";
+  operator: string | null;
+  network: string | null;
+  ref: string | null;
+  wheelchair: boolean | null;
+  shelter: boolean | null;
+  osmType: string;
+  osmId: number;
+}
+
+interface NearbyTransportResult {
+  aerodromeId: string;
+  radiusMeters: number;
+  stops: NearbyTransport[];
+  pilotServices: {
+    transport: {
+      available: boolean;
+      source: string;
+      walkableThresholdMeters: number;
+      matchingStopsCount: number;
+    };
+  };
+}
+
 interface NearbyRestaurantsResult {
   aerodromeId: string;
   radiusMeters: number;
@@ -208,6 +240,7 @@ export default function AerodromeDetailPage() {
   });
 
   const [restaurantRadius, setRestaurantRadius] = useState(3000);
+  const [transportRadius, setTransportRadius] = useState(3000);
 
   // Always fetch at 3 km — pilot services derivation needs the full walkable zone.
   // The radius selector filters the displayed list client-side.
@@ -215,6 +248,16 @@ export default function AerodromeDetailPage() {
     queryKey: ["restaurants", id],
     queryFn: () =>
       apiClient.get<NearbyRestaurantsResult>(`/aerodromes/${id}/restaurants`, {
+        radiusMeters: "3000",
+      }),
+    enabled: !!ad,
+    staleTime: 6 * 60 * 60 * 1000,
+  });
+
+  const { data: transportRes, isLoading: transportLoading, isError: transportError } = useQuery({
+    queryKey: ["transport", id],
+    queryFn: () =>
+      apiClient.get<NearbyTransportResult>(`/aerodromes/${id}/transports`, {
         radiusMeters: "3000",
       }),
     enabled: !!ad,
@@ -276,11 +319,12 @@ export default function AerodromeDetailPage() {
   }
 
   const restaurantFromNearby = restaurantsRes?.data?.pilotServices?.restaurant?.available ?? false;
+  const transportFromNearby = transportRes?.data?.pilotServices?.transport?.available ?? false;
 
   const amenities = [
     { icon: Utensils, label: "Restaurant", active: ad.hasRestaurant || restaurantFromNearby },
     { icon: Bike, label: "Vélos", active: ad.hasBikes },
-    { icon: Bus, label: "Transport", active: ad.hasTransport },
+    { icon: Bus, label: "Transport", active: ad.hasTransport || transportFromNearby },
     { icon: Home, label: "Hébergement", active: ad.hasAccommodation },
     { icon: Wrench, label: "Maintenance", active: ad.hasMaintenance },
     { icon: Plane, label: "Hangars", active: ad.hasHangars },
@@ -715,6 +759,158 @@ export default function AerodromeDetailPage() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Nearby Public Transport */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Bus className="h-5 w-5" /> Transports à proximité
+              </CardTitle>
+              <div className="flex gap-1 text-xs">
+                {[1000, 3000, 5000].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setTransportRadius(r)}
+                    className={`rounded px-2 py-1 border transition-colors ${
+                      transportRadius === r
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    {r / 1000} km
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {transportLoading ? (
+              <p className="text-muted-foreground text-sm">Chargement...</p>
+            ) : transportError ? (
+              <p className="text-muted-foreground text-sm">
+                Impossible de charger les transports pour le moment.
+              </p>
+            ) : (() => {
+              const filtered = (transportRes?.data?.stops ?? []).filter(
+                (s) => s.distanceMeters <= transportRadius,
+              );
+              if (!filtered.length) {
+                return (
+                  <p className="text-muted-foreground text-sm">
+                    Aucun transport trouvé dans un rayon de {transportRadius / 1000} km.
+                  </p>
+                );
+              }
+
+              const groups: { type: NearbyTransport["type"]; label: string; icon: React.ElementType }[] = [
+                { type: "train", label: "Train", icon: Train },
+                { type: "tram", label: "Tram", icon: Bus },
+                { type: "bus", label: "Bus", icon: Bus },
+                { type: "other", label: "Autres", icon: MapPin },
+              ];
+
+              return (
+                <div className="space-y-4">
+                  {groups.map(({ type, label, icon: Icon }) => {
+                    const stops = filtered.filter((s) => s.type === type);
+                    if (!stops.length) return null;
+                    return (
+                      <div key={type}>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <Icon className="h-3.5 w-3.5" /> {label}
+                        </p>
+                        <div className="space-y-2">
+                          {stops.map((s) => {
+                            const dist =
+                              s.distanceMeters < 1000
+                                ? `${s.distanceMeters} m`
+                                : `${(s.distanceMeters / 1000).toFixed(1)} km`;
+                            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
+                            const osmUrl = `https://www.openstreetmap.org/${s.osmType}/${s.osmId}`;
+                            const walkable = s.distanceMeters <= 1000;
+
+                            return (
+                              <div
+                                key={s.id}
+                                className="rounded-md border p-3 flex items-start justify-between gap-3"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span className="font-medium text-sm">{s.name}</span>
+                                    {s.ref && s.ref !== s.name && (
+                                      <span className="text-xs text-muted-foreground font-mono">
+                                        {s.ref}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {(s.network ?? s.operator) && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+                                      {[s.network, s.operator].filter(Boolean).join(" · ")}
+                                    </p>
+                                  )}
+
+                                  <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
+                                    {walkable ? (
+                                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                                        À pied
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        Proche
+                                      </span>
+                                    )}
+                                    {s.subType === "station" && (
+                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        Gare
+                                      </span>
+                                    )}
+                                    {s.wheelchair === true && (
+                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        ♿ Accessible
+                                      </span>
+                                    )}
+                                    {s.shelter === true && (
+                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        Abri
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                  <span className="text-xs font-medium text-primary">{dist}</span>
+                                  <a
+                                    href={mapsUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="h-3 w-3" /> Google Maps
+                                  </a>
+                                  <a
+                                    href={osmUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="h-3 w-3" /> OSM
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

@@ -52,6 +52,77 @@ loadEnv();
 
 import { PrismaClient } from "@aerodirectory/database";
 import { syncOpenAipFranceAirports } from "../apps/api/src/services/importers/openaip/openaip.importer";
+import { fetchOverpassNearby } from "../apps/api/src/services/overpass/overpass.client";
+
+const OVERPASS_ENDPOINT =
+  process.env["OVERPASS_ENDPOINT"] ?? "https://overpass-api.de/api/interpreter";
+const WALKABLE_RADIUS_METERS = 1_000;
+const RESTAURANT_AMENITIES = ["restaurant", "cafe"];
+const CONCURRENCY = 5;
+const BATCH_DELAY_MS = 1_000;
+
+async function enrichRestaurantTags(prisma: PrismaClient): Promise<void> {
+  console.log("\n[4/4] Enrichissement du tag hasRestaurant via Overpass...");
+
+  // Only check aerodromes not yet tagged — idempotent re-runs won't re-query them
+  const aerodromes = await prisma.aerodrome.findMany({
+    where: { hasRestaurant: false },
+    select: { id: true, name: true, latitude: true, longitude: true },
+  });
+
+  console.log(`  ${aerodromes.length} aérodromes à vérifier (rayon ${WALKABLE_RADIUS_METERS}m)`);
+  if (aerodromes.length === 0) {
+    console.log("  Rien à faire.\n");
+    return;
+  }
+
+  let tagged = 0;
+  let errors = 0;
+
+  for (let i = 0; i < aerodromes.length; i += CONCURRENCY) {
+    const batch = aerodromes.slice(i, i + CONCURRENCY);
+
+    await Promise.all(
+      batch.map(async (ad) => {
+        try {
+          const elements = await fetchOverpassNearby(
+            ad.latitude,
+            ad.longitude,
+            WALKABLE_RADIUS_METERS,
+            RESTAURANT_AMENITIES,
+            OVERPASS_ENDPOINT,
+          );
+
+          const hasResto = elements.some((el) => {
+            const amenity = el.tags?.["amenity"];
+            return amenity === "restaurant" || amenity === "cafe";
+          });
+
+          if (hasResto) {
+            await prisma.aerodrome.update({
+              where: { id: ad.id },
+              data: { hasRestaurant: true },
+            });
+            tagged++;
+          }
+        } catch {
+          errors++;
+        }
+      }),
+    );
+
+    const done = Math.min(i + CONCURRENCY, aerodromes.length);
+    if (done % 100 === 0 || done === aerodromes.length) {
+      console.log(`  Progression : ${done}/${aerodromes.length} (tagués : ${tagged})`);
+    }
+
+    if (i + CONCURRENCY < aerodromes.length) {
+      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
+
+  console.log(`\n  Terminé : ${tagged} aérodromes tagués hasRestaurant=true, ${errors} erreurs Overpass.\n`);
+}
 
 async function main() {
   const apiKey = process.env["OPENAIP_API_KEY"];
@@ -86,6 +157,8 @@ async function main() {
     // Print final count
     const count = await prisma.aerodrome.count();
     console.log(`Total aerodromes in database: ${count}`);
+
+    await enrichRestaurantTags(prisma);
   } catch (error) {
     console.error("Import failed:", error);
     process.exit(1);
