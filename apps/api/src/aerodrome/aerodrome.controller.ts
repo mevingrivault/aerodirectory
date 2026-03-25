@@ -11,6 +11,7 @@ import {
 import { AerodromeService } from "./aerodrome.service";
 import { RestaurantService } from "../restaurant/restaurant.service";
 import { TransportService } from "../transport/transport.service";
+import { AccommodationService } from "../accommodation/accommodation.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { Public, Roles } from "../common/decorators";
@@ -29,6 +30,8 @@ const MAX_RESTAURANT_RADIUS = 10_000;
 const DEFAULT_RESTAURANT_RADIUS = 3_000;
 const MAX_TRANSPORT_RADIUS = 10_000;
 const DEFAULT_TRANSPORT_RADIUS = 3_000;
+const MAX_ACCOMMODATION_RADIUS = 20_000;
+const DEFAULT_ACCOMMODATION_RADIUS = 10_000;
 
 @Controller("aerodromes")
 export class AerodromeController {
@@ -36,6 +39,7 @@ export class AerodromeController {
     private readonly aerodromes: AerodromeService,
     private readonly restaurants: RestaurantService,
     private readonly transport: TransportService,
+    private readonly accommodation: AccommodationService,
   ) {}
 
   @Public()
@@ -139,6 +143,20 @@ export class AerodromeController {
       : DEFAULT_TRANSPORT_RADIUS;
 
     const result = await this.transport.getNearbyTransport(id, radius);
+    return ok(result);
+  }
+
+  @Public()
+  @Get(":id/accommodations")
+  async getNearbyAccommodations(
+    @Param("id") id: string,
+    @Query("radiusMeters") radiusMeters?: string,
+  ) {
+    const radius = radiusMeters
+      ? Math.min(Math.max(parseInt(radiusMeters, 10) || DEFAULT_ACCOMMODATION_RADIUS, 500), MAX_ACCOMMODATION_RADIUS)
+      : DEFAULT_ACCOMMODATION_RADIUS;
+
+    const result = await this.accommodation.getNearbyAccommodations(id, radius);
     return ok(result);
   }
 }

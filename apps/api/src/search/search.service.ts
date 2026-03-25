@@ -36,6 +36,15 @@ export class SearchService {
     if (filters.hasRestaurant !== undefined) {
       where.hasRestaurant = filters.hasRestaurant;
     }
+    if (filters.hasAccommodation !== undefined) {
+      where.hasAccommodation = filters.hasAccommodation;
+    }
+    if (filters.hasBikes !== undefined) {
+      where.hasBikes = filters.hasBikes;
+    }
+    if (filters.hasTransport !== undefined) {
+      where.hasTransport = filters.hasTransport;
+    }
     if (filters.nightOperations !== undefined) {
       where.nightOperations = filters.nightOperations;
     }

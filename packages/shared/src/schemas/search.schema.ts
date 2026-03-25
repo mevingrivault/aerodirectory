@@ -20,6 +20,9 @@ export const AerodromeSearchSchema = PaginationSchema.extend({
   surface: z.enum(SURFACE_TYPES).optional(),
   fuel: z.enum(FUEL_TYPES).optional(),
   hasRestaurant: z.coerce.boolean().optional(),
+  hasAccommodation: z.coerce.boolean().optional(),
+  hasBikes: z.coerce.boolean().optional(),
+  hasTransport: z.coerce.boolean().optional(),
   nightOperations: z.coerce.boolean().optional(),
   status: z.enum(["OPEN", "CLOSED", "RESTRICTED", "SEASONAL"]).optional(),
   // Geospatial

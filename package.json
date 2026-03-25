@@ -18,7 +18,8 @@
     "db:generate": "pnpm --filter @aerodirectory/database prisma:generate",
     "db:migrate": "pnpm --filter @aerodirectory/database prisma:migrate",
     "db:seed": "pnpm --filter @aerodirectory/database prisma:seed",
-    "import:openaip": "pnpm db:generate && tsx scripts/import-openaip.ts"
+    "import:openaip": "pnpm db:generate && tsx scripts/import-openaip.ts",
+    "import:osm": "pnpm db:generate && tsx scripts/import-osm.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

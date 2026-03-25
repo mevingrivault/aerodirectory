@@ -4,9 +4,48 @@ import Redis from "ioredis";
 import { PrismaService } from "../prisma/prisma.service";
 import type { OverpassElement } from "../services/overpass/overpass.client";
 
+// ─── OSM DB query ──────────────────────────────────────────────────────────
+
+function degreeBbox(lat: number, lon: number, radiusMeters: number) {
+  const deltaLat = radiusMeters / 111_320;
+  const deltaLon = radiusMeters / (111_320 * Math.cos((lat * Math.PI) / 180));
+  return {
+    latMin: lat - deltaLat, latMax: lat + deltaLat,
+    lonMin: lon - deltaLon, lonMax: lon + deltaLon,
+  };
+}
+
+async function queryOsmTransport(
+  prisma: PrismaService,
+  lat: number,
+  lon: number,
+  radiusMeters: number,
+): Promise<OverpassElement[]> {
+  const bbox = degreeBbox(lat, lon, radiusMeters);
+
+  const pois = await prisma.osmPoi.findMany({
+    where: {
+      category: { in: ["TRANSPORT", "BIKE"] },
+      lat: { gte: bbox.latMin, lte: bbox.latMax },
+      lon: { gte: bbox.lonMin, lte: bbox.lonMax },
+    },
+  });
+
+  return pois.map((poi) => {
+    const [osmType, osmIdStr] = poi.osmId.split("/") as [string, string];
+    return {
+      type: (osmType === "way" ? "way" : osmType === "relation" ? "relation" : "node") as OverpassElement["type"],
+      id: parseInt(osmIdStr, 10),
+      lat: poi.lat,
+      lon: poi.lon,
+      tags: poi.tags as Record<string, string>,
+    };
+  });
+}
+
 // ─── Public types ──────────────────────────────────────────────────────────
 
-export type TransportType = "bus" | "tram" | "train" | "other";
+export type TransportType = "bus" | "tram" | "train" | "bike" | "other";
 export type TransportSubType = "station" | "stop" | "platform";
 
 export interface OsmSource {
@@ -22,6 +61,7 @@ export interface NearbyTransport {
   distanceMeters: number;
   type: TransportType;
   subType: TransportSubType;
+  capacity: number | null;
   operator: string | null;
   network: string | null;
   ref: string | null;
@@ -61,10 +101,8 @@ interface MemoryCacheEntry {
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const CACHE_TTL_SECONDS = 12 * 60 * 60;
 const DEFAULT_RADIUS_METERS = 3_000;
-const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const WALKABLE_THRESHOLD_METERS = 1_000;
 const CLUSTER_RADIUS_METERS = 30;
-const TIMEOUT_MS = 25_000;
 
 // ─── Service ───────────────────────────────────────────────────────────────
 
@@ -73,15 +111,11 @@ export class TransportService {
   private readonly logger = new Logger(TransportService.name);
   private readonly memoryCache = new Map<string, MemoryCacheEntry>();
   private readonly redis: Redis | null;
-  private readonly overpassEndpoint: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.overpassEndpoint =
-      this.config.get<string>("OVERPASS_ENDPOINT") ?? DEFAULT_OVERPASS_ENDPOINT;
-
     const redisUrl = this.config.get<string>("REDIS_URL");
     if (redisUrl) {
       try {
@@ -114,7 +148,7 @@ export class TransportService {
     });
     if (!aerodrome) throw new NotFoundException("Aerodrome not found");
 
-    const cacheKey = `transport:v2:${aerodromeId}:${radiusMeters}`;
+    const cacheKey = `transport:v3:${aerodromeId}:${radiusMeters}`;
     const cached = await this.cacheGet(cacheKey);
     if (cached) {
       this.logger.debug(`Cache trouvé — ${cacheKey}`);
@@ -122,21 +156,15 @@ export class TransportService {
     }
 
     this.logger.log(
-      `Récupération des transports près de ${aerodromeId} (rayon=${radiusMeters}m) via Overpass`,
+      `Récupération des transports près de ${aerodromeId} (rayon=${radiusMeters}m) via DB locale`,
     );
 
-    let elements: OverpassElement[] = [];
-    let overpassSucceeded = false;
-    try {
-      elements = await this.fetchTransportOverpass(
-        aerodrome.latitude,
-        aerodrome.longitude,
-        radiusMeters,
-      );
-      overpassSucceeded = true;
-    } catch (error) {
-      this.logger.error(`Échec Overpass pour ${aerodromeId} : ${error}`);
-    }
+    const elements = await queryOsmTransport(
+      this.prisma,
+      aerodrome.latitude,
+      aerodrome.longitude,
+      radiusMeters,
+    );
 
     // Normalize all elements, filtering invalid ones
     const normalized = elements
@@ -165,57 +193,9 @@ export class TransportService {
       },
     };
 
-    // Ne mettre en cache que si Overpass a répondu correctement
-    if (overpassSucceeded) {
-      await this.cacheSet(cacheKey, result);
-    }
+    await this.cacheSet(cacheKey, result);
 
     return result;
-  }
-
-  // ─── Overpass ─────────────────────────────────────────────────────────────
-
-  private async fetchTransportOverpass(
-    lat: number,
-    lon: number,
-    radiusMeters: number,
-  ): Promise<OverpassElement[]> {
-    const r = radiusMeters;
-    const query = [
-      "[out:json][timeout:25];",
-      "(",
-      `  node["highway"="bus_stop"](around:${r},${lat},${lon});`,
-      `  node["public_transport"="platform"](around:${r},${lat},${lon});`,
-      `  node["public_transport"="stop_position"](around:${r},${lat},${lon});`,
-      `  node["railway"="tram_stop"](around:${r},${lat},${lon});`,
-      `  node["railway"="station"](around:${r},${lat},${lon});`,
-      `  node["railway"="halt"](around:${r},${lat},${lon});`,
-      `  way["public_transport"="platform"](around:${r},${lat},${lon});`,
-      `  relation["public_transport"="platform"](around:${r},${lat},${lon});`,
-      ");",
-      "out center tags;",
-    ].join("\n");
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-    try {
-      const response = await fetch(this.overpassEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Overpass error: ${response.status} ${response.statusText}`);
-      }
-
-      const json = (await response.json()) as { elements?: OverpassElement[] };
-      return json.elements ?? [];
-    } finally {
-      clearTimeout(timer);
-    }
   }
 
   // ─── Cache helpers ─────────────────────────────────────────────────────────
@@ -267,7 +247,7 @@ function namesAreSimilar(a: string, b: string): boolean {
   return false;
 }
 
-const TYPE_PRIORITY: Record<TransportType, number> = { train: 4, tram: 3, bus: 2, other: 1 };
+const TYPE_PRIORITY: Record<TransportType, number> = { train: 4, tram: 3, bus: 2, bike: 1, other: 0 };
 const SUBTYPE_PRIORITY: Record<TransportSubType, number> = { station: 3, platform: 2, stop: 1 };
 
 function mergeTransports(base: NearbyTransport, incoming: NearbyTransport): void {
@@ -275,6 +255,7 @@ function mergeTransports(base: NearbyTransport, incoming: NearbyTransport): void
   if (incoming.name && incoming.name.length > base.name.length) {
     base.name = incoming.name;
   }
+  base.capacity ??= incoming.capacity;
   base.operator ??= incoming.operator;
   base.network ??= incoming.network;
   base.ref ??= incoming.ref;
@@ -338,6 +319,10 @@ function classifyTransport(tags: Record<string, string>): {
   const highway = tags["highway"];
   const pt = tags["public_transport"];
 
+  if (tags["amenity"] === "bicycle_rental") {
+    const bikeSubType = tags["bicycle_rental"] === "docking_station" ? "station" : "stop";
+    return { type: "bike", subType: bikeSubType };
+  }
   if (railway === "station") return { type: "train", subType: "station" };
   if (railway === "halt") return { type: "train", subType: "stop" };
   if (railway === "tram_stop") return { type: "tram", subType: "stop" };
@@ -378,6 +363,7 @@ function fallbackName(type: TransportType): string {
   if (type === "train") return "Gare";
   if (type === "tram") return "Arrêt de tram";
   if (type === "bus") return "Arrêt de bus";
+  if (type === "bike") return "Station vélo";
   return "Arrêt";
 }
 
@@ -422,6 +408,7 @@ function normalizeTransport(
     distanceMeters: Math.round(haversineMeters(aeroLat, aeroLon, lat, lon)),
     type,
     subType,
+    capacity: tags["capacity"] ? parseInt(tags["capacity"], 10) || null : null,
     operator: tags["operator"] ?? null,
     network: tags["network"] ?? null,
     ref: tags["ref"] ?? null,

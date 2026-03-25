@@ -137,12 +137,13 @@ interface NearbyTransport {
   lat: number;
   lon: number;
   distanceMeters: number;
-  type: "bus" | "tram" | "train" | "other";
+  type: "bus" | "tram" | "train" | "bike" | "other";
   subType: "station" | "stop" | "platform";
   operator: string | null;
   network: string | null;
   ref: string | null;
   wheelchair: boolean | null;
+  capacity: number | null;
   shelter: boolean | null;
   bench: boolean | null;
   lit: boolean | null;
@@ -161,6 +162,37 @@ interface NearbyTransportResult {
       source: string;
       walkableThresholdMeters: number;
       matchingStopsCount: number;
+    };
+  };
+}
+
+interface NearbyAccommodation {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distanceMeters: number;
+  category: "camping" | "hotel" | "chambre_hotes";
+  stars: number | null;
+  rooms: number | null;
+  capacity: number | null;
+  phone: string | null;
+  website: string | null;
+  wheelchair: boolean | null;
+  osmType: string;
+  osmId: number;
+}
+
+interface NearbyAccommodationResult {
+  aerodromeId: string;
+  radiusMeters: number;
+  accommodations: NearbyAccommodation[];
+  pilotServices: {
+    accommodation: {
+      available: boolean;
+      source: string;
+      walkableThresholdMeters: number;
+      matchingPlacesCount: number;
     };
   };
 }
@@ -249,7 +281,11 @@ export default function AerodromeDetailPage() {
   });
 
   const [restaurantRadius, setRestaurantRadius] = useState(3000);
+  const [restaurantLimit, setRestaurantLimit] = useState(5);
   const [transportRadius, setTransportRadius] = useState(3000);
+  const [transportLimit, setTransportLimit] = useState(5);
+  const [bikeLimit, setBikeLimit] = useState(5);
+  const [accommodationLimit, setAccommodationLimit] = useState(5);
 
   // Always fetch at 3 km — pilot services derivation needs the full walkable zone.
   // The radius selector filters the displayed list client-side.
@@ -273,6 +309,16 @@ export default function AerodromeDetailPage() {
     staleTime: 6 * 60 * 60 * 1000,
   });
 
+  const { data: accommodationRes, isLoading: accommodationLoading, isError: accommodationError } = useQuery({
+    queryKey: ["accommodation", id],
+    queryFn: () =>
+      apiClient.get<NearbyAccommodationResult>(`/aerodromes/${id}/accommodations`, {
+        radiusMeters: "10000",
+      }),
+    enabled: !!ad,
+    staleTime: 6 * 60 * 60 * 1000,
+  });
+
   const { data: visitsRes, refetch: refetchVisit } = useQuery({
     queryKey: ["visits"],
     queryFn: () => apiClient.get<{ aerodromeId: string; status: string }[]>("/visits"),
@@ -284,7 +330,7 @@ export default function AerodromeDetailPage() {
   // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
   useEffect(() => {
     if (user && currentVisitStatus === null) {
-      apiClient.put(`/visits/${id}`, { status: "SEEN" }).then(() => refetchVisit());
+      apiClient.put(`/visits/${id}`, { status: "SEEN" }).then(() => refetchVisit()).catch(() => {});
     }
   }, [user, id, currentVisitStatus]);
 
@@ -329,12 +375,16 @@ export default function AerodromeDetailPage() {
 
   const restaurantFromNearby = restaurantsRes?.data?.pilotServices?.restaurant?.available ?? false;
   const transportFromNearby = transportRes?.data?.pilotServices?.transport?.available ?? false;
+  const bikeFromNearby = (transportRes?.data?.transports ?? []).some(
+    (s) => s.type === "bike" && s.distanceMeters <= 1000,
+  );
+  const accommodationFromNearby = accommodationRes?.data?.pilotServices?.accommodation?.available ?? false;
 
   const amenities = [
     { icon: Utensils, label: "Restaurant", active: ad.hasRestaurant || restaurantFromNearby },
-    { icon: Bike, label: "Vélos", active: ad.hasBikes },
+    { icon: Bike, label: "Vélos", active: ad.hasBikes || bikeFromNearby },
     { icon: Bus, label: "Transport", active: ad.hasTransport || transportFromNearby },
-    { icon: Home, label: "Hébergement", active: ad.hasAccommodation },
+    { icon: Home, label: "Hébergement", active: ad.hasAccommodation || accommodationFromNearby },
     { icon: Wrench, label: "Maintenance", active: ad.hasMaintenance },
     { icon: Plane, label: "Hangars", active: ad.hasHangars },
     { icon: Moon, label: "Vols de nuit", active: ad.nightOperations },
@@ -648,7 +698,7 @@ export default function AerodromeDetailPage() {
         )}
 
         {/* Nearby Restaurants, Cafes & Bars */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -659,7 +709,7 @@ export default function AerodromeDetailPage() {
                 {[1000, 3000, 5000].map((r) => (
                   <button
                     key={r}
-                    onClick={() => setRestaurantRadius(r)}
+                    onClick={() => { setRestaurantRadius(r); setRestaurantLimit(5); }}
                     className={`rounded px-2 py-1 border transition-colors ${
                       restaurantRadius === r
                         ? "bg-primary text-primary-foreground border-primary"
@@ -683,10 +733,13 @@ export default function AerodromeDetailPage() {
               <p className="text-muted-foreground text-sm">
                 Aucun établissement trouvé dans un rayon de {restaurantRadius / 1000} km.
               </p>
-            ) : (
+            ) : (() => {
+              const filteredRestos = (restaurantsRes?.data?.restaurants ?? [])
+                .filter((r) => r.distanceMeters <= restaurantRadius);
+              const visibleRestos = filteredRestos.slice(0, restaurantLimit);
+              return (
               <div className="space-y-2">
-                {restaurantsRes!.data.restaurants
-                  .filter((r) => r.distanceMeters <= restaurantRadius)
+                {visibleRestos
                   .map((r) => {
                   const dist =
                     r.distanceMeters < 1000
@@ -779,13 +832,22 @@ export default function AerodromeDetailPage() {
                     </div>
                   );
                 })}
+                {filteredRestos.length > restaurantLimit && (
+                  <button
+                    onClick={() => setRestaurantLimit((l) => l + 5)}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
+                  >
+                    Voir plus ({filteredRestos.length - restaurantLimit} restants)
+                  </button>
+                )}
               </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
 
         {/* Nearby Public Transport */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -795,7 +857,7 @@ export default function AerodromeDetailPage() {
                 {[1000, 3000, 5000].map((r) => (
                   <button
                     key={r}
-                    onClick={() => setTransportRadius(r)}
+                    onClick={() => { setTransportRadius(r); setTransportLimit(5); setBikeLimit(5); }}
                     className={`rounded px-2 py-1 border transition-colors ${
                       transportRadius === r
                         ? "bg-primary text-primary-foreground border-primary"
@@ -816,9 +878,9 @@ export default function AerodromeDetailPage() {
                 Impossible de charger les transports pour le moment.
               </p>
             ) : (() => {
-              const filtered = (transportRes?.data?.transports ?? [])
-                .filter((s) => s.distanceMeters <= transportRadius)
-                .slice(0, 4);
+              const allFiltered = (transportRes?.data?.transports ?? [])
+                .filter((s) => s.distanceMeters <= transportRadius && s.type !== "bike");
+              const filtered = allFiltered.slice(0, transportLimit);
               if (!filtered.length) {
                 return (
                   <p className="text-muted-foreground text-sm">
@@ -835,6 +897,7 @@ export default function AerodromeDetailPage() {
               ];
 
               return (
+                <>
                 <div className="space-y-4">
                   {groups.map(({ type, label, icon: Icon }) => {
                     const stops = filtered.filter((s) => s.type === type);
@@ -876,6 +939,7 @@ export default function AerodromeDetailPage() {
                                   {(s.network ?? s.operator) && (
                                     <p className="text-xs text-muted-foreground mt-0.5 ml-5">
                                       {[s.network, s.operator].filter(Boolean).join(" · ")}
+                                      {s.capacity && ` · ${s.capacity} vélos`}
                                     </p>
                                   )}
 
@@ -947,10 +1011,232 @@ export default function AerodromeDetailPage() {
                     );
                   })}
                 </div>
+                {allFiltered.length > transportLimit && (
+                  <button
+                    onClick={() => setTransportLimit((l) => l + 5)}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors mt-2"
+                  >
+                    Voir plus ({allFiltered.length - transportLimit} restants)
+                  </button>
+                )}
+              </>
               );
             })()}
           </CardContent>
         </Card>
+
+        {/* Nearby Bike Sharing */}
+        {(() => {
+          const allBikes = (transportRes?.data?.transports ?? [])
+            .filter((s) => s.type === "bike" && s.distanceMeters <= transportRadius);
+          if (!transportLoading && !transportError && allBikes.length === 0) return null;
+          const visibleBikes = allBikes.slice(0, bikeLimit);
+          return (
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Bike className="h-5 w-5" /> Vélos en libre service
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {transportLoading ? (
+                  <p className="text-muted-foreground text-sm">Chargement...</p>
+                ) : (
+                  <div className="space-y-2">
+                    {visibleBikes.map((s) => {
+                      const dist =
+                        s.distanceMeters < 1000
+                          ? `${s.distanceMeters} m`
+                          : `${(s.distanceMeters / 1000).toFixed(1)} km`;
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
+                      const walkable = s.distanceMeters <= 1000;
+                      return (
+                        <div
+                          key={s.id}
+                          className="rounded-md border p-3 flex items-start justify-between gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Bike className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm">{s.name}</span>
+                            </div>
+                            {(s.network ?? s.operator) && (
+                              <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+                                {[s.network, s.operator].filter(Boolean).join(" · ")}
+                                {s.capacity ? ` · ${s.capacity} vélos` : ""}
+                              </p>
+                            )}
+                            <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
+                              {walkable ? (
+                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                                  À pied
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  Proche
+                                </span>
+                              )}
+                              {s.wheelchair === true && (
+                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  ♿ Accessible
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-xs font-medium text-primary">{dist}</span>
+                            <a
+                              href={mapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                            >
+                              <ExternalLink className="h-3 w-3" /> Google Maps
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {allBikes.length > bikeLimit && (
+                      <button
+                        onClick={() => setBikeLimit((l) => l + 5)}
+                        className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
+                      >
+                        Voir plus ({allBikes.length - bikeLimit} restants)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {/* Nearby Accommodation */}
+        {(() => {
+          const allAccommodations = accommodationRes?.data?.accommodations ?? [];
+          if (!accommodationLoading && !accommodationError && allAccommodations.length === 0) return null;
+
+          const groups: { category: NearbyAccommodation["category"]; label: string; icon: string }[] = [
+            { category: "camping", label: "Camping", icon: "⛺" },
+            { category: "hotel", label: "Hôtels", icon: "🏨" },
+            { category: "chambre_hotes", label: "Chambres d'hôtes & Gîtes", icon: "🏡" },
+          ];
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Home className="h-5 w-5" /> Hébergements à proximité
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {accommodationLoading && (
+                  <p className="text-sm text-muted-foreground">Chargement...</p>
+                )}
+                {accommodationError && (
+                  <p className="text-sm text-muted-foreground">Impossible de charger les hébergements.</p>
+                )}
+                {!accommodationLoading && !accommodationError && allAccommodations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Aucun hébergement trouvé dans un rayon de 10 km.</p>
+                )}
+                {groups.map(({ category, label, icon }) => {
+                  const items = allAccommodations
+                    .filter((a) => a.category === category)
+                    .slice(0, accommodationLimit);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={category}>
+                      <p className="text-sm font-semibold text-muted-foreground mb-2">
+                        {icon} {label}
+                      </p>
+                      <div className="space-y-2">
+                        {items.map((a) => {
+                          const dist =
+                            a.distanceMeters < 1000
+                              ? `${a.distanceMeters} m`
+                              : `${(a.distanceMeters / 1000).toFixed(1)} km`;
+                          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lon}`;
+                          return (
+                            <div
+                              key={a.id}
+                              className="rounded-md border p-3 flex items-start justify-between gap-3"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm">{a.name}</p>
+                                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                  {a.stars && (
+                                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
+                                      {"★".repeat(a.stars)} {a.stars} étoile{a.stars > 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                  {a.rooms && (
+                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                      {a.rooms} chambre{a.rooms > 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                  {a.capacity && !a.rooms && (
+                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                      {a.capacity} places
+                                    </span>
+                                  )}
+                                  {a.wheelchair === true && (
+                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                      ♿ Accessible
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex gap-3 mt-1.5">
+                                  {a.phone && (
+                                    <a
+                                      href={`tel:${a.phone}`}
+                                      className="text-xs text-primary hover:underline"
+                                    >
+                                      {a.phone}
+                                    </a>
+                                  )}
+                                  {a.website && (
+                                    <a
+                                      href={a.website}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="h-3 w-3" /> Site web
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className="text-xs font-medium text-primary">{dist}</span>
+                                <a
+                                  href={mapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Google Maps
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {allAccommodations.length > accommodationLimit && (
+                  <button
+                    onClick={() => setAccommodationLimit((l) => l + 5)}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
+                  >
+                    Voir plus ({allAccommodations.length - accommodationLimit} restants)
+                  </button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Links */}
         {(ad.aipLink || ad.vacLink || ad.websiteUrl) && (

@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "osm"]
 }
 
 // ─── Enums ───────────────────────────────────────────────
@@ -14,6 +15,8 @@ enum Role {
   MEMBER
   MODERATOR
   ADMIN
+
+  @@schema("public")
 }
 
 enum AerodromeStatus {
@@ -21,6 +24,8 @@ enum AerodromeStatus {
   CLOSED
   RESTRICTED
   SEASONAL
+
+  @@schema("public")
 }
 
 enum AerodromeType {
@@ -32,6 +37,8 @@ enum AerodromeType {
   MILITARY
   SEAPLANE_BASE
   OTHER
+
+  @@schema("public")
 }
 
 enum SurfaceType {
@@ -42,6 +49,8 @@ enum SurfaceType {
   DIRT
   WATER
   OTHER
+
+  @@schema("public")
 }
 
 enum FrequencyType {
@@ -54,6 +63,8 @@ enum FrequencyType {
   CTAF
   FIS
   OTHER
+
+  @@schema("public")
 }
 
 enum FuelType {
@@ -61,6 +72,8 @@ enum FuelType {
   UL91
   JET_A1
   SP98
+
+  @@schema("public")
 }
 
 enum PaymentType {
@@ -69,12 +82,16 @@ enum PaymentType {
   TOTAL_CARD
   BP_CARD
   OTHER
+
+  @@schema("public")
 }
 
 enum VisitStatus {
   SEEN
   VISITED
   FAVORITE
+
+  @@schema("public")
 }
 
 enum ContentStatus {
@@ -82,6 +99,8 @@ enum ContentStatus {
   APPROVED
   REJECTED
   FLAGGED
+
+  @@schema("public")
 }
 
 enum AuditAction {
@@ -100,6 +119,8 @@ enum AuditAction {
   CORRECTION_PROPOSE
   REPORT_CREATE
   ADMIN_ACTION
+
+  @@schema("public")
 }
 
 // ─── User ────────────────────────────────────────────────
@@ -128,6 +149,7 @@ model User {
 
   @@index([email])
   @@map("users")
+  @@schema("public")
 }
 
 model EmailToken {
@@ -143,6 +165,7 @@ model EmailToken {
 
   @@index([token])
   @@map("email_tokens")
+  @@schema("public")
 }
 
 // ─── Aerodrome ───────────────────────────────────────────
@@ -199,6 +222,7 @@ model Aerodrome {
   @@index([countryCode])
   @@index([aerodromeType])
   @@map("aerodromes")
+  @@schema("public")
 }
 
 model Runway {
@@ -216,6 +240,7 @@ model Runway {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("runways")
+  @@schema("public")
 }
 
 model Frequency {
@@ -231,6 +256,7 @@ model Frequency {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("frequencies")
+  @@schema("public")
 }
 
 model Fuel {
@@ -249,6 +275,7 @@ model Fuel {
 
   @@unique([aerodromeId, type])
   @@map("fuels")
+  @@schema("public")
 }
 
 // ─── Collaborative features ─────────────────────────────
@@ -268,6 +295,7 @@ model Visit {
 
   @@unique([userId, aerodromeId])
   @@map("visits")
+  @@schema("public")
 }
 
 model Comment {
@@ -284,6 +312,7 @@ model Comment {
 
   @@index([aerodromeId])
   @@map("comments")
+  @@schema("public")
 }
 
 model Correction {
@@ -304,6 +333,7 @@ model Correction {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("corrections")
+  @@schema("public")
 }
 
 model Report {
@@ -323,6 +353,7 @@ model Report {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("reports")
+  @@schema("public")
 }
 
 // ─── Flight Planner ──────────────────────────────────────
@@ -343,6 +374,7 @@ model AircraftProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("aircraft_profiles")
+  @@schema("public")
 }
 
 // ─── Audit Log ───────────────────────────────────────────
@@ -362,6 +394,7 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+  @@schema("public")
 }
 
 // ─── Airspace (future use) ──────────────────────────────
@@ -382,4 +415,24 @@ model Airspace {
   @@unique([source, sourceId])
   @@index([class])
   @@map("airspaces")
+  @@schema("public")
+}
+
+// ─── OSM data (schema: osm) ──────────────────────────────
+// Populated by `pnpm import:osm` — never written by the app at runtime.
+// Isolated in the `osm` PostgreSQL schema to keep app migrations clean.
+
+model OsmPoi {
+  osmId    String @id          // "node/123456" | "way/789"
+  lat      Float
+  lon      Float
+  category String               // "RESTAURANT" | "TRANSPORT" | "BIKE"
+  tags     Json                 // raw OSM tags — mirrors OverpassElement.tags
+
+  importedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category, lat, lon])
+  @@map("pois")
+  @@schema("osm")
 }

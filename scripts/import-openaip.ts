@@ -52,19 +52,31 @@ loadEnv();
 
 import { PrismaClient } from "@aerodirectory/database";
 import { syncOpenAipFranceAirports } from "../apps/api/src/services/importers/openaip/openaip.importer";
-import { fetchOverpassNearby } from "../apps/api/src/services/overpass/overpass.client";
+import { fetchOverpassBbox } from "../apps/api/src/services/overpass/overpass.client";
+import type { OverpassElement } from "../apps/api/src/services/overpass/overpass.client";
 
 const OVERPASS_ENDPOINT =
   process.env["OVERPASS_ENDPOINT"] ?? "https://overpass-api.de/api/interpreter";
 const WALKABLE_RADIUS_METERS = 1_000;
 const RESTAURANT_AMENITIES = ["restaurant", "cafe"];
-const CONCURRENCY = 5;
-const BATCH_DELAY_MS = 1_000;
+// Grid cell size in degrees (~111km per degree lat, ~80km per degree lon in France)
+const GRID_DEG = 5.0;
+const GRID_MARGIN_DEG = 0.01;
+const CELL_DELAY_MS = 5_000;
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 async function enrichRestaurantTags(prisma: PrismaClient): Promise<void> {
   console.log("\n[4/4] Enrichissement du tag hasRestaurant via Overpass...");
 
-  // Only check aerodromes not yet tagged — idempotent re-runs won't re-query them
   const aerodromes = await prisma.aerodrome.findMany({
     where: { hasRestaurant: false },
     select: { id: true, name: true, latitude: true, longitude: true },
@@ -76,52 +88,72 @@ async function enrichRestaurantTags(prisma: PrismaClient): Promise<void> {
     return;
   }
 
+  // Group aerodromes by 1°×1° grid cell
+  const cells = new Map<string, typeof aerodromes>();
+  for (const ad of aerodromes) {
+    const cellLat = Math.floor(ad.latitude / GRID_DEG);
+    const cellLon = Math.floor(ad.longitude / GRID_DEG);
+    const key = `${cellLat}:${cellLon}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key)!.push(ad);
+  }
+
+  console.log(`  ${cells.size} cellules géographiques à interroger`);
+
   let tagged = 0;
   let errors = 0;
+  let processed = 0;
+  const cellEntries = [...cells.entries()];
 
-  for (let i = 0; i < aerodromes.length; i += CONCURRENCY) {
-    const batch = aerodromes.slice(i, i + CONCURRENCY);
+  for (let ci = 0; ci < cellEntries.length; ci++) {
+    const [key, cellAds] = cellEntries[ci]!;
+    const [cellLatStr, cellLonStr] = key.split(":");
+    const cellLat = Number(cellLatStr) * GRID_DEG;
+    const cellLon = Number(cellLonStr) * GRID_DEG;
 
-    await Promise.all(
-      batch.map(async (ad) => {
-        try {
-          const elements = await fetchOverpassNearby(
-            ad.latitude,
-            ad.longitude,
-            WALKABLE_RADIUS_METERS,
-            RESTAURANT_AMENITIES,
-            OVERPASS_ENDPOINT,
-          );
+    const south = cellLat - GRID_MARGIN_DEG;
+    const west = cellLon - GRID_MARGIN_DEG;
+    const north = cellLat + GRID_DEG + GRID_MARGIN_DEG;
+    const east = cellLon + GRID_DEG + GRID_MARGIN_DEG;
 
-          const hasResto = elements.some((el) => {
-            const amenity = el.tags?.["amenity"];
-            return amenity === "restaurant" || amenity === "cafe";
+    try {
+      const elements = await fetchOverpassBbox(
+        south, west, north, east,
+        RESTAURANT_AMENITIES,
+        OVERPASS_ENDPOINT,
+      );
+
+      // For each aerodrome in this cell, check if any restaurant is within 1km
+      for (const ad of cellAds) {
+        const hasResto = elements.some((el: OverpassElement) => {
+          const lat = el.lat ?? el.center?.lat;
+          const lon = el.lon ?? el.center?.lon;
+          if (lat === undefined || lon === undefined) return false;
+          return haversineMeters(ad.latitude, ad.longitude, lat, lon) <= WALKABLE_RADIUS_METERS;
+        });
+
+        if (hasResto) {
+          await prisma.aerodrome.update({
+            where: { id: ad.id },
+            data: { hasRestaurant: true },
           });
-
-          if (hasResto) {
-            await prisma.aerodrome.update({
-              where: { id: ad.id },
-              data: { hasRestaurant: true },
-            });
-            tagged++;
-          }
-        } catch {
-          errors++;
+          tagged++;
         }
-      }),
-    );
+        processed++;
+      }
 
-    const done = Math.min(i + CONCURRENCY, aerodromes.length);
-    if (done % 100 === 0 || done === aerodromes.length) {
-      console.log(`  Progression : ${done}/${aerodromes.length} (tagués : ${tagged})`);
+      console.log(`  [${ci + 1}/${cellEntries.length}] Cellule (${south.toFixed(1)},${west.toFixed(1)})→(${north.toFixed(1)},${east.toFixed(1)}) — ${cellAds.length} aérodromes, ${elements.length} POI OSM`);
+    } catch (err) {
+      errors += cellAds.length;
+      console.warn(`  [${ci + 1}/${cellEntries.length}] ✗ Cellule ${key} — ${err}`);
     }
 
-    if (i + CONCURRENCY < aerodromes.length) {
-      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    if (ci < cellEntries.length - 1) {
+      await new Promise((r) => setTimeout(r, CELL_DELAY_MS));
     }
   }
 
-  console.log(`\n  Terminé : ${tagged} aérodromes tagués hasRestaurant=true, ${errors} erreurs Overpass.\n`);
+  console.log(`\n  Terminé : ${tagged} aérodromes tagués hasRestaurant=true, ${errors} erreurs (${processed} traités).\n`);
 }
 
 async function main() {

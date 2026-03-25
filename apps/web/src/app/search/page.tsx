@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Fuel, Utensils, Plane, ChevronLeft, ChevronRight, MapPin, Coffee, ExternalLink } from "lucide-react";
+import { Search, Fuel, Utensils, Plane, ChevronLeft, ChevronRight, MapPin, Coffee, ExternalLink, Home, Bike, Bus } from "lucide-react";
 
 interface AerodromeResult {
   id: string;
@@ -154,7 +154,7 @@ export default function SearchPage() {
   const toggleFilter = (key: string, value: string) => {
     setFilters((f) => {
       const next = { ...f };
-      if (next[key]) delete next[key];
+      if (next[key] === value) delete next[key];
       else next[key] = value;
       return next;
     });
@@ -225,46 +225,40 @@ export default function SearchPage() {
               <Utensils className="mr-1 h-3 w-3" /> Restaurant
             </Button>
             <Button
-              variant={filters["fuel"] ? "default" : "outline"}
+              variant={filters["hasAccommodation"] ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleFilter("hasAccommodation", "true")}
+            >
+              <Home className="mr-1 h-3 w-3" /> Hébergement
+            </Button>
+            <Button
+              variant={filters["fuel"] === "AVGAS_100LL" ? "default" : "outline"}
               size="sm"
               onClick={() => toggleFilter("fuel", "AVGAS_100LL")}
             >
               <Fuel className="mr-1 h-3 w-3" /> Carburant 100LL
             </Button>
             <Button
-              variant={filters["nightOperations"] ? "default" : "outline"}
+              variant={filters["fuel"] === "SP98" ? "default" : "outline"}
               size="sm"
-              onClick={() => toggleFilter("nightOperations", "true")}
+              onClick={() => toggleFilter("fuel", "SP98")}
             >
-              Vols de nuit
+              <Fuel className="mr-1 h-3 w-3" /> Carburant SP98
             </Button>
             <Button
-              variant={filters["aerodromeType"] ? "default" : "outline"}
+              variant={filters["hasBikes"] ? "default" : "outline"}
               size="sm"
-              onClick={() => toggleFilter("aerodromeType", "SMALL_AIRPORT")}
+              onClick={() => toggleFilter("hasBikes", "true")}
             >
-              <Plane className="mr-1 h-3 w-3" /> Petits Aérodromes
+              <Bike className="mr-1 h-3 w-3" /> Vélo
             </Button>
-            {filters["minRunwayLength"] ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => toggleFilter("minRunwayLength", "800")}
-              >
-                Piste min. {filters["minRunwayLength"]}m
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFilters((f) => ({ ...f, minRunwayLength: "800" }));
-                  setPage(1);
-                }}
-              >
-                Piste min. 800m
-              </Button>
-            )}
+            <Button
+              variant={filters["hasTransport"] ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleFilter("hasTransport", "true")}
+            >
+              <Bus className="mr-1 h-3 w-3" /> Transport
+            </Button>
           </div>
 
           {/* Results count */}

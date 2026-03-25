@@ -2,10 +2,7 @@ import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
 import { PrismaService } from "../prisma/prisma.service";
-import {
-  fetchOverpassNearby,
-  type OverpassElement,
-} from "../services/overpass/overpass.client";
+import type { OverpassElement } from "../services/overpass/overpass.client";
 
 // ─── Public types ──────────────────────────────────────────────────────────
 
@@ -59,10 +56,9 @@ interface MemoryCacheEntry {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours (in-memory)
-const CACHE_TTL_SECONDS = 12 * 60 * 60;    // 12 hours (Redis EX)
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const CACHE_TTL_SECONDS = 12 * 60 * 60;
 const DEFAULT_RADIUS_METERS = 3_000;
-const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 
 // ─── Accessibility thresholds ──────────────────────────────────────────────
 // Walkable: pilot can walk from the aerodrome to the place during a stopover
@@ -88,15 +84,10 @@ export class RestaurantService {
   // Optional Redis client (null when REDIS_URL is not set or unreachable)
   private readonly redis: Redis | null;
 
-  private readonly overpassEndpoint: string;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.overpassEndpoint =
-      this.config.get<string>("OVERPASS_ENDPOINT") ?? DEFAULT_OVERPASS_ENDPOINT;
-
     const redisUrl = this.config.get<string>("REDIS_URL");
     if (redisUrl) {
       try {
@@ -139,24 +130,16 @@ export class RestaurantService {
     }
 
     this.logger.log(
-      `Récupération des établissements près de ${aerodromeId} (rayon=${radiusMeters}m) via Overpass`,
+      `Récupération des établissements près de ${aerodromeId} (rayon=${radiusMeters}m) via DB locale`,
     );
 
-    let elements: OverpassElement[] = [];
-    let overpassSucceeded = false;
-    try {
-      elements = await fetchOverpassNearby(
-        aerodrome.latitude,
-        aerodrome.longitude,
-        radiusMeters,
-        [...AMENITIES],
-        this.overpassEndpoint,
-      );
-      overpassSucceeded = true;
-    } catch (error) {
-      this.logger.error(`Échec Overpass pour ${aerodromeId} : ${error}`);
-      // Retourne un résultat vide plutôt que de planter — Overpass peut être temporairement indisponible
-    }
+    const elements = await queryOsmPois(
+      this.prisma,
+      aerodrome.latitude,
+      aerodrome.longitude,
+      radiusMeters,
+      "RESTAURANT",
+    );
 
     const restaurants = elements
       .map((el) =>
@@ -190,10 +173,7 @@ export class RestaurantService {
       },
     };
 
-    // Ne mettre en cache que si Overpass a répondu correctement
-    if (overpassSucceeded) {
-      await this.cacheSet(cacheKey, result);
-    }
+    await this.cacheSet(cacheKey, result);
 
     return result;
   }
@@ -204,18 +184,7 @@ export class RestaurantService {
     radiusMeters: number,
     q?: string,
   ): Promise<NearbyRestaurant[]> {
-    let elements: OverpassElement[] = [];
-    try {
-      elements = await fetchOverpassNearby(
-        lat,
-        lon,
-        radiusMeters,
-        [...AMENITIES],
-        this.overpassEndpoint,
-      );
-    } catch (error) {
-      this.logger.error(`Échec Overpass (recherche libre) : ${error}`);
-    }
+    const elements = await queryOsmPois(this.prisma, lat, lon, radiusMeters, "RESTAURANT");
 
     let results = elements
       .map((el) => normalizeRestaurant(el, lat, lon))
@@ -272,6 +241,48 @@ export class RestaurantService {
     }
     this.memoryCache.set(key, { data, cachedAt: Date.now() });
   }
+}
+
+// ─── OSM DB query ──────────────────────────────────────────────────────────
+
+function degreeBbox(lat: number, lon: number, radiusMeters: number) {
+  const deltaLat = radiusMeters / 111_320;
+  const deltaLon = radiusMeters / (111_320 * Math.cos((lat * Math.PI) / 180));
+  return {
+    latMin: lat - deltaLat,
+    latMax: lat + deltaLat,
+    lonMin: lon - deltaLon,
+    lonMax: lon + deltaLon,
+  };
+}
+
+async function queryOsmPois(
+  prisma: PrismaService,
+  lat: number,
+  lon: number,
+  radiusMeters: number,
+  category: string,
+): Promise<OverpassElement[]> {
+  const bbox = degreeBbox(lat, lon, radiusMeters);
+
+  const pois = await prisma.osmPoi.findMany({
+    where: {
+      category,
+      lat: { gte: bbox.latMin, lte: bbox.latMax },
+      lon: { gte: bbox.lonMin, lte: bbox.lonMax },
+    },
+  });
+
+  return pois.map((poi) => {
+    const [osmType, osmIdStr] = poi.osmId.split("/") as [string, string];
+    return {
+      type: (osmType === "way" ? "way" : osmType === "relation" ? "relation" : "node") as OverpassElement["type"],
+      id: parseInt(osmIdStr, 10),
+      lat: poi.lat,
+      lon: poi.lon,
+      tags: poi.tags as Record<string, string>,
+    };
+  });
 }
 
 // ─── Normalization ─────────────────────────────────────────────────────────
