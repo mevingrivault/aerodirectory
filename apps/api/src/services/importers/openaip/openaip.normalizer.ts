@@ -22,6 +22,7 @@ import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType, FuelTy
 export interface NormalizedAerodrome {
   name: string;
   icaoCode: string | null;
+  altIdentifier: string | null;
   latitude: number;
   longitude: number;
   elevation: number | null; // feet
@@ -146,6 +147,7 @@ export function normalizeOpenAipAirport(
   return {
     name: (raw.name || "").trim(),
     icaoCode: validIcao,
+    altIdentifier: raw.altIdentifier?.trim() || null,
     latitude: lat,
     longitude: lng,
     elevation,

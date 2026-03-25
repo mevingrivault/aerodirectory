@@ -143,6 +143,7 @@ export class RestaurantService {
     );
 
     let elements: OverpassElement[] = [];
+    let overpassSucceeded = false;
     try {
       elements = await fetchOverpassNearby(
         aerodrome.latitude,
@@ -151,6 +152,7 @@ export class RestaurantService {
         [...AMENITIES],
         this.overpassEndpoint,
       );
+      overpassSucceeded = true;
     } catch (error) {
       this.logger.error(`Échec Overpass pour ${aerodromeId} : ${error}`);
       // Retourne un résultat vide plutôt que de planter — Overpass peut être temporairement indisponible
@@ -187,7 +189,11 @@ export class RestaurantService {
         },
       },
     };
-    await this.cacheSet(cacheKey, result);
+
+    // Ne mettre en cache que si Overpass a répondu correctement
+    if (overpassSucceeded) {
+      await this.cacheSet(cacheKey, result);
+    }
 
     return result;
   }

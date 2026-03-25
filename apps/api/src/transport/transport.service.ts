@@ -9,6 +9,11 @@ import type { OverpassElement } from "../services/overpass/overpass.client";
 export type TransportType = "bus" | "tram" | "train" | "other";
 export type TransportSubType = "station" | "stop" | "platform";
 
+export interface OsmSource {
+  type: "node" | "way" | "relation";
+  id: number;
+}
+
 export interface NearbyTransport {
   id: string;
   name: string;
@@ -22,14 +27,18 @@ export interface NearbyTransport {
   ref: string | null;
   wheelchair: boolean | null;
   shelter: boolean | null;
-  osmType: "node" | "way" | "relation";
-  osmId: number;
+  // Level 2
+  bench: boolean | null;
+  lit: boolean | null;
+  routeRef: string[];
+  localRef: string | null;
+  osmSources: OsmSource[];
 }
 
 export interface NearbyTransportResult {
   aerodromeId: string;
   radiusMeters: number;
-  stops: NearbyTransport[];
+  transports: NearbyTransport[];
   pilotServices: {
     transport: {
       available: boolean;
@@ -54,6 +63,7 @@ const CACHE_TTL_SECONDS = 12 * 60 * 60;
 const DEFAULT_RADIUS_METERS = 3_000;
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const WALKABLE_THRESHOLD_METERS = 1_000;
+const CLUSTER_RADIUS_METERS = 30;
 const TIMEOUT_MS = 25_000;
 
 // ─── Service ───────────────────────────────────────────────────────────────
@@ -104,7 +114,7 @@ export class TransportService {
     });
     if (!aerodrome) throw new NotFoundException("Aerodrome not found");
 
-    const cacheKey = `transport:${aerodromeId}:${radiusMeters}`;
+    const cacheKey = `transport:v2:${aerodromeId}:${radiusMeters}`;
     const cached = await this.cacheGet(cacheKey);
     if (cached) {
       this.logger.debug(`Cache trouvé — ${cacheKey}`);
@@ -116,37 +126,35 @@ export class TransportService {
     );
 
     let elements: OverpassElement[] = [];
+    let overpassSucceeded = false;
     try {
       elements = await this.fetchTransportOverpass(
         aerodrome.latitude,
         aerodrome.longitude,
         radiusMeters,
       );
+      overpassSucceeded = true;
     } catch (error) {
       this.logger.error(`Échec Overpass pour ${aerodromeId} : ${error}`);
     }
 
-    // Deduplicate by osm type+id (same stop may match several tag filters)
-    const seen = new Set<string>();
-    const stops = elements
-      .filter((el) => {
-        const key = `${el.type}-${el.id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
+    // Normalize all elements, filtering invalid ones
+    const normalized = elements
       .map((el) => normalizeTransport(el, aerodrome.latitude, aerodrome.longitude))
       .filter((s): s is NearbyTransport => s !== null)
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
 
-    const walkableCount = stops.filter(
+    // Deduplicate via spatial + name clustering
+    const transports = clusterTransports(normalized);
+
+    const walkableCount = transports.filter(
       (s) => s.distanceMeters <= WALKABLE_THRESHOLD_METERS,
     ).length;
 
     const result: NearbyTransportResult = {
       aerodromeId,
       radiusMeters,
-      stops,
+      transports,
       pilotServices: {
         transport: {
           available: walkableCount > 0,
@@ -156,7 +164,11 @@ export class TransportService {
         },
       },
     };
-    await this.cacheSet(cacheKey, result);
+
+    // Ne mettre en cache que si Overpass a répondu correctement
+    if (overpassSucceeded) {
+      await this.cacheSet(cacheKey, result);
+    }
 
     return result;
   }
@@ -235,6 +247,87 @@ export class TransportService {
   }
 }
 
+// ─── Clustering / deduplication ────────────────────────────────────────────
+
+function normalizeNameForComparison(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function namesAreSimilar(a: string, b: string): boolean {
+  if (!a || !b) return true;
+  const na = normalizeNameForComparison(a);
+  const nb = normalizeNameForComparison(b);
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  return false;
+}
+
+const TYPE_PRIORITY: Record<TransportType, number> = { train: 4, tram: 3, bus: 2, other: 1 };
+const SUBTYPE_PRIORITY: Record<TransportSubType, number> = { station: 3, platform: 2, stop: 1 };
+
+function mergeTransports(base: NearbyTransport, incoming: NearbyTransport): void {
+  // Best name = non-empty, longest
+  if (incoming.name && incoming.name.length > base.name.length) {
+    base.name = incoming.name;
+  }
+  base.operator ??= incoming.operator;
+  base.network ??= incoming.network;
+  base.ref ??= incoming.ref;
+  base.wheelchair ??= incoming.wheelchair;
+  base.shelter ??= incoming.shelter;
+  base.bench ??= incoming.bench;
+  base.lit ??= incoming.lit;
+  base.localRef ??= incoming.localRef;
+
+  // Merge routeRef (deduplicated union)
+  const merged = new Set([...base.routeRef, ...incoming.routeRef]);
+  base.routeRef = [...merged];
+
+  // Keep highest-priority subType
+  if (SUBTYPE_PRIORITY[incoming.subType] > SUBTYPE_PRIORITY[base.subType]) {
+    base.subType = incoming.subType;
+  }
+
+  // Keep highest-priority type
+  if (TYPE_PRIORITY[incoming.type] > TYPE_PRIORITY[base.type]) {
+    base.type = incoming.type;
+  }
+
+  base.osmSources.push(...incoming.osmSources);
+}
+
+function clusterTransports(stops: NearbyTransport[]): NearbyTransport[] {
+  const clusters: NearbyTransport[] = [];
+
+  for (const stop of stops) {
+    let merged = false;
+
+    for (const cluster of clusters) {
+      const d = haversineMeters(stop.lat, stop.lon, cluster.lat, cluster.lon);
+      if (d <= CLUSTER_RADIUS_METERS && namesAreSimilar(stop.name, cluster.name)) {
+        mergeTransports(cluster, stop);
+        merged = true;
+        break;
+      }
+    }
+
+    if (!merged) {
+      clusters.push({
+        ...stop,
+        osmSources: [...stop.osmSources],
+        routeRef: [...stop.routeRef],
+      });
+    }
+  }
+
+  return clusters;
+}
+
 // ─── Normalization ─────────────────────────────────────────────────────────
 
 function classifyTransport(tags: Record<string, string>): {
@@ -275,6 +368,19 @@ function parseBool(val: string | undefined): boolean | null {
   return null;
 }
 
+function parseRouteRef(tags: Record<string, string>): string[] {
+  const raw = tags["route_ref"] ?? tags["routes"] ?? "";
+  if (!raw) return [];
+  return raw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+}
+
+function fallbackName(type: TransportType): string {
+  if (type === "train") return "Gare";
+  if (type === "tram") return "Arrêt de tram";
+  if (type === "bus") return "Arrêt de bus";
+  return "Arrêt";
+}
+
 function haversineMeters(
   lat1: number, lon1: number, lat2: number, lon2: number,
 ): number {
@@ -302,9 +408,15 @@ function normalizeTransport(
 
   const { type, subType } = classifyTransport(tags);
 
+  const rawName =
+    tags["name"]?.trim() ||
+    tags["local_ref"]?.trim() ||
+    tags["ref"]?.trim() ||
+    "";
+
   return {
     id: `osm-${el.type}-${el.id}`,
-    name: tags["name"]?.trim() || tags["ref"]?.trim() || "Arrêt sans nom",
+    name: rawName || fallbackName(type),
     lat,
     lon,
     distanceMeters: Math.round(haversineMeters(aeroLat, aeroLon, lat, lon)),
@@ -315,7 +427,10 @@ function normalizeTransport(
     ref: tags["ref"] ?? null,
     wheelchair: parseBool(tags["wheelchair"]),
     shelter: parseBool(tags["shelter"]),
-    osmType: el.type,
-    osmId: el.id,
+    bench: parseBool(tags["bench"]),
+    lit: parseBool(tags["lit"]),
+    routeRef: parseRouteRef(tags),
+    localRef: tags["local_ref"] ?? null,
+    osmSources: [{ type: el.type, id: el.id }],
   };
 }

@@ -49,6 +49,7 @@ interface AerodromeDetail {
   aerodromeType: string;
   status: string;
   description: string | null;
+  altIdentifier: string | null;
   aipLink: string | null;
   vacLink: string | null;
   websiteUrl: string | null;
@@ -125,6 +126,11 @@ interface NearbyRestaurant {
   osmId: number;
 }
 
+interface OsmSource {
+  type: string;
+  id: number;
+}
+
 interface NearbyTransport {
   id: string;
   name: string;
@@ -138,14 +144,17 @@ interface NearbyTransport {
   ref: string | null;
   wheelchair: boolean | null;
   shelter: boolean | null;
-  osmType: string;
-  osmId: number;
+  bench: boolean | null;
+  lit: boolean | null;
+  routeRef: string[];
+  localRef: string | null;
+  osmSources: OsmSource[];
 }
 
 interface NearbyTransportResult {
   aerodromeId: string;
   radiusMeters: number;
-  stops: NearbyTransport[];
+  transports: NearbyTransport[];
   pilotServices: {
     transport: {
       available: boolean;
@@ -390,6 +399,19 @@ export default function AerodromeDetailPage() {
               </a>
             );
           })()}
+
+          {/* Fiche basulm (ULM) */}
+          {ad.altIdentifier && (
+            <a
+              href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size="sm" variant="outline">
+                <FileText className="mr-1 h-4 w-4" /> Fiche basulm
+              </Button>
+            </a>
+          )}
         </div>
 
         {/* Visit buttons (authenticated only) */}
@@ -794,9 +816,9 @@ export default function AerodromeDetailPage() {
                 Impossible de charger les transports pour le moment.
               </p>
             ) : (() => {
-              const filtered = (transportRes?.data?.stops ?? []).filter(
-                (s) => s.distanceMeters <= transportRadius,
-              );
+              const filtered = (transportRes?.data?.transports ?? [])
+                .filter((s) => s.distanceMeters <= transportRadius)
+                .slice(0, 4);
               if (!filtered.length) {
                 return (
                   <p className="text-muted-foreground text-sm">
@@ -829,7 +851,10 @@ export default function AerodromeDetailPage() {
                                 ? `${s.distanceMeters} m`
                                 : `${(s.distanceMeters / 1000).toFixed(1)} km`;
                             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
-                            const osmUrl = `https://www.openstreetmap.org/${s.osmType}/${s.osmId}`;
+                            const primarySource = s.osmSources?.[0];
+                            const osmUrl = primarySource
+                              ? `https://www.openstreetmap.org/${primarySource.type}/${primarySource.id}`
+                              : null;
                             const walkable = s.distanceMeters <= 1000;
 
                             return (
@@ -851,6 +876,12 @@ export default function AerodromeDetailPage() {
                                   {(s.network ?? s.operator) && (
                                     <p className="text-xs text-muted-foreground mt-0.5 ml-5">
                                       {[s.network, s.operator].filter(Boolean).join(" · ")}
+                                    </p>
+                                  )}
+
+                                  {s.routeRef && s.routeRef.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+                                      Lignes : {s.routeRef.join(", ")}
                                     </p>
                                   )}
 
@@ -876,7 +907,12 @@ export default function AerodromeDetailPage() {
                                     )}
                                     {s.shelter === true && (
                                       <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        Abri
+                                        🛑 Abri
+                                      </span>
+                                    )}
+                                    {s.lit === true && (
+                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        💡 Éclairé
                                       </span>
                                     )}
                                   </div>
@@ -892,14 +928,16 @@ export default function AerodromeDetailPage() {
                                   >
                                     <ExternalLink className="h-3 w-3" /> Google Maps
                                   </a>
-                                  <a
-                                    href={osmUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                  >
-                                    <ExternalLink className="h-3 w-3" /> OSM
-                                  </a>
+                                  {osmUrl && (
+                                    <a
+                                      href={osmUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="h-3 w-3" /> OSM
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -955,52 +993,6 @@ export default function AerodromeDetailPage() {
           </Card>
         )}
 
-        {/* VAC Chart */}
-        {ad.icaoCode && (() => {
-          const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
-          if (!pattern) return null;
-          const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
-          return (
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileText className="h-5 w-5" /> Carte VAC — {ad.icaoCode}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Disclaimer */}
-                <div className="flex gap-2 rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
-                  <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>
-                    Cette carte est fournie à titre informatif uniquement et peut ne pas être à jour.{" "}
-                    <strong>Consultez toujours la documentation officielle AIP France</strong> publiée
-                    par le SIA avant tout vol. Les données présentées ne sauraient engager la
-                    responsabilité d'AéroDirectory.
-                  </p>
-                </div>
-
-                {/* PDF embed */}
-                <div className="w-full overflow-hidden rounded-md border bg-muted" style={{ height: "600px" }}>
-                  <iframe
-                    src={vacUrl}
-                    className="h-full w-full"
-                    title={`Carte VAC ${ad.icaoCode}`}
-                  />
-                </div>
-
-                {/* Fallback link */}
-                <a
-                  href={vacUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" /> Ouvrir la carte VAC sur le site du SIA
-                </a>
-              </CardContent>
-            </Card>
-          );
-        })()}
 
         {/* Comments */}
         <Card className="lg:col-span-2">

@@ -151,6 +151,7 @@ model Aerodrome {
   id               String          @id @default(cuid())
   name             String
   icaoCode         String?         @unique
+  altIdentifier    String?
   latitude         Float
   longitude        Float
   elevation        Int? // feet
