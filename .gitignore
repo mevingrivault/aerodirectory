@@ -32,9 +32,6 @@ npm-debug.log*
 # Testing
 coverage/
 
-# Prisma
-packages/database/prisma/migrations/
-
 # Generated
 packages/database/src/generated/
 
