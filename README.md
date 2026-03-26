@@ -129,7 +129,7 @@ pnpm dev
 2. Go to your account settings and generate an API key
 3. Add it to your `.env` file:
    ```
-   OPENAIP_API_KEY=ae04f0a4c8ebdae9528c4e2aedbf39c9
+   OPENAIP_API_KEY=your_openaip_api_key_here
    ```
 
 ## Importing Data from openAIP
