@@ -35,7 +35,6 @@ COPY --from=builder /app/packages/database/node_modules ./packages/database/node
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/packages/database/src/generated ./packages/database/src/generated
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 
 COPY --from=builder /app/package.json ./
