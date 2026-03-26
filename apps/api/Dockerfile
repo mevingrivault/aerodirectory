@@ -4,26 +4,18 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# ─── Stage 2: Dependencies ───────────────────────────────────────────────────
-FROM base AS deps
+# ─── Stage 2: Fetch dependencies (lockfile only) ─────────────────────────────
+FROM base AS fetch
 WORKDIR /app
-
-# Copy manifests only (better layer caching)
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY packages/database/package.json ./packages/database/
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/api/package.json ./apps/api/
-
-RUN pnpm install --frozen-lockfile --prod=false
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
 
 # ─── Stage 3: Builder ────────────────────────────────────────────────────────
-FROM deps AS builder
+FROM fetch AS builder
 WORKDIR /app
 
-# Copy all source files
-COPY packages/database/ ./packages/database/
-COPY packages/shared/ ./packages/shared/
-COPY apps/api/ ./apps/api/
+COPY . .
+RUN pnpm install --frozen-lockfile --offline
 
 # Generate Prisma client, build shared, then build API
 RUN pnpm --filter @aerodirectory/database prisma:generate && \
@@ -39,15 +31,17 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# Copy manifests for prod install
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch --prod
+
+COPY package.json pnpm-workspace.yaml ./
 COPY packages/database/package.json ./packages/database/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --offline --prod
 
-# Copy built artifacts and Prisma schema
+# Copy built artifacts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/database/src/generated ./packages/database/src/generated

@@ -4,28 +4,22 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# ─── Stage 2: Dependencies ───────────────────────────────────────────────────
-FROM base AS deps
+# ─── Stage 2: Fetch dependencies (lockfile only) ─────────────────────────────
+FROM base AS fetch
 WORKDIR /app
-
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY packages/database/package.json ./packages/database/
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/web/package.json ./apps/web/
-
-RUN pnpm install --frozen-lockfile --prod=false
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
 
 # ─── Stage 3: Builder ────────────────────────────────────────────────────────
-FROM deps AS builder
+FROM fetch AS builder
 WORKDIR /app
 
 # NEXT_PUBLIC_API_URL must be known at build time (baked into the JS bundle)
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-COPY packages/database/ ./packages/database/
-COPY packages/shared/ ./packages/shared/
-COPY apps/web/ ./apps/web/
+COPY . .
+RUN pnpm install --frozen-lockfile --offline
 
 RUN pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/web build
@@ -36,7 +30,6 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
