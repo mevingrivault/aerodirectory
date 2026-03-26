@@ -1,5 +1,5 @@
 # ─── Stage 1: Base ───────────────────────────────────────────────────────────
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
@@ -22,7 +22,7 @@ RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/api build
 
 # ─── Stage 4: Runner ─────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
