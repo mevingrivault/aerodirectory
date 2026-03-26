@@ -18,6 +18,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile --offline
 
 RUN pnpm --filter @aerodirectory/database prisma:generate && \
+    pnpm --filter @aerodirectory/database build && \
     pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/api build
 
@@ -35,6 +36,7 @@ COPY --from=builder /app/packages/database/node_modules ./packages/database/node
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 
 COPY --from=builder /app/package.json ./
