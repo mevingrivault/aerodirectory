@@ -17,6 +17,7 @@ dist/
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 
@@ -36,3 +37,8 @@ packages/database/prisma/migrations/
 
 # Generated
 packages/database/src/generated/
+
+# Large data files (OSM imports — not needed in repo)
+data/*.pbf
+data/*.geojsonseq
+data/*.osm

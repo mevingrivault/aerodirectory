@@ -30,6 +30,10 @@ export const PlannerQuerySchema = z.object({
   // Safety margin
   reserveMinutes: z.number().int().min(0).max(120).default(30),
 
+  // Ground procedures overhead
+  departureGroundMinutes: z.number().int().min(0).max(60).default(0),
+  arrivalGroundMinutes: z.number().int().min(0).max(60).default(0),
+
   // Sorting & legacy
   maxDistanceNm: z.number().positive().max(5000).optional(),
   sortBy: z.enum(["time", "cost", "distance"]).default("time"),

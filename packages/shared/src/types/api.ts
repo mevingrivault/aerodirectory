@@ -29,11 +29,23 @@ export interface PlannerResult {
     icaoCode: string | null;
     latitude: number;
     longitude: number;
+    city: string | null;
+    region: string | null;
+    elevation: number | null;
+    hasRestaurant: boolean;
+    hasTransport: boolean;
+    hasBikes: boolean;
+    hasAccommodation: boolean;
+    fuels: string[];
+    maxRunwayLength: number | null;
   };
   distanceNm: number;
-  timeHours: number;
-  fuelUsedLiters: number;
-  estimatedCost: number;
+  timeHours: number;       // one-way flight time
+  fuelUsedLiters: number;  // one-way fuel used
+  fuelCost: number;        // extra fuel cost (if fuelPricePerLiter set, else 0)
+  estimatedCost: number;   // total trip cost (hourlyCost × tripTime + fuelCost)
+  tripTimeHours: number;   // total trip time (accounts for outbound/round_trip)
+  tripFuelLiters: number;  // total trip fuel  (accounts for outbound/round_trip)
 }
 
 /** Aérodex stats */

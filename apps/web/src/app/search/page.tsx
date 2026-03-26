@@ -19,6 +19,9 @@ interface AerodromeResult {
   status: string;
   aerodromeType: string;
   hasRestaurant: boolean;
+  hasTransport: boolean;
+  hasBikes: boolean;
+  hasAccommodation: boolean;
   nightOperations: boolean;
   latitude: number;
   longitude: number;
@@ -59,6 +62,13 @@ const TYPE_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "OUVERT",
   CLOSED: "FERMÉ",
+};
+
+const FUEL_LABELS: Record<string, string> = {
+  AVGAS_100LL: "100LL",
+  SP98: "SP98",
+  MOGAS: "Mogas",
+  JET_A1: "Jet A-1",
 };
 
 export default function SearchPage() {
@@ -311,17 +321,33 @@ export default function SearchPage() {
                           ))}
                         </div>
                       </div>
-                      <div className="hidden sm:flex flex-col items-end gap-1">
+                      <div className="hidden sm:flex flex-col items-end gap-1.5">
                         {ad.hasRestaurant && (
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-xs">
                             <Utensils className="mr-1 h-3 w-3" /> Restaurant
                           </Badge>
                         )}
-                        {ad.fuels?.some((f) => f.available) && (
-                          <Badge variant="outline">
-                            <Fuel className="mr-1 h-3 w-3" /> Carburant
+                        {ad.hasAccommodation && (
+                          <Badge variant="outline" className="text-xs">
+                            <Home className="mr-1 h-3 w-3" /> Hébergement
                           </Badge>
                         )}
+                        {ad.hasTransport && (
+                          <Badge variant="outline" className="text-xs">
+                            <Bus className="mr-1 h-3 w-3" /> Transport
+                          </Badge>
+                        )}
+                        {ad.hasBikes && (
+                          <Badge variant="outline" className="text-xs">
+                            <Bike className="mr-1 h-3 w-3" /> Vélos
+                          </Badge>
+                        )}
+                        {ad.fuels?.filter((f) => f.available).map((f) => (
+                          <Badge key={f.type} variant="outline" className="text-xs">
+                            <Fuel className="mr-1 h-3 w-3" />
+                            {FUEL_LABELS[f.type] ?? f.type}
+                          </Badge>
+                        ))}
                         {ad.distanceKm !== undefined && (
                           <span className="text-xs font-medium text-primary">
                             {ad.distanceKm.toFixed(0)} km
