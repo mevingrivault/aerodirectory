@@ -31,6 +31,12 @@ import {
   Coffee,
   Beer,
   Train,
+  Cloud,
+  Wind,
+  Eye,
+  Thermometer,
+  Gauge,
+  AlertCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -211,6 +217,49 @@ interface NearbyRestaurantsResult {
   };
 }
 
+interface WeatherWind {
+  degrees: number | null;
+  speed_kts: number;
+  gust_kts: number | null;
+  cardinal: string | null;
+}
+
+interface WeatherResult {
+  icao: string;
+  stationName: string | null;
+  isNearest: boolean;
+  distanceNm?: number;
+  bearingDeg?: number;
+  metar: {
+    raw: string;
+    observedAt: string;
+    wind: WeatherWind | null;
+    visibility_meters: number | null;
+    clouds: { code: string; base_ft: number | null; text: string | null }[];
+    temperature_c: number | null;
+    dewpoint_c: number | null;
+    humidity_percent: number | null;
+    pressure_hpa: number | null;
+    conditions: { code: string; text: string }[];
+    flight_category: string | null;
+  } | null;
+  taf: {
+    raw: string;
+    issuedAt: string;
+    validFrom: string;
+    validTo: string;
+    forecast: {
+      from: string;
+      to: string;
+      changeIndicator: string | null;
+      wind?: WeatherWind;
+      visibility_meters?: number | null;
+      clouds?: { code: string; base_ft: number | null }[];
+      conditions?: { code: string; text: string }[];
+    }[];
+  } | null;
+}
+
 const TYPE_LABELS: Record<string, string> = {
   SMALL_AIRPORT: "Aérodrome",
   INTERNATIONAL_AIRPORT: "Aéroport International",
@@ -319,6 +368,13 @@ export default function AerodromeDetailPage() {
     staleTime: 6 * 60 * 60 * 1000,
   });
 
+  const { data: weatherRes, isLoading: weatherLoading } = useQuery({
+    queryKey: ["weather", id],
+    queryFn: () => apiClient.get<WeatherResult | null>(`/aerodromes/${id}/weather`),
+    enabled: !!ad && !!user,
+    staleTime: 30 * 60 * 1000,
+  });
+
   const { data: visitsRes, refetch: refetchVisit } = useQuery({
     queryKey: ["visits"],
     queryFn: () => apiClient.get<{ aerodromeId: string; status: string }[]>("/visits"),
@@ -401,99 +457,107 @@ export default function AerodromeDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <h1 className="text-3xl font-bold">{ad.name}</h1>
-          {ad.icaoCode && (
-            <Badge variant="secondary" className="text-lg">
-              {ad.icaoCode}
+      <div className="mb-8 flex items-start justify-between gap-6 flex-wrap">
+        {/* Left: text info */}
+        <div>
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <h1 className="text-3xl font-bold">{ad.name}</h1>
+            {ad.icaoCode && (
+              <Badge variant="secondary" className="text-lg">
+                {ad.icaoCode}
+              </Badge>
+            )}
+            <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
+              {STATUS_LABELS[ad.status] ?? ad.status}
             </Badge>
-          )}
-          <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
-            {STATUS_LABELS[ad.status] ?? ad.status}
-          </Badge>
-          <Badge variant="outline">
-            {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground flex items-center gap-1">
-          <MapPin className="h-4 w-4" />
-          {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
-          {ad.elevation != null && ` — ${ad.elevation} ft`}
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
-        </p>
-
-        {/* Source info */}
-        {ad.source && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Source : {ad.source}
-            {ad.lastSyncedAt &&
-              ` — Dernière synchro : ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
+            <Badge variant="outline">
+              {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground flex items-center gap-1">
+            <MapPin className="h-4 w-4" />
+            {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
+            {ad.elevation != null && ` — ${ad.elevation} ft`}
           </p>
-        )}
+          <p className="text-sm text-muted-foreground mt-1">
+            {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
+          </p>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 mt-4 flex-wrap">
-          {/* VAC link */}
-          {ad.icaoCode && (() => {
-            const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
-            if (!pattern) return null;
-            const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
-            return (
-              <a href={vacUrl} target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="outline">
-                  <FileText className="mr-1 h-4 w-4" /> Carte VAC
-                </Button>
-              </a>
-            );
-          })()}
-
-          {/* Fiche basulm (ULM) */}
-          {ad.altIdentifier && (
-            <a
-              href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button size="sm" variant="outline">
-                <FileText className="mr-1 h-4 w-4" /> Fiche basulm
-              </Button>
-            </a>
+          {/* Source info */}
+          {ad.source && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Source : {ad.source}
+              {ad.lastSyncedAt &&
+                ` — Dernière synchro : ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
+            </p>
           )}
         </div>
 
-        {/* Visit buttons (authenticated only) */}
-        {user && (
-          <div className="flex gap-2 mt-2">
-            {(() => {
-              const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
-              const isFavorite = currentVisitStatus === "FAVORITE";
+        {/* Right: action buttons */}
+        <div className="flex flex-col gap-2 items-end">
+          <div className="flex gap-2 flex-wrap justify-end">
+            {/* VAC link */}
+            {ad.icaoCode && (() => {
+              const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
+              if (!pattern) return null;
+              const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
               return (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
-                    onClick={() => handleVisit("VISITED")}
-                  >
-                    <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
+                <a href={vacUrl} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="outline">
+                    <FileText className="mr-1 h-4 w-4" /> Carte VAC
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
-                    onClick={() => handleVisit("FAVORITE")}
-                  >
-                    <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
-                  </Button>
-                </>
+                </a>
               );
             })()}
+
+            {/* Fiche basulm (ULM) */}
+            {ad.altIdentifier && (
+              <a
+                href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="sm" variant="outline">
+                  <FileText className="mr-1 h-4 w-4" /> Fiche basulm
+                </Button>
+              </a>
+            )}
           </div>
-        )}
+
+          {/* Visit buttons (authenticated only) */}
+          {user && (
+            <div className="flex gap-2">
+              {(() => {
+                const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
+                const isFavorite = currentVisitStatus === "FAVORITE";
+                return (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
+                      onClick={() => handleVisit("VISITED")}
+                    >
+                      <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
+                      onClick={() => handleVisit("FAVORITE")}
+                    >
+                      <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
+                    </Button>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Weather */}
+      <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
 
       {/* Disclaimer */}
       <div className="mb-6 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
@@ -1327,5 +1391,295 @@ export default function AerodromeDetailPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// ─── WeatherCard ───────────────────────────────────────────────────────────
+
+const CAT_STYLES: Record<string, { bg: string; text: string; title: string }> = {
+  VFR:  { bg: "bg-green-500",  text: "text-white", title: "Conditions VFR — Plafond > 3 000 ft et visibilité > 8 km" },
+  MVFR: { bg: "bg-blue-500",   text: "text-white", title: "VFR marginales — Plafond 1 000–3 000 ft et/ou visibilité 5–8 km" },
+  IFR:  { bg: "bg-red-500",    text: "text-white", title: "Conditions IFR — Plafond 500–1 000 ft et/ou visibilité 1,5–5 km" },
+  LIFR: { bg: "bg-purple-600", text: "text-white", title: "IFR basses — Plafond < 500 ft et/ou visibilité < 1,5 km" },
+};
+
+function formatVisibility(meters: number | null | undefined): string {
+  if (meters == null) return "—";
+  if (meters >= 9999) return "> 10 km";
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+  return `${meters} m`;
+}
+
+function formatUtcTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }) + " UTC";
+  } catch { return "—"; }
+}
+
+function formatUtcDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("fr-FR", {
+      day: "2-digit", month: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "UTC",
+    }) + " UTC";
+  } catch { return "—"; }
+}
+
+function MetricTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/40 px-3 py-2 min-w-[90px]">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-sm font-bold text-foreground leading-tight">{value}</p>
+      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResult | null; loading: boolean; authenticated: boolean }) {
+  const [showRawMetar, setShowRawMetar] = useState(false);
+  const [showRawTaf, setShowRawTaf] = useState(false);
+
+  if (!authenticated) {
+    return (
+      <Card className="mb-6">
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Cloud className="h-5 w-5" /> Météo</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            <Link href="/login" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              Connectez-vous
+            </Link>{" "}
+            pour accéder aux données METAR et TAF en temps réel.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card className="mb-6">
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Cloud className="h-5 w-5" /> Météo</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Chargement...</p></CardContent>
+      </Card>
+    );
+  }
+
+  if (!weather) {
+    return (
+      <Card className="mb-6">
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Cloud className="h-5 w-5" /> Météo</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+            <AlertCircle className="h-4 w-4" /> Données météo indisponibles pour cette station.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const m = weather.metar;
+  const cat = m?.flight_category;
+  const catStyle = cat ? (CAT_STYLES[cat] ?? null) : null;
+
+  const windValue = m?.wind
+    ? (m.wind.degrees != null ? `${m.wind.degrees}° · ${m.wind.speed_kts} kt` : `VRB · ${m.wind.speed_kts} kt`)
+    : "Calme";
+  const windSub = m?.wind?.gust_kts != null ? `Rafales ${m.wind.gust_kts} kt` : undefined;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Cloud className="h-5 w-5" /> Météo
+            </CardTitle>
+            {catStyle && (
+              <span
+                className={`text-sm font-bold px-3 py-1 rounded-full cursor-help ${catStyle.bg} ${catStyle.text}`}
+                title={catStyle.title}
+              >
+                {cat}
+              </span>
+            )}
+          </div>
+          {m && (
+            <span className="text-xs text-muted-foreground self-center">
+              Obs. {formatUtcTime(m.observedAt)}
+            </span>
+          )}
+        </div>
+        {weather.isNearest && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <Navigation className="h-3 w-3 shrink-0" />
+            Station la plus proche : <span className="font-semibold">{weather.icao}</span>
+            {weather.stationName && ` — ${weather.stationName}`}
+            {weather.distanceNm != null && ` · ${weather.distanceNm.toFixed(0)} NM`}
+          </p>
+        )}
+        {/* Flight category legend */}
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {Object.entries(CAT_STYLES).map(([cat, style]) => (
+            <span key={cat} className="flex items-center gap-1 text-[11px] text-muted-foreground" title={style.title}>
+              <span className={`inline-block h-2 w-2 rounded-full ${style.bg}`} />
+              {cat}
+            </span>
+          ))}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        {/* ── METAR ── */}
+        {m && (
+          <div>
+            {/* Metric tiles */}
+            <div className="flex flex-wrap gap-2">
+              <MetricTile label="Vent" value={windValue} sub={windSub} />
+              <MetricTile label="Visibilité" value={formatVisibility(m.visibility_meters)} />
+              <MetricTile
+                label="Température"
+                value={m.temperature_c != null ? `${m.temperature_c}°C` : "—"}
+                sub={m.dewpoint_c != null ? `Rosée ${m.dewpoint_c}°C` : undefined}
+              />
+              <MetricTile
+                label="QNH"
+                value={m.pressure_hpa != null ? `${m.pressure_hpa} hPa` : "—"}
+              />
+              {m.humidity_percent != null && (
+                <MetricTile label="Humidité" value={`${m.humidity_percent}%`} />
+              )}
+            </div>
+
+            {/* Clouds */}
+            {m.clouds.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {m.clouds.map((c, i) => (
+                  <span key={i} className="rounded-full border bg-sky-50 text-sky-800 px-2.5 py-0.5 text-xs font-mono">
+                    {c.code}{c.base_ft != null && ` ${c.base_ft.toLocaleString()} ft`}
+                    {c.text && ` · ${c.text}`}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Conditions */}
+            {m.conditions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {m.conditions.map((c, i) => (
+                  <span key={i} className="rounded-full border border-blue-200 bg-blue-50 text-blue-800 px-2.5 py-0.5 text-xs font-semibold">
+                    {c.text || c.code}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Raw METAR */}
+            <div className="mt-3">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowRawMetar((v) => !v)}
+              >
+                {showRawMetar ? "▾ Masquer le METAR brut" : "▸ Voir le METAR brut"}
+              </button>
+              {showRawMetar && (
+                <pre className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
+                  {m.raw}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAF ── */}
+        {weather.taf && (
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">TAF</p>
+                {(weather.taf.validFrom || weather.taf.validTo) && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatUtcDateTime(weather.taf.validFrom)} → {formatUtcDateTime(weather.taf.validTo)}
+                  </p>
+                )}
+              </div>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowRawTaf((v) => !v)}
+              >
+                {showRawTaf ? "▾ Masquer le TAF brut" : "▸ Voir le TAF brut"}
+              </button>
+            </div>
+
+            {showRawTaf && (
+              <pre className="mb-3 rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
+                {weather.taf.raw}
+              </pre>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-1.5 pr-3 whitespace-nowrap">Période</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-1.5 pr-3">Vent</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-1.5 pr-3">Visibilité</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-1.5 pr-3">Nuages</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-1.5">Conditions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weather.taf.forecast.map((f, i) => (
+                    <tr key={i} className={`border-b last:border-0 ${f.changeIndicator ? "bg-orange-50/60" : ""}`}>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {f.changeIndicator && (
+                          <span className="inline-block font-bold text-orange-700 text-[11px] uppercase mr-1.5">{f.changeIndicator}</span>
+                        )}
+                        {(f.from || f.to) ? (
+                          <span className="text-muted-foreground font-mono text-[11px]">
+                            {formatUtcDateTime(f.from)}{f.to ? ` → ${formatUtcDateTime(f.to)}` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {f.wind
+                          ? <>{f.wind.degrees != null ? `${f.wind.degrees}°` : "VRB"} · {f.wind.speed_kts} kt{f.wind.gust_kts != null && <span className="text-orange-600"> G{f.wind.gust_kts}</span>}</>
+                          : <span className="text-muted-foreground">—</span>
+                        }
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {f.visibility_meters != null ? formatVisibility(f.visibility_meters) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {f.clouds && f.clouds.length > 0
+                          ? f.clouds.map((c, j) => (
+                              <span key={j} className="font-mono mr-1.5">{c.code}{c.base_ft != null && ` ${c.base_ft.toLocaleString()}ft`}</span>
+                            ))
+                          : <span className="text-muted-foreground">—</span>
+                        }
+                      </td>
+                      <td className="py-2">
+                        {f.conditions && f.conditions.length > 0
+                          ? <span className="text-blue-700 font-semibold">{f.conditions.map((c) => c.text || c.code).join(" · ")}</span>
+                          : <span className="text-muted-foreground">—</span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
