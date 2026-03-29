@@ -40,6 +40,9 @@ git pull --ff-only origin main || echo "$LOG_PREFIX Avertissement : git pull éc
 # Reinstaller les dépendances si package.json a changé
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
+# Compiler le package database (requis par les scripts tsx)
+pnpm --filter @aerodirectory/database build
+
 RUN_OPENAIP=false
 RUN_OSM=false
 RUN_REGIONS=false
