@@ -66,8 +66,6 @@ export class StorageService implements OnModuleInit {
         Key: key,
         Body: buffer,
         ContentType: mimeType,
-        // Private by default — served via signed URLs or proxy
-        ACL: "private" as never,
       }),
     );
 
