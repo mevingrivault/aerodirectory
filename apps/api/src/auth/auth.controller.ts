@@ -24,6 +24,7 @@ import {
   ChangePasswordSchema,
   DeleteAccountSchema,
   ForgotPasswordSchema,
+  ResendVerificationSchema,
   ResetPasswordSchema,
   type RegisterInput,
   type LoginInput,
@@ -32,6 +33,7 @@ import {
   type ChangePasswordInput,
   type DeleteAccountInput,
   type ForgotPasswordInput,
+  type ResendVerificationInput,
   type ResetPasswordInput,
 } from "@aerodirectory/shared";
 
@@ -131,6 +133,25 @@ export class AuthController {
   ) {
     const profile = await this.auth.updateProfile(user.sub, body);
     return ok(profile);
+  }
+
+  @Public()
+  @Post("resend-verification")
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(
+    @Body(new ZodValidationPipe(ResendVerificationSchema))
+    body: ResendVerificationInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.resendVerificationEmail(
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({
+      message:
+        "Si cet e-mail correspond à un compte non vérifié, un nouveau lien de vérification a été envoyé.",
+    });
   }
 
   @Public()

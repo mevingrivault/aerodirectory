@@ -22,6 +22,7 @@ import type {
   UpdateProfileInput,
   ChangePasswordInput,
   ForgotPasswordInput,
+  ResendVerificationInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
 
@@ -275,6 +276,42 @@ export class AuthService {
   }
 
   // ─── Password reset ────────────────────────────────────
+
+  async resendVerificationEmail(
+    input: ResendVerificationInput,
+    _ip?: string,
+    _userAgent?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email },
+    });
+
+    if (!user || user.emailVerified) {
+      return;
+    }
+
+    await this.prisma.emailToken.updateMany({
+      where: {
+        userId: user.id,
+        type: "verify",
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+
+    const token = randomBytes(32).toString("hex");
+    await this.prisma.emailToken.create({
+      data: {
+        token,
+        userId: user.id,
+        type: "verify",
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    await this.mail.sendEmailVerification(user.email, token);
+  }
 
   async requestPasswordReset(
     input: ForgotPasswordInput,

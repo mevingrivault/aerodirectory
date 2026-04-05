@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -18,10 +19,17 @@ export default function LoginPage() {
   const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+
+  const needsEmailVerification = error
+    .toLowerCase()
+    .includes("vérifier votre adresse e-mail");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setResendMessage("");
     setLoading(true);
 
     try {
@@ -41,6 +49,7 @@ export default function LoginPage() {
   const handleTotp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setResendMessage("");
     setLoading(true);
 
     try {
@@ -50,6 +59,28 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Code TOTP invalide");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setError("");
+    setResendMessage("");
+    setResendLoading(true);
+
+    try {
+      const response = await apiClient.post<{ message: string }>(
+        "/auth/resend-verification",
+        { email },
+      );
+      setResendMessage(response.data.message);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de renvoyer l'e-mail de vérification",
+      );
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -69,6 +100,11 @@ export default function LoginPage() {
           {error && (
             <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
+            </div>
+          )}
+          {resendMessage && (
+            <div className="mb-4 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+              {resendMessage}
             </div>
           )}
 
@@ -131,6 +167,19 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Connexion..." : "Se connecter"}
               </Button>
+              {needsEmailVerification && email && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                >
+                  {resendLoading
+                    ? "Envoi..."
+                    : "Renvoyer l'e-mail de vérification"}
+                </Button>
+              )}
             </form>
           )}
 

@@ -38,7 +38,10 @@ export class JwtAuthGuard implements CanActivate {
         throw new UnauthorizedException("Two-factor authentication required");
       }
       request.user = payload;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException("Invalid or expired token");
     }
 
