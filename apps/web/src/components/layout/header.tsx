@@ -33,7 +33,12 @@ export function Header() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const links = navLinks(!!user);
+  const links = [
+    ...navLinks(!!user),
+    ...(user?.role === "ADMIN"
+      ? [{ href: "/admin", icon: User, label: "Admin" }]
+      : []),
+  ];
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

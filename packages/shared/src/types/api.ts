@@ -88,3 +88,55 @@ export interface UserProfile {
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
 }
+
+export interface AdminDashboardStats {
+  totalUsers: number;
+  bannedUsers: number;
+  activeComments: number;
+  deletedComments: number;
+}
+
+export interface AdminUserListItem {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: string;
+  status: "ACTIVE" | "BANNED";
+  bannedAt: string | null;
+  bannedReason: string | null;
+  bannedBy: { id: string; displayName: string | null; email: string } | null;
+  createdAt: string;
+  _count: {
+    comments: number;
+    visits: number;
+  };
+}
+
+export interface AdminUserDetail extends AdminUserListItem {
+  emailVerified: string | null;
+  totpEnabled: boolean;
+  homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+}
+
+export interface AdminCommentListItem {
+  id: string;
+  content: string;
+  createdAt: string;
+  deletedAt: string | null;
+  deletedReason: string | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+  deletedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+}

@@ -23,6 +23,7 @@ import type {
   ChangePasswordInput,
   ForgotPasswordInput,
   ResendVerificationInput,
+  CheckEmailInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
 
@@ -104,6 +105,17 @@ export class AuthService {
 
   // ─── Login ──────────────────────────────────────────────
 
+  async checkEmailAvailability(
+    input: CheckEmailInput,
+  ): Promise<{ available: boolean }> {
+    const existing = await this.prisma.user.findUnique({
+      where: { email: input.email },
+      select: { id: true },
+    });
+
+    return { available: !existing };
+  }
+
   async login(
     input: LoginInput,
     ip?: string,
@@ -130,6 +142,10 @@ export class AuthService {
         userAgent,
       });
       throw new UnauthorizedException("Invalid credentials");
+    }
+
+    if (user.status === "BANNED") {
+      throw new UnauthorizedException("Votre compte a été suspendu.");
     }
 
     if (!user.emailVerified) {

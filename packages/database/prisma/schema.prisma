@@ -18,6 +18,13 @@ enum Role {
   @@schema("public")
 }
 
+enum UserStatus {
+  ACTIVE
+  BANNED
+
+  @@schema("public")
+}
+
 enum AerodromeStatus {
   OPEN
   CLOSED
@@ -120,6 +127,8 @@ enum AuditAction {
   ADMIN_ACTION
   PASSWORD_RESET_REQUEST
   PASSWORD_RESET
+  USER_BAN
+  USER_UNBAN
 
   @@schema("public")
 }
@@ -133,6 +142,10 @@ model User {
   passwordHash  String
   totpSecret    String?
   totpEnabled   Boolean   @default(false)
+  status        UserStatus @default(ACTIVE)
+  bannedAt      DateTime?
+  bannedReason  String?
+  bannedById    String?
   role                Role      @default(MEMBER)
   displayName         String?   @unique
   homeAerodromeId     String?
@@ -141,14 +154,18 @@ model User {
 
   homeAerodrome    Aerodrome?        @relation("UserHomeAerodrome", fields: [homeAerodromeId], references: [id])
   visits           Visit[]
-  comments         Comment[]
+  comments         Comment[]          @relation("CommentAuthor")
+  deletedComments  Comment[]          @relation("CommentDeletedBy")
   corrections      Correction[]
   reports          Report[]
   aircraftProfiles AircraftProfile[]
   auditLogs        AuditLog[]
   emailTokens      EmailToken[]
+  bannedBy         User?             @relation("UserBans", fields: [bannedById], references: [id], onDelete: SetNull)
+  bannedUsers      User[]            @relation("UserBans")
 
   @@index([email])
+  @@index([status])
   @@map("users")
   @@schema("public")
 }
@@ -305,13 +322,18 @@ model Comment {
   aerodromeId   String
   content       String
   contentStatus ContentStatus @default(PENDING)
+  deletedAt     DateTime?
+  deletedReason String?
+  deletedById   String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation("CommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  deletedBy User?     @relation("CommentDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@index([aerodromeId])
+  @@index([deletedAt])
   @@map("comments")
   @@schema("public")
 }

@@ -43,6 +43,7 @@ export default function ProfilePage() {
   const [totpSetup, setTotpSetup] = useState<TotpSetupResponse | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpAlert, setTotpAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const [totpLoading, setTotpLoading] = useState(false);
 
   // Edit display name state
   const [editingName, setEditingName] = useState(false);
@@ -191,9 +192,21 @@ export default function ProfilePage() {
   // ─── TOTP ───────────────────────────────────────────────
 
   const handleSetupTotp = async () => {
-    const res = await apiClient.post<TotpSetupResponse>("/auth/totp/setup");
-    setTotpSetup(res.data);
+    setTotpLoading(true);
     setTotpAlert(null);
+
+    try {
+      const res = await apiClient.post<TotpSetupResponse>("/auth/totp/setup");
+      setTotpSetup(res.data);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser la 2FA pour le moment.";
+      setTotpAlert({ type: "error", msg });
+    } finally {
+      setTotpLoading(false);
+    }
   };
 
   const handleVerifyTotp = async (e: React.FormEvent) => {
@@ -216,7 +229,7 @@ export default function ProfilePage() {
       {/* Account info */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-lg">Informations du Compte</CardTitle>
+          <CardTitle className="text-lg">Informations du compte</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {nameAlert && <Alert type={nameAlert.type} msg={nameAlert.msg} />}
@@ -281,7 +294,7 @@ export default function ProfilePage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Lock className="h-5 w-5" /> Changer le Mot de Passe
+            <Lock className="h-5 w-5" /> Changer le mot de passe
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -319,7 +332,7 @@ export default function ProfilePage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <MapPin className="h-5 w-5" /> Aérodrome de Rattachement
+            <MapPin className="h-5 w-5" /> Aérodrome de rattachement
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -392,7 +405,7 @@ export default function ProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Shield className="h-5 w-5" /> Authentification à Deux Facteurs
+            <Shield className="h-5 w-5" /> Authentification à deux facteurs
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -430,8 +443,14 @@ export default function ProfilePage() {
               <p className="text-sm text-muted-foreground mb-3">
                 Ajoutez une couche de sécurité supplémentaire avec l&apos;authentification à deux facteurs TOTP.
               </p>
-              <Button variant="outline" onClick={handleSetupTotp}>
-                <Key className="mr-2 h-4 w-4" /> Activer la 2FA
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSetupTotp}
+                disabled={totpLoading}
+              >
+                <Key className="mr-2 h-4 w-4" />
+                {totpLoading ? "Initialisation..." : "Activer la 2FA"}
               </Button>
             </div>
           )}
@@ -470,3 +489,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

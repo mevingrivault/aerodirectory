@@ -7,12 +7,14 @@ import {
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { IS_PUBLIC_KEY } from "../../common/decorators";
+import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,10 +36,27 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync(token);
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, role: true, status: true },
+      });
+
+      if (!dbUser) {
+        throw new UnauthorizedException("Account not found");
+      }
+
+      if (dbUser.status === "BANNED") {
+        throw new UnauthorizedException("Votre compte a été suspendu.");
+      }
+
       if (payload.totpPending && !request.url.startsWith("/api/v1/auth/login/totp")) {
         throw new UnauthorizedException("Two-factor authentication required");
       }
-      request.user = payload;
+      request.user = {
+        ...payload,
+        role: dbUser.role,
+        status: dbUser.status,
+      };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;

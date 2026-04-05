@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type {
@@ -46,6 +51,7 @@ export class CommentService {
       this.prisma.comment.findMany({
         where: {
           aerodromeId,
+          deletedAt: null,
           contentStatus: { in: ["APPROVED", "PENDING"] },
         },
         include: {
@@ -58,6 +64,7 @@ export class CommentService {
       this.prisma.comment.count({
         where: {
           aerodromeId,
+          deletedAt: null,
           contentStatus: { in: ["APPROVED", "PENDING"] },
         },
       }),
@@ -72,6 +79,9 @@ export class CommentService {
     });
 
     if (!comment) throw new NotFoundException("Comment not found");
+    if (comment.deletedAt) {
+      throw new BadRequestException("Comment already deleted");
+    }
 
     // Only author, moderators, or admins can delete
     if (
@@ -82,7 +92,13 @@ export class CommentService {
       throw new ForbiddenException("Not authorized to delete this comment");
     }
 
-    await this.prisma.comment.delete({ where: { id: commentId } });
+    await this.prisma.comment.update({
+      where: { id: commentId },
+      data: {
+        deletedAt: new Date(),
+        deletedById: userId,
+      },
+    });
 
     await this.audit.log({
       userId,
