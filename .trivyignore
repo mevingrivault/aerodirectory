@@ -1,0 +1,21 @@
+# ─── Trivy ignore file ────────────────────────────────────────────────────────
+#
+# These CVEs are ignored because they affect packages bundled inside the Node.js
+# base image tooling (npm CLI at usr/local/lib/node_modules/npm/) that are NOT
+# executed at runtime in production containers.
+# They will be resolved automatically when a new node:24-alpine base image is
+# published with an updated npm version.
+
+# tar@7.5.9 — path traversal via hardlinks/symlinks (npm bundled only)
+CVE-2026-29786
+CVE-2026-31802
+
+# minimatch@10.2.2 — ReDoS (npm bundled only)
+CVE-2026-27903
+CVE-2026-27904
+
+# picomatch@4.0.3 — ReDoS (npm bundled only)
+CVE-2026-33671
+
+# zlib@1.3.1-r2 — buffer overflow in untgz CLI utility (not libz used by Node.js)
+CVE-2026-22184

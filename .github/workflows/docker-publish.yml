@@ -47,6 +47,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
+          trivyignores: .trivyignore
 
       - name: Push API image
         uses: docker/build-push-action@v6
@@ -97,6 +98,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
+          trivyignores: .trivyignore
 
       - name: Push Web image
         uses: docker/build-push-action@v6
