@@ -65,6 +65,7 @@ export class ScanService {
           `Fichier rejeté : menace détectée (${viruses.join(", ")})`,
         );
       }
+      this.logger.log("ClamAV scan passed — file is clean");
     } finally {
       await unlink(tmpPath).catch(() => undefined);
     }
