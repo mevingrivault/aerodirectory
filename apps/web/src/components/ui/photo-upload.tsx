@@ -138,7 +138,7 @@ export function PhotoUpload({
             <div key={p.id} className="relative group rounded-lg overflow-hidden border bg-muted aspect-video">
               {/* We show the storedKey as a relative path — served via your CDN/proxy */}
               <img
-                src={`/api/photos/${p.storedKey}`}
+                src={`${process.env["NEXT_PUBLIC_CDN_URL"]}/${p.storedKey}`}
                 alt="Photo aérodrome"
                 className="w-full h-full object-cover"
                 loading="lazy"

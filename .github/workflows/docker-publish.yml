@@ -87,6 +87,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_VAC_URL_PATTERN=${{ vars.NEXT_PUBLIC_VAC_URL_PATTERN }}
+            NEXT_PUBLIC_CDN_URL=${{ vars.NEXT_PUBLIC_CDN_URL }}
           tags: |
             ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
 
@@ -109,6 +110,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_VAC_URL_PATTERN=${{ vars.NEXT_PUBLIC_VAC_URL_PATTERN }}
+            NEXT_PUBLIC_CDN_URL=${{ vars.NEXT_PUBLIC_CDN_URL }}
           tags: |
             ${{ env.IMAGE_PREFIX }}-web:latest
             ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
