@@ -37,6 +37,7 @@ import {
   Thermometer,
   Gauge,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -281,6 +282,10 @@ export default function AerodromeDetailPage() {
   const id = params.id as string;
   const { user } = useAuth();
   const [commentText, setCommentText] = useState("");
+  const [commentActionAlert, setCommentActionAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const { data: aerodromeRes, isLoading } = useQuery({
     queryKey: ["aerodrome", id],
@@ -406,6 +411,7 @@ export default function AerodromeDetailPage() {
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
+    setCommentActionAlert(null);
     await apiClient.post(`/aerodromes/${id}/comments`, {
       content: commentText,
     });
@@ -425,13 +431,41 @@ export default function AerodromeDetailPage() {
       });
 
       refetchComments();
-      window.alert("Le commentaire a été signalé et masqué en attendant modération.");
+      setCommentActionAlert({
+        type: "success",
+        message: "Le commentaire a été signalé et masqué en attendant modération.",
+      });
     } catch (error) {
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "Impossible de signaler ce commentaire.",
-      );
+      setCommentActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible de signaler ce commentaire.",
+      });
+    }
+  };
+
+  const handleDeleteComment = async (comment: Comment) => {
+    if (!window.confirm("Supprimer définitivement votre commentaire ?")) {
+      return;
+    }
+
+    try {
+      await apiClient.delete(`/aerodromes/${id}/comments/${comment.id}`);
+      refetchComments();
+      setCommentActionAlert({
+        type: "success",
+        message: "Votre commentaire a été supprimé.",
+      });
+    } catch (error) {
+      setCommentActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible de supprimer ce commentaire.",
+      });
     }
   };
 
@@ -1368,6 +1402,17 @@ export default function AerodromeDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {commentActionAlert && (
+              <div
+                className={`mb-4 rounded-md border p-3 text-sm ${
+                  commentActionAlert.type === "success"
+                    ? "border-green-300 bg-green-50 text-green-800"
+                    : "border-red-300 bg-red-50 text-red-800"
+                }`}
+              >
+                {commentActionAlert.message}
+              </div>
+            )}
             {user && (
               <form onSubmit={handleComment} className="flex gap-2 mb-4">
                 <Input
@@ -1396,16 +1441,28 @@ export default function AerodromeDetailPage() {
                       </span>
                     </div>
                     <p className="text-sm">{c.content}</p>
-                    {user && user.id !== c.user.id && (
-                      <div className="mt-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReportComment(c)}
-                        >
-                          Signaler
-                        </Button>
+                    {user && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {user.id === c.user.id ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteComment(c)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Supprimer
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReportComment(c)}
+                          >
+                            Signaler
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
