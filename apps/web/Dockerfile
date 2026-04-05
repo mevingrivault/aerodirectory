@@ -2,7 +2,8 @@
 FROM node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate && \
+    apk upgrade --no-cache zlib
 
 # ─── Stage 2: Fetch dependencies (lockfile only) ─────────────────────────────
 FROM base AS fetch

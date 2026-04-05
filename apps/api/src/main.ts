@@ -4,6 +4,10 @@ import {
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
 import { ConfigService } from "@nestjs/config";
+import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyCookie from "@fastify/cookie";
+import fastifyCsrf from "@fastify/csrf-protection";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
@@ -19,13 +23,13 @@ async function bootstrap() {
 
   // CORS
   const corsOrigins = config.get<string>("CORS_ORIGINS", "http://localhost:3000");
-  await app.register(require("@fastify/cors"), {
+  await app.register(fastifyCors, {
     origin: corsOrigins.split(",").map((o: string) => o.trim()),
     credentials: true,
   });
 
   // Helmet — strict CSP
-  await app.register(require("@fastify/helmet"), {
+  await app.register(fastifyHelmet, {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -44,12 +48,12 @@ async function bootstrap() {
   });
 
   // Cookies
-  await app.register(require("@fastify/cookie"), {
+  await app.register(fastifyCookie, {
     secret: config.get<string>("JWT_SECRET"),
   });
 
   // CSRF protection
-  await app.register(require("@fastify/csrf-protection"), {
+  await app.register(fastifyCsrf, {
     cookieOpts: {
       signed: true,
       httpOnly: true,

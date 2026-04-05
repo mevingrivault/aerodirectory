@@ -289,20 +289,17 @@ export class MetarService {
             validTo: rawTaf.timestamp?.to ?? rawTaf.period?.date_to ?? "",
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             forecast: (rawTaf.forecast ?? []).map((f: any) => {
-              // Debug: log first period keys to understand CheckWX TAF structure
-              if (rawTaf.forecast?.indexOf(f) === 0) {
-                this.logger.log(`TAF forecast[0] raw: ${JSON.stringify(f).slice(0, 500)}`);
-              }
+              const dir = f.wind?.direction;
               return ({
-              from: f.timestamp?.from ?? f.period?.date_from ?? f.date_from ?? "",
-              to: f.timestamp?.to ?? f.period?.date_to ?? f.date_to ?? "",
-              changeIndicator: f.change?.indicator?.code ?? null,
+              from: f.change?.period?.from ?? f.timestamp?.from ?? f.period?.date_from ?? f.date_from ?? "",
+              to: f.change?.period?.to ?? f.timestamp?.to ?? f.period?.date_to ?? f.date_to ?? "",
+              changeIndicator: (!f.change?.code || f.change?.code === "INITIAL") ? null : (f.change?.code ?? null),
               wind: f.wind
                 ? {
-                    degrees: f.wind.degrees ?? null,
-                    speed_kts: f.wind.speed_kts ?? f.wind.speed?.kts ?? 0,
-                    gust_kts: f.wind.gust_kts ?? f.wind.gust?.kts ?? null,
-                    cardinal: f.wind.degrees_from ?? f.wind.cardinal ?? null,
+                    degrees: dir === "VRB" || dir == null ? null : (typeof dir === "number" ? dir : Number(dir) || null),
+                    speed_kts: f.wind.speed?.kts ?? f.wind.speed_kts ?? 0,
+                    gust_kts: f.wind.gust?.kts ?? f.wind.gust_kts ?? null,
+                    cardinal: dir === "VRB" ? "VRB" : (f.wind.cardinal ?? null),
                   }
                 : undefined,
               visibility_meters: f.visibility?.meters_float ?? f.visibility?.meters ?? null,
