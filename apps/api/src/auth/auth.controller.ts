@@ -7,6 +7,8 @@ import {
   Query,
   Req,
   UsePipes,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import { FastifyRequest } from "fastify";
 import { AuthService } from "./auth.service";
@@ -19,11 +21,15 @@ import {
   TotpVerifySchema,
   UpdateProfileSchema,
   ChangePasswordSchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
   type RegisterInput,
   type LoginInput,
   type TotpVerifyInput,
   type UpdateProfileInput,
   type ChangePasswordInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
 } from "@aerodirectory/shared";
 
 @Controller("auth")
@@ -118,6 +124,29 @@ export class AuthController {
   ) {
     const profile = await this.auth.updateProfile(user.sub, body);
     return ok(profile);
+  }
+
+  @Public()
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body(new ZodValidationPipe(ForgotPasswordSchema)) body: ForgotPasswordInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.requestPasswordReset(body, req.ip, req.headers["user-agent"]);
+    // Réponse générique — ne pas révéler si l'email existe
+    return ok({ message: "Si cet e-mail est associé à un compte, un lien de réinitialisation a été envoyé." });
+  }
+
+  @Public()
+  @Post("reset-password")
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body(new ZodValidationPipe(ResetPasswordSchema)) body: ResetPasswordInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.resetPassword(body, req.ip, req.headers["user-agent"]);
+    return ok({ message: "Mot de passe réinitialisé avec succès." });
   }
 
   @Post("change-password")

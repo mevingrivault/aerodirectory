@@ -33,7 +33,7 @@ export class VisitService {
 
   async getUserVisits(userId: string) {
     return this.prisma.visit.findMany({
-      where: { userId },
+      where: { userId, status: { in: ["VISITED", "FAVORITE"] } },
       include: {
         aerodrome: {
           select: {

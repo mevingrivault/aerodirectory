@@ -12,6 +12,7 @@ import * as QRCode from "qrcode";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { MailService } from "../mail/mail.service";
 import type {
   RegisterInput,
   LoginInput,
@@ -20,6 +21,8 @@ import type {
   UserProfile,
   UpdateProfileInput,
   ChangePasswordInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
 } from "@aerodirectory/shared";
 
 @Injectable()
@@ -29,6 +32,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
 
   // ─── Registration ───────────────────────────────────────
@@ -264,6 +268,96 @@ export class AuthService {
         data: { usedAt: new Date() },
       }),
     ]);
+  }
+
+  // ─── Password reset ────────────────────────────────────
+
+  async requestPasswordReset(
+    input: ForgotPasswordInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email },
+    });
+
+    // Message générique — ne pas révéler si l'email existe
+    if (!user) return;
+
+    // Invalider les anciens tokens de reset non utilisés
+    await this.prisma.emailToken.updateMany({
+      where: {
+        userId: user.id,
+        type: "reset",
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+
+    const token = randomBytes(32).toString("hex");
+    await this.prisma.emailToken.create({
+      data: {
+        token,
+        userId: user.id,
+        type: "reset",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 heure
+      },
+    });
+
+    await this.mail.sendPasswordReset(user.email, token);
+
+    await this.audit.log({
+      userId: user.id,
+      action: "PASSWORD_RESET_REQUEST",
+      ip,
+      userAgent,
+    });
+  }
+
+  async resetPassword(
+    input: ResetPasswordInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const emailToken = await this.prisma.emailToken.findUnique({
+      where: { token: input.token },
+      include: { user: true },
+    });
+
+    if (
+      !emailToken ||
+      emailToken.type !== "reset" ||
+      emailToken.usedAt ||
+      emailToken.expiresAt < new Date()
+    ) {
+      throw new BadRequestException("Lien de réinitialisation invalide ou expiré");
+    }
+
+    const passwordHash = await argon2.hash(input.password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: emailToken.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.emailToken.update({
+        where: { id: emailToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    await this.audit.log({
+      userId: emailToken.userId,
+      action: "PASSWORD_RESET",
+      ip,
+      userAgent,
+    });
   }
 
   // ─── Token generation ──────────────────────────────────

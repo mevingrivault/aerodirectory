@@ -47,12 +47,12 @@ export const FUEL_LABELS: Record<string, string> = {
 export const VISIT_STATUSES = ["SEEN", "VISITED", "FAVORITE"] as const;
 
 export const BADGES = [
-  { id: "first_flight", name: "First Flight", description: "Visit your first aerodrome", threshold: 1 },
-  { id: "five_fields", name: "Weekend Pilot", description: "Visit 5 aerodromes", threshold: 5 },
-  { id: "ten_fields", name: "Explorer", description: "Visit 10 aerodromes", threshold: 10 },
-  { id: "twentyfive_fields", name: "Adventurer", description: "Visit 25 aerodromes", threshold: 25 },
-  { id: "fifty_fields", name: "Veteran", description: "Visit 50 aerodromes", threshold: 50 },
-  { id: "hundred_fields", name: "Legend", description: "Visit 100 aerodromes", threshold: 100 },
+  { id: "first_flight", name: "Premier Vol", description: "Visitez votre premier aérodrome", threshold: 1 },
+  { id: "five_fields", name: "Pilote du Week-end", description: "Visitez 5 aérodromes", threshold: 5 },
+  { id: "ten_fields", name: "Explorateur", description: "Visitez 10 aérodromes", threshold: 10 },
+  { id: "twentyfive_fields", name: "Aventurier", description: "Visitez 25 aérodromes", threshold: 25 },
+  { id: "fifty_fields", name: "Vétéran", description: "Visitez 50 aérodromes", threshold: 50 },
+  { id: "hundred_fields", name: "Légende", description: "Visitez 100 aérodromes", threshold: 100 },
 ] as const;
 
 export const DISCLAIMER =

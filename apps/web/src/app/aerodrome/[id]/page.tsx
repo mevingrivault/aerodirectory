@@ -457,102 +457,96 @@ export default function AerodromeDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between gap-6 flex-wrap">
-        {/* Left: text info */}
-        <div>
-          <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h1 className="text-3xl font-bold">{ad.name}</h1>
-            {ad.icaoCode && (
-              <Badge variant="secondary" className="text-lg">
-                {ad.icaoCode}
-              </Badge>
-            )}
-            <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
-              {STATUS_LABELS[ad.status] ?? ad.status}
+      <div className="mb-8">
+        {/* Titre + badges */}
+        <div className="flex items-start gap-3 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{ad.name}</h1>
+          {ad.icaoCode && (
+            <Badge variant="secondary" className="mt-1 shrink-0">
+              {ad.icaoCode}
             </Badge>
-            <Badge variant="outline">
-              {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
-            </Badge>
-          </div>
-          <p className="text-muted-foreground flex items-center gap-1">
-            <MapPin className="h-4 w-4" />
-            {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
-            {ad.elevation != null && ` — ${ad.elevation} ft`}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
-          </p>
-
-          {/* Source info */}
-          {ad.source && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Source : {ad.source}
-              {ad.lastSyncedAt &&
-                ` — Dernière synchro : ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
-            </p>
           )}
         </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
+            {STATUS_LABELS[ad.status] ?? ad.status}
+          </Badge>
+          <Badge variant="outline">
+            {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+          </Badge>
+        </div>
 
-        {/* Right: action buttons */}
-        <div className="flex flex-col gap-2 items-end">
-          <div className="flex gap-2 flex-wrap justify-end">
-            {/* VAC link */}
-            {ad.icaoCode && (() => {
-              const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
-              if (!pattern) return null;
-              const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
-              return (
-                <a href={vacUrl} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline">
-                    <FileText className="mr-1 h-4 w-4" /> Carte VAC
-                  </Button>
-                </a>
-              );
-            })()}
+        {/* Localisation */}
+        <p className="text-muted-foreground flex items-center gap-1 text-sm">
+          <MapPin className="h-4 w-4 shrink-0" />
+          {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
+          {ad.elevation != null && ` — ${ad.elevation} ft`}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+          {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
+        </p>
+        {ad.source && (
+          <p className="text-xs text-muted-foreground mt-0.5 ml-5">
+            Source : {ad.source}
+            {ad.lastSyncedAt &&
+              ` — Dernière synchro : ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
+          </p>
+        )}
 
-            {/* Fiche basulm (ULM) */}
-            {ad.altIdentifier && (
-              <a
-                href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+        {/* Boutons d'action */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {/* VAC link */}
+          {ad.icaoCode && (() => {
+            const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
+            if (!pattern) return null;
+            const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
+            return (
+              <a href={vacUrl} target="_blank" rel="noopener noreferrer">
                 <Button size="sm" variant="outline">
-                  <FileText className="mr-1 h-4 w-4" /> Fiche basulm
+                  <FileText className="mr-1 h-4 w-4" /> Carte VAC
                 </Button>
               </a>
-            )}
-          </div>
+            );
+          })()}
+
+          {/* Fiche basulm (ULM) */}
+          {ad.altIdentifier && (
+            <a
+              href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size="sm" variant="outline">
+                <FileText className="mr-1 h-4 w-4" /> Fiche basulm
+              </Button>
+            </a>
+          )}
 
           {/* Visit buttons (authenticated only) */}
-          {user && (
-            <div className="flex gap-2">
-              {(() => {
-                const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
-                const isFavorite = currentVisitStatus === "FAVORITE";
-                return (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
-                      onClick={() => handleVisit("VISITED")}
-                    >
-                      <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
-                      onClick={() => handleVisit("FAVORITE")}
-                    >
-                      <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
-                    </Button>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+          {user && (() => {
+            const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
+            const isFavorite = currentVisitStatus === "FAVORITE";
+            return (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
+                  onClick={() => handleVisit("VISITED")}
+                >
+                  <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
+                  onClick={() => handleVisit("FAVORITE")}
+                >
+                  <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
+                </Button>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -1496,14 +1490,15 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
   return (
     <Card className="mb-6">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3 flex-wrap">
+        {/* Ligne titre + badge catégorie + heure */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Cloud className="h-5 w-5" /> Météo
             </CardTitle>
             {catStyle && (
               <span
-                className={`text-sm font-bold px-3 py-1 rounded-full cursor-help ${catStyle.bg} ${catStyle.text}`}
+                className={`text-sm font-bold px-2.5 py-0.5 rounded-full cursor-help ${catStyle.bg} ${catStyle.text}`}
                 title={catStyle.title}
               >
                 {cat}
@@ -1511,25 +1506,30 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
             )}
           </div>
           {m && (
-            <span className="text-xs text-muted-foreground self-center">
+            <span className="text-xs text-muted-foreground shrink-0">
               Obs. {formatUtcTime(m.observedAt)}
             </span>
           )}
         </div>
+
+        {/* Station la plus proche — compacte */}
         {weather.isNearest && (
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            <Navigation className="h-3 w-3 shrink-0" />
-            Station la plus proche : <span className="font-semibold">{weather.icao}</span>
-            {weather.stationName && ` — ${weather.stationName}`}
-            {weather.distanceNm != null && ` · ${weather.distanceNm.toFixed(0)} NM`}
+          <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1">
+            <Navigation className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>
+              <span className="font-semibold">{weather.icao}</span>
+              {weather.stationName && <span> — {weather.stationName}</span>}
+              {weather.distanceNm != null && <span className="text-muted-foreground/70"> · {weather.distanceNm.toFixed(0)} NM</span>}
+            </span>
           </p>
         )}
-        {/* Flight category legend */}
+
+        {/* Légende catégories */}
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-          {Object.entries(CAT_STYLES).map(([cat, style]) => (
-            <span key={cat} className="flex items-center gap-1 text-[11px] text-muted-foreground" title={style.title}>
+          {Object.entries(CAT_STYLES).map(([c, style]) => (
+            <span key={c} className="flex items-center gap-1 text-[11px] text-muted-foreground" title={style.title}>
               <span className={`inline-block h-2 w-2 rounded-full ${style.bg}`} />
-              {cat}
+              {c}
             </span>
           ))}
         </div>
@@ -1539,8 +1539,8 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
         {/* ── METAR ── */}
         {m && (
           <div>
-            {/* Metric tiles */}
-            <div className="flex flex-wrap gap-2">
+            {/* Tiles en grille 2 colonnes sur mobile */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <MetricTile label="Vent" value={windValue} sub={windSub} />
               <MetricTile label="Visibilité" value={formatVisibility(m.visibility_meters)} />
               <MetricTile
@@ -1552,9 +1552,6 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
                 label="QNH"
                 value={m.pressure_hpa != null ? `${m.pressure_hpa} hPa` : "—"}
               />
-              {m.humidity_percent != null && (
-                <MetricTile label="Humidité" value={`${m.humidity_percent}%`} />
-              )}
             </div>
 
             {/* Clouds */}
@@ -1600,17 +1597,10 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
         {/* ── TAF ── */}
         {weather.taf && (
           <div className="border-t pt-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">TAF</p>
-                {(weather.taf.validFrom || weather.taf.validTo) && (
-                  <p className="text-xs text-muted-foreground">
-                    {formatUtcDateTime(weather.taf.validFrom)} → {formatUtcDateTime(weather.taf.validTo)}
-                  </p>
-                )}
-              </div>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">TAF</p>
               <button
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 onClick={() => setShowRawTaf((v) => !v)}
               >
                 {showRawTaf ? "▾ Masquer le TAF brut" : "▸ Voir le TAF brut"}
@@ -1623,7 +1613,52 @@ function WeatherCard({ weather, loading, authenticated }: { weather: WeatherResu
               </pre>
             )}
 
-            <div className="overflow-x-auto">
+            {/* TAF en cards empilées sur mobile, table sur desktop */}
+            <div className="sm:hidden space-y-2">
+              {weather.taf.forecast.map((f, i) => (
+                <div key={i} className={`rounded-md border p-2.5 text-xs ${f.changeIndicator ? "border-orange-200 bg-orange-50/40" : "bg-muted/30"}`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {f.changeIndicator && (
+                      <span className="font-bold text-orange-700 uppercase text-[11px]">{f.changeIndicator}</span>
+                    )}
+                    {(f.from || f.to) && (
+                      <span className="text-muted-foreground font-mono text-[11px]">
+                        {formatUtcDateTime(f.from)}{f.to ? ` → ${formatUtcDateTime(f.to)}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px]">
+                    {f.wind && (
+                      <span>
+                        <span className="text-muted-foreground mr-1">Vent</span>
+                        {f.wind.degrees != null ? `${f.wind.degrees}°` : "VRB"} · {f.wind.speed_kts} kt
+                        {f.wind.gust_kts != null && <span className="text-orange-600"> G{f.wind.gust_kts}</span>}
+                      </span>
+                    )}
+                    {f.visibility_meters != null && (
+                      <span>
+                        <span className="text-muted-foreground mr-1">Vis.</span>
+                        {formatVisibility(f.visibility_meters)}
+                      </span>
+                    )}
+                    {f.clouds && f.clouds.length > 0 && (
+                      <span className="font-mono">
+                        {f.clouds.map((c, j) => (
+                          <span key={j} className="mr-1">{c.code}{c.base_ft != null && ` ${c.base_ft.toLocaleString()}ft`}</span>
+                        ))}
+                      </span>
+                    )}
+                    {f.conditions && f.conditions.length > 0 && (
+                      <span className="text-blue-700 font-semibold">
+                        {f.conditions.map((c) => c.text || c.code).join(" · ")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b">

@@ -272,7 +272,9 @@ export class MetarService {
             temperature_c: rawMetar.temperature?.celsius ?? null,
             dewpoint_c: rawMetar.dewpoint?.celsius ?? null,
             humidity_percent: rawMetar.humidity?.percent ?? null,
-            pressure_hpa: rawMetar.barometer?.hpa ?? rawMetar.barometer?.mb ?? null,
+            pressure_hpa: rawMetar.barometer?.hpa ?? rawMetar.barometer?.hPa ?? rawMetar.barometer?.mb
+              ?? (rawMetar.barometer?.inhg != null ? Math.round(rawMetar.barometer.inhg * 33.8639) : null)
+              ?? (() => { const m = (rawMetar.raw_text ?? "").match(/\bQ(\d{4})\b/); return m ? parseInt(m[1], 10) : null; })(),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             conditions: (rawMetar.conditions ?? []).map((c: any) => ({
               code: c.code ?? "",

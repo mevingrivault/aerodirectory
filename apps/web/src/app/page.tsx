@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Map, BookOpen, Navigation, Plane, Shield } from "lucide-react";
+import { Search, Map, BookOpen, Navigation, Plane } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -34,26 +34,26 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background py-20 md:py-32">
+      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background py-16 md:py-32">
         <div className="container mx-auto px-4 text-center">
           <div className="mx-auto flex items-center justify-center gap-2 mb-6">
             <Plane className="h-10 w-10 text-primary" />
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4">
             Découvrez les Aérodromes Français
           </h1>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground mb-8">
+          <p className="mx-auto max-w-2xl text-base sm:text-lg text-muted-foreground mb-8 px-2">
             L&apos;annuaire collaboratif pour les pilotes. Parcourez les terrains, découvrez les services,
             partagez vos expériences et planifiez votre prochain vol.
           </p>
-          <div className="flex justify-center gap-4">
-            <Button size="lg" asChild>
+          <div className="flex flex-col sm:flex-row justify-center gap-3 px-4 sm:px-0">
+            <Button size="lg" asChild className="w-full sm:w-auto">
               <Link href="/search">
                 <Search className="mr-2 h-5 w-5" />
                 Explorer les Aérodromes
               </Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
+            <Button size="lg" variant="outline" asChild className="w-full sm:w-auto">
               <Link href="/map">
                 <Map className="mr-2 h-5 w-5" />
                 Ouvrir la Carte
@@ -82,17 +82,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Security notice */}
-      <section className="border-t bg-muted/30 py-12">
-        <div className="container mx-auto px-4 text-center">
-          <Shield className="mx-auto h-8 w-8 text-primary mb-3" />
-          <h2 className="text-xl font-semibold mb-2">Sécurisé et Conforme RGPD</h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Hachage Argon2id, authentification à deux facteurs TOTP, connexions chiffrées,
-            CSP stricte et journalisation complète. Vos données sont protégées.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }

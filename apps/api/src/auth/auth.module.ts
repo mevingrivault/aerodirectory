@@ -6,9 +6,11 @@ import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
+import { MailModule } from "../mail/mail.module";
 
 @Module({
   imports: [
+    MailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
