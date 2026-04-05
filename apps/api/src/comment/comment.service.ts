@@ -52,7 +52,7 @@ export class CommentService {
         where: {
           aerodromeId,
           deletedAt: null,
-          contentStatus: { in: ["APPROVED", "PENDING"] },
+          contentStatus: "APPROVED",
         },
         include: {
           user: { select: { id: true, displayName: true } },
@@ -65,7 +65,7 @@ export class CommentService {
         where: {
           aerodromeId,
           deletedAt: null,
-          contentStatus: { in: ["APPROVED", "PENDING"] },
+          contentStatus: "APPROVED",
         },
       }),
     ]);
@@ -143,6 +143,41 @@ export class CommentService {
     input: ReportCreateInput,
     ip?: string,
   ) {
+    if (input.targetType === "comment") {
+      const comment = await this.prisma.comment.findUnique({
+        where: { id: input.targetId },
+        select: {
+          id: true,
+          userId: true,
+          aerodromeId: true,
+          deletedAt: true,
+        },
+      });
+
+      if (!comment || comment.aerodromeId !== aerodromeId || comment.deletedAt) {
+        throw new NotFoundException("Comment not found");
+      }
+
+      if (comment.userId === userId) {
+        throw new BadRequestException("You cannot report your own comment");
+      }
+
+      const existingPendingReport = await this.prisma.report.findFirst({
+        where: {
+          userId,
+          aerodromeId,
+          targetType: "comment",
+          targetId: input.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      if (existingPendingReport) {
+        throw new BadRequestException("You have already reported this comment");
+      }
+    }
+
     const report = await this.prisma.report.create({
       data: {
         userId,
@@ -152,6 +187,13 @@ export class CommentService {
         reason: input.reason,
       },
     });
+
+    if (input.targetType === "comment") {
+      await this.prisma.comment.update({
+        where: { id: input.targetId },
+        data: { contentStatus: "FLAGGED" },
+      });
+    }
 
     await this.audit.log({
       userId,

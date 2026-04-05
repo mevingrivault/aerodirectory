@@ -15,10 +15,12 @@ import {
   AdminUsersQuerySchema,
   BanUserSchema,
   DeleteAdminCommentSchema,
+  RestoreAdminCommentSchema,
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
   type BanUserInput,
   type DeleteAdminCommentInput,
+  type RestoreAdminCommentInput,
 } from "@aerodirectory/shared";
 import { Roles, CurrentUser } from "../common/decorators";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
@@ -98,5 +100,24 @@ export class AdminController {
       req.headers["user-agent"],
     );
     return ok({ deleted: true });
+  }
+
+  @Post("comments/:commentId/restore")
+  @HttpCode(HttpStatus.OK)
+  async restoreComment(
+    @CurrentUser() user: { sub: string },
+    @Param("commentId") commentId: string,
+    @Body(new ZodValidationPipe(RestoreAdminCommentSchema))
+    body: RestoreAdminCommentInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.restoreComment(
+      user.sub,
+      commentId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ restored: true });
   }
 }

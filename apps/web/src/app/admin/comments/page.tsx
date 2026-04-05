@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, MessageSquareWarning, Trash2 } from "lucide-react";
+import { ArrowLeft, Eye, MessageSquareWarning, Trash2 } from "lucide-react";
 import type { AdminCommentListItem } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -17,7 +17,7 @@ export default function AdminCommentsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [state, setState] = useState<"active" | "deleted" | "all">("active");
+  const [state, setState] = useState<"active" | "reported" | "deleted" | "all">("active");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -71,6 +71,30 @@ export default function AdminCommentsPage() {
     }
   };
 
+  const handleRestore = async (comment: AdminCommentListItem) => {
+    if (!window.confirm("Reafficher ce commentaire ?")) {
+      return;
+    }
+
+    const note = window.prompt("Note de moderation (optionnel) :") ?? "";
+
+    try {
+      await apiClient.post(`/admin/comments/${comment.id}/restore`, {
+        note: note.trim() || undefined,
+      });
+      setFeedback({ type: "success", message: "Commentaire reaffiche avec succes." });
+      await commentsQuery.refetch();
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Impossible de reafficher ce commentaire.",
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6">
@@ -107,10 +131,13 @@ export default function AdminCommentsPage() {
         />
         <select
           value={state}
-          onChange={(event) => setState(event.target.value as "active" | "deleted" | "all")}
+          onChange={(event) =>
+            setState(event.target.value as "active" | "reported" | "deleted" | "all")
+          }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="active">Commentaires actifs</option>
+          <option value="reported">Commentaires signales</option>
           <option value="deleted">Commentaires supprimes</option>
           <option value="all">Tous les commentaires</option>
         </select>
@@ -132,8 +159,20 @@ export default function AdminCommentsPage() {
                   <span className="text-muted-foreground"> · {comment.user.email}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant={comment.deletedAt ? "destructive" : "success"}>
-                    {comment.deletedAt ? "Supprime" : "Actif"}
+                  <Badge
+                    variant={
+                      comment.deletedAt
+                        ? "destructive"
+                        : comment.contentStatus === "FLAGGED"
+                          ? "warning"
+                          : "success"
+                    }
+                  >
+                    {comment.deletedAt
+                      ? "Supprime"
+                      : comment.contentStatus === "FLAGGED"
+                        ? "Signale"
+                        : "Actif"}
                   </Badge>
                   <Badge variant="outline">
                     {comment.aerodrome.icaoCode
@@ -147,6 +186,12 @@ export default function AdminCommentsPage() {
 
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>Publie le {new Date(comment.createdAt).toLocaleString("fr-FR")}</div>
+                {comment.pendingReports.count > 0 && (
+                  <div>{comment.pendingReports.count} signalement(s) en attente</div>
+                )}
+                {comment.pendingReports.reasons.map((reason, index) => (
+                  <div key={`${comment.id}-report-${index}`}>Signalement : {reason}</div>
+                ))}
                 {comment.deletedAt && (
                   <div>
                     Supprime le {new Date(comment.deletedAt).toLocaleString("fr-FR")}
@@ -160,14 +205,26 @@ export default function AdminCommentsPage() {
 
               {!comment.deletedAt && (
                 <div className="mt-3">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => handleDelete(comment)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Supprimer
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {comment.contentStatus === "FLAGGED" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleRestore(comment)}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Reafficher
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => handleDelete(comment)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Supprimer
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

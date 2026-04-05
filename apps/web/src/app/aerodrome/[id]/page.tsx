@@ -413,6 +413,28 @@ export default function AerodromeDetailPage() {
     refetchComments();
   };
 
+  const handleReportComment = async (comment: Comment) => {
+    const reason = window.prompt("Pourquoi signalez-vous ce commentaire ?");
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await apiClient.post(`/aerodromes/${id}/reports`, {
+        targetType: "comment",
+        targetId: comment.id,
+        reason: reason.trim(),
+      });
+
+      refetchComments();
+      window.alert("Le commentaire a été signalé et masqué en attendant modération.");
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Impossible de signaler ce commentaire.",
+      );
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
@@ -1374,6 +1396,18 @@ export default function AerodromeDetailPage() {
                       </span>
                     </div>
                     <p className="text-sm">{c.content}</p>
+                    {user && user.id !== c.user.id && (
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReportComment(c)}
+                        >
+                          Signaler
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

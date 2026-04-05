@@ -10,7 +10,7 @@ export const AdminUsersQuerySchema = PaginationSchema.extend({
 
 export const AdminCommentsQuerySchema = PaginationSchema.extend({
   search: z.string().trim().max(255).optional(),
-  state: z.enum(["active", "deleted", "all"]).optional(),
+  state: z.enum(["active", "reported", "deleted", "all"]).optional(),
 });
 
 export const BanUserSchema = z.object({
@@ -21,7 +21,12 @@ export const DeleteAdminCommentSchema = z.object({
   reason: optionalText,
 });
 
+export const RestoreAdminCommentSchema = z.object({
+  note: optionalText,
+});
+
 export type AdminUsersQueryInput = z.infer<typeof AdminUsersQuerySchema>;
 export type AdminCommentsQueryInput = z.infer<typeof AdminCommentsQuerySchema>;
 export type BanUserInput = z.infer<typeof BanUserSchema>;
 export type DeleteAdminCommentInput = z.infer<typeof DeleteAdminCommentSchema>;
+export type RestoreAdminCommentInput = z.infer<typeof RestoreAdminCommentSchema>;

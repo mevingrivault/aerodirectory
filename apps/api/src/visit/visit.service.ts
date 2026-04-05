@@ -43,6 +43,7 @@ export class VisitService {
             latitude: true,
             longitude: true,
             city: true,
+            aerodromeType: true,
           },
         },
       },

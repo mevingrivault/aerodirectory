@@ -17,7 +17,17 @@ export class AerodromeService {
         runways: true,
         frequencies: true,
         fuels: true,
-        _count: { select: { visits: true, comments: true } },
+        _count: {
+          select: {
+            visits: true,
+            comments: {
+              where: {
+                deletedAt: null,
+                contentStatus: "APPROVED",
+              },
+            },
+          },
+        },
       },
     });
 
@@ -35,7 +45,17 @@ export class AerodromeService {
         runways: true,
         frequencies: true,
         fuels: true,
-        _count: { select: { visits: true, comments: true } },
+        _count: {
+          select: {
+            visits: true,
+            comments: {
+              where: {
+                deletedAt: null,
+                contentStatus: "APPROVED",
+              },
+            },
+          },
+        },
       },
     });
 

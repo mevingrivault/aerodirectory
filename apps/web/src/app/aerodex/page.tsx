@@ -30,7 +30,31 @@ interface VisitEntry {
     name: string;
     icaoCode: string | null;
     city: string | null;
+    aerodromeType: string;
   };
+}
+
+type VisitBucket = "aerodromes" | "ulm" | "heli";
+
+const VISIT_BUCKETS: Array<{
+  key: VisitBucket;
+  title: string;
+}> = [
+  { key: "aerodromes", title: "Aérodromes et aéroports" },
+  { key: "ulm", title: "Bases ULM" },
+  { key: "heli", title: "Hélistations" },
+];
+
+function getVisitBucket(aerodromeType: string): VisitBucket {
+  if (aerodromeType === "ULTRALIGHT_FIELD") {
+    return "ulm";
+  }
+
+  if (aerodromeType === "HELIPORT") {
+    return "heli";
+  }
+
+  return "aerodromes";
 }
 
 function VisitRow({ v }: { v: VisitEntry }) {
@@ -40,9 +64,10 @@ function VisitRow({ v }: { v: VisitEntry }) {
     ) : (
       <Star className="h-4 w-4 text-yellow-500" />
     );
+
   return (
     <Link href={`/aerodrome/${v.aerodrome.id}`}>
-      <div className="flex items-center justify-between rounded-md border p-3 hover:bg-accent/50 transition-colors gap-2">
+      <div className="flex items-center justify-between rounded-md border p-3 transition-colors gap-2 hover:bg-accent/50">
         <div className="flex items-center gap-2 min-w-0">
           <div className="shrink-0">{icon}</div>
           <div className="min-w-0">
@@ -123,6 +148,53 @@ function VisitList({
   );
 }
 
+function VisitGroupSection({
+  title,
+  icon,
+  items,
+  emptyMessages,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: VisitEntry[];
+  emptyMessages: Record<VisitBucket, string>;
+}) {
+  const groupedItems: Record<VisitBucket, VisitEntry[]> = {
+    aerodromes: items.filter(
+      (item) => getVisitBucket(item.aerodrome.aerodromeType) === "aerodromes",
+    ),
+    ulm: items.filter((item) => getVisitBucket(item.aerodrome.aerodromeType) === "ulm"),
+    heli: items.filter((item) => getVisitBucket(item.aerodrome.aerodromeType) === "heli"),
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          {icon}
+          {title}
+          {items.length > 0 && (
+            <span className="ml-auto text-sm font-normal text-muted-foreground">
+              {items.length}
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {VISIT_BUCKETS.map((bucket) => (
+          <VisitList
+            key={`${title}-${bucket.key}`}
+            title={bucket.title}
+            icon={<Plane className="h-4 w-4 text-primary" />}
+            items={groupedItems[bucket.key]}
+            empty={emptyMessages[bucket.key]}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AerodexPage() {
   const { user } = useAuth();
 
@@ -166,7 +238,6 @@ export default function AerodexPage() {
         Aérodex
       </h1>
 
-      {/* Stats */}
       {stats && (
         <>
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -195,7 +266,6 @@ export default function AerodexPage() {
             </Card>
           </div>
 
-          {/* Progress bar */}
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
@@ -208,14 +278,16 @@ export default function AerodexPage() {
                 <div
                   className="h-3 rounded-full bg-primary transition-all"
                   style={{
-                    width: `${Math.min(100, (stats.visitedCount / Math.max(1, stats.totalAerodromes)) * 100)}%`,
+                    width: `${Math.min(
+                      100,
+                      (stats.visitedCount / Math.max(1, stats.totalAerodromes)) * 100,
+                    )}%`,
                   }}
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Badges */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -248,19 +320,26 @@ export default function AerodexPage() {
         </>
       )}
 
-      {/* Lists */}
       <div className="space-y-6">
-        <VisitList
-          title="Mes Visites"
+        <VisitGroupSection
+          title="Mes visites"
           icon={<Star className="h-5 w-5 text-yellow-500" />}
           items={visited}
-          empty="Aucune visite pour l'instant. Commencez à explorer les aérodromes !"
+          emptyMessages={{
+            aerodromes: "Aucune visite sur des aérodromes ou aéroports pour l'instant.",
+            ulm: "Aucune base ULM visitée pour l'instant.",
+            heli: "Aucune hélistation visitée pour l'instant.",
+          }}
         />
-        <VisitList
-          title="Mes Favoris"
+        <VisitGroupSection
+          title="Mes favoris"
           icon={<Heart className="h-5 w-5 text-red-500" />}
           items={favorites}
-          empty="Aucun favori pour l'instant."
+          emptyMessages={{
+            aerodromes: "Aucun aérodrome ou aéroport en favori pour l'instant.",
+            ulm: "Aucune base ULM en favori pour l'instant.",
+            heli: "Aucune hélistation en favori pour l'instant.",
+          }}
         />
       </div>
     </div>

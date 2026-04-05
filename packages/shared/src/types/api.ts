@@ -121,6 +121,7 @@ export interface AdminUserDetail extends AdminUserListItem {
 export interface AdminCommentListItem {
   id: string;
   content: string;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
   createdAt: string;
   deletedAt: string | null;
   deletedReason: string | null;
@@ -139,4 +140,8 @@ export interface AdminCommentListItem {
     displayName: string | null;
     email: string;
   } | null;
+  pendingReports: {
+    count: number;
+    reasons: string[];
+  };
 }

@@ -10,6 +10,7 @@ import type {
   AdminUsersQueryInput,
   BanUserInput,
   DeleteAdminCommentInput,
+  RestoreAdminCommentInput,
   AdminDashboardStats,
   AdminUserDetail,
   AdminUserListItem,
@@ -28,7 +29,12 @@ export class AdminService {
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: "BANNED" } }),
-        this.prisma.comment.count({ where: { deletedAt: null } }),
+        this.prisma.comment.count({
+          where: {
+            deletedAt: null,
+            contentStatus: { not: "FLAGGED" },
+          },
+        }),
         this.prisma.comment.count({ where: { deletedAt: { not: null } } }),
       ]);
 
@@ -209,7 +215,9 @@ export class AdminService {
 
     const where = {
       ...(state === "active"
-        ? { deletedAt: null }
+        ? { deletedAt: null, contentStatus: { not: "FLAGGED" as const } }
+        : state === "reported"
+          ? { deletedAt: null, contentStatus: "FLAGGED" as const }
         : state === "deleted"
           ? { deletedAt: { not: null as Date | null } }
           : {}),
@@ -269,8 +277,46 @@ export class AdminService {
       this.prisma.comment.count({ where }),
     ]);
 
+    const reports = comments.length
+      ? await this.prisma.report.findMany({
+          where: {
+            targetType: "comment",
+            targetId: { in: comments.map((comment) => comment.id) },
+            contentStatus: "PENDING",
+          },
+          select: {
+            targetId: true,
+            reason: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+
+    const pendingReportsByComment = new Map<
+      string,
+      { count: number; reasons: string[] }
+    >();
+
+    for (const report of reports) {
+      const entry = pendingReportsByComment.get(report.targetId) ?? {
+        count: 0,
+        reasons: [],
+      };
+      entry.count += 1;
+      if (entry.reasons.length < 3) {
+        entry.reasons.push(report.reason);
+      }
+      pendingReportsByComment.set(report.targetId, entry);
+    }
+
     return {
-      data: comments.map((comment) => this.toAdminCommentListItem(comment)),
+      data: comments.map((comment) =>
+        this.toAdminCommentListItem(
+          comment,
+          pendingReportsByComment.get(comment.id) ?? { count: 0, reasons: [] },
+        ),
+      ),
       total,
     };
   }
@@ -304,6 +350,19 @@ export class AdminService {
       },
     });
 
+    await this.prisma.report.updateMany({
+      where: {
+        targetType: "comment",
+        targetId: commentId,
+        contentStatus: "PENDING",
+      },
+      data: {
+        contentStatus: "APPROVED",
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
     await this.audit.log({
       userId: adminId,
       action: "COMMENT_DELETE",
@@ -313,6 +372,61 @@ export class AdminService {
         commentId,
         reason: input.reason?.trim() || null,
         moderation: true,
+      },
+    });
+  }
+
+  async restoreComment(
+    adminId: string,
+    commentId: string,
+    input: RestoreAdminCommentInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { id: true, deletedAt: true, contentStatus: true },
+    });
+
+    if (!comment) {
+      throw new NotFoundException("Commentaire introuvable");
+    }
+
+    if (comment.deletedAt) {
+      throw new BadRequestException("Un commentaire supprimé ne peut pas être rétabli.");
+    }
+
+    if (comment.contentStatus !== "FLAGGED") {
+      throw new BadRequestException("Ce commentaire n'est pas en attente de modération.");
+    }
+
+    await this.prisma.comment.update({
+      where: { id: commentId },
+      data: { contentStatus: "APPROVED" },
+    });
+
+    await this.prisma.report.updateMany({
+      where: {
+        targetType: "comment",
+        targetId: commentId,
+        contentStatus: "PENDING",
+      },
+      data: {
+        contentStatus: "REJECTED",
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "COMMENT_RESTORE",
+        commentId,
+        note: input.note?.trim() || null,
       },
     });
   }
@@ -346,22 +460,26 @@ export class AdminService {
   private toAdminCommentListItem(comment: {
     id: string;
     content: string;
+    contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
     createdAt: Date;
     deletedAt: Date | null;
     deletedReason: string | null;
     aerodrome: { id: string; name: string; icaoCode: string | null };
     user: { id: string; displayName: string | null; email: string };
     deletedBy?: { id: string; displayName: string | null; email: string } | null;
-  }): AdminCommentListItem {
+  },
+  pendingReports: { count: number; reasons: string[] }): AdminCommentListItem {
     return {
       id: comment.id,
       content: comment.content,
+      contentStatus: comment.contentStatus,
       createdAt: comment.createdAt.toISOString(),
       deletedAt: comment.deletedAt?.toISOString() ?? null,
       deletedReason: comment.deletedReason,
       aerodrome: comment.aerodrome,
       user: comment.user,
       deletedBy: comment.deletedBy ?? null,
+      pendingReports,
     };
   }
 }
