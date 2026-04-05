@@ -5,7 +5,6 @@ import {
   PayloadTooLargeException,
 } from "@nestjs/common";
 import sharp from "sharp";
-import { fileTypeFromBuffer } from "file-type";
 
 export const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -70,9 +69,8 @@ export class ImageService {
       );
     }
 
-    // 3. Real MIME type detection (magic bytes via file-type, with HEIC fallback)
-    const detectedType = await fileTypeFromBuffer(buffer);
-    const realMime = detectedType?.mime ?? this.detectHeicFromBuffer(buffer);
+    // 3. Real MIME type detection (magic bytes)
+    const realMime = this.detectMimeFromBuffer(buffer);
 
     if (!realMime || !ALLOWED_MIME_TYPES.has(realMime)) {
       throw new BadRequestException(
@@ -135,16 +133,23 @@ export class ImageService {
   }
 
   /**
-   * Detects HEIC/HEIF by checking the ftyp box at offset 4 in the buffer.
-   * file-type doesn't always detect HEIC on all versions.
+   * Detects MIME type from magic bytes (no external library needed).
    */
-  private detectHeicFromBuffer(buffer: Buffer): string | null {
+  private detectMimeFromBuffer(buffer: Buffer): string | null {
     if (buffer.length < 12) return null;
-    // ftyp box: bytes 4-7 are "ftyp", bytes 8-11 are the brand
+    // JPEG: FF D8 FF
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return "image/png";
+    // WebP: RIFF....WEBP
+    if (buffer.slice(0, 4).toString("ascii") === "RIFF" && buffer.slice(8, 12).toString("ascii") === "WEBP") return "image/webp";
+    // HEIC/HEIF: ftyp box at offset 4
     const marker = buffer.slice(4, 8).toString("ascii");
-    if (marker !== "ftyp") return null;
-    const brand = buffer.slice(8, 12).toString("ascii").toLowerCase();
-    return HEIC_BRANDS.includes(brand) ? "image/heic" : null;
+    if (marker === "ftyp") {
+      const brand = buffer.slice(8, 12).toString("ascii").toLowerCase();
+      if (HEIC_BRANDS.includes(brand)) return "image/heic";
+    }
+    return null;
   }
 
   private mimeToExt(mime: string): string {

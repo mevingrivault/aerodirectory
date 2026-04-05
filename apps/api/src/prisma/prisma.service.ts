@@ -29,6 +29,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get auditLog() { return this.client.auditLog; }
   get airspace() { return this.client.airspace; }
   get osmPoi() { return this.client.osmPoi; }
+  get photo() { return this.client.photo; }
 
   get $queryRaw() { return this.client.$queryRaw.bind(this.client); }
   get $executeRaw() { return this.client.$executeRaw.bind(this.client); }
