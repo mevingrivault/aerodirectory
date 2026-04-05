@@ -51,6 +51,20 @@ export class AuthService {
       throw new ConflictException("Email already registered");
     }
 
+    const displayNameTaken = await this.prisma.user.findFirst({
+      where: {
+        displayName: {
+          equals: input.displayName,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    });
+
+    if (displayNameTaken) {
+      throw new ConflictException("Display name already taken");
+    }
+
     // Argon2id with OWASP-recommended parameters
     const passwordHash = await argon2.hash(input.password, {
       type: argon2.argon2id,
@@ -437,11 +451,28 @@ export class AuthService {
     userId: string,
     input: UpdateProfileInput,
   ): Promise<UserProfile> {
+    if (input.displayName) {
+      const displayNameTaken = await this.prisma.user.findFirst({
+        where: {
+          id: { not: userId },
+          displayName: {
+            equals: input.displayName,
+            mode: "insensitive",
+          },
+        },
+        select: { id: true },
+      });
+
+      if (displayNameTaken) {
+        throw new ConflictException("Display name already taken");
+      }
+    }
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        displayName: input.displayName ?? null,
-        homeAerodromeId: input.homeAerodromeId,
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.homeAerodromeId !== undefined ? { homeAerodromeId: input.homeAerodromeId } : {}),
       },
       include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });

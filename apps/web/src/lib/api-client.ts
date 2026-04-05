@@ -32,14 +32,15 @@ class ApiClient {
       credentials: "include",
     });
 
-    const json = await response.json();
+    const raw = await response.text();
+    const json = raw ? safeParseJson(raw) : null;
 
     if (!response.ok) {
-      const error = json as ApiErrorResponse;
+      const error = json as ApiErrorResponse | NestLikeErrorResponse | null;
       throw new ApiError(
-        error.error?.message || "Request failed",
+        extractErrorMessage(error) || response.statusText || "Request failed",
         response.status,
-        error.error?.code,
+        error && "error" in error ? error.error?.code : undefined,
       );
     }
 
@@ -81,6 +82,46 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+interface NestLikeErrorResponse {
+  statusCode?: number;
+  message?: string | string[];
+  error?: string;
+}
+
+function safeParseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function extractErrorMessage(
+  error: ApiErrorResponse | NestLikeErrorResponse | null,
+): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  if (
+    "error" in error &&
+    typeof error.error === "object" &&
+    error.error &&
+    "message" in error.error
+  ) {
+    return error.error.message || null;
+  }
+
+  if ("message" in error) {
+    if (Array.isArray(error.message)) {
+      return error.message.join(", ");
+    }
+    return error.message ?? null;
+  }
+
+  return null;
 }
 
 export const apiClient = new ApiClient();

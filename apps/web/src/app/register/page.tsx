@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Plane, Check, X, Mail } from "lucide-react";
 
 const RULES = [
-  { label: "12 caractères minimum", test: (p: string) => p.length >= 12 },
+  { label: "12 caracteres minimum", test: (p: string) => p.length >= 12 },
   { label: "Une majuscule", test: (p: string) => /[A-Z]/.test(p) },
   { label: "Une minuscule", test: (p: string) => /[a-z]/.test(p) },
   { label: "Un chiffre", test: (p: string) => /[0-9]/.test(p) },
-  { label: "Un caractère spécial", test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
+  { label: "Un caractere special", test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
 ];
 
 export default function RegisterPage() {
@@ -24,19 +30,34 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showRules, setShowRules] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const allRulesOk = RULES.every((r) => r.test(password));
+  const passwordChecks = useMemo(
+    () => RULES.map((rule) => ({ ...rule, ok: rule.test(password) })),
+    [password],
+  );
+  const allRulesOk = passwordChecks.every((rule) => rule.ok);
+  const completedRules = passwordChecks.filter((rule) => rule.ok).length;
   const confirmOk = confirm.length > 0 && password === confirm;
+  const displayNameOk = displayName.trim().length >= 2;
+  const showPasswordHelp = showRules || passwordTouched || password.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allRulesOk) {
-      setError("Le mot de passe ne respecte pas les critères de sécurité.");
+
+    if (!displayNameOk) {
+      setError("Le pseudo est obligatoire.");
       return;
     }
+
+    if (!allRulesOk) {
+      setError("Le mot de passe ne respecte pas les criteres de securite.");
+      return;
+    }
+
     if (password !== confirm) {
       setError("Les mots de passe ne correspondent pas.");
       return;
@@ -46,14 +67,16 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const message = await register(email, password, displayName.trim() || undefined);
+      const message = await register(email, password, displayName.trim());
       setSuccess(message);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("conflict")) {
-        setError("Cette adresse e-mail est déjà utilisée.");
+      const msg = err instanceof Error ? err.message.toLowerCase() : "";
+      if (msg.includes("display name")) {
+        setError("Ce pseudo est deja pris.");
+      } else if (msg.includes("already") || msg.includes("conflict")) {
+        setError("Cette adresse e-mail est deja utilisee.");
       } else {
-        setError("Échec de l'inscription. Veuillez réessayer.");
+        setError("Echec de l'inscription. Veuillez reessayer.");
       }
     } finally {
       setLoading(false);
@@ -65,9 +88,9 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Plane className="mx-auto mb-2 h-8 w-8 text-primary" />
-          <CardTitle>Créer un compte</CardTitle>
+          <CardTitle>Creer un compte</CardTitle>
           <CardDescription>
-            Bienvenue sur Navventura. Tu es prêt à devenir Aéroventurier ?
+            Bienvenue sur Navventura. Tu es pret a devenir Aeroventurier ?
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -76,10 +99,10 @@ export default function RegisterPage() {
               <Mail className="mx-auto h-12 w-12 text-primary" />
               <p className="text-sm text-foreground">{success}</p>
               <p className="text-sm text-muted-foreground">
-                Ouvre l'e-mail reçu pour valider ton adresse avant de te connecter.
+                Ouvre l&apos;e-mail recu pour valider ton adresse avant de te connecter.
               </p>
               <Link href="/login" className="text-sm text-primary hover:underline">
-                Aller à la connexion
+                Aller a la connexion
               </Link>
             </div>
           ) : (
@@ -89,10 +112,11 @@ export default function RegisterPage() {
                   {error}
                 </div>
               )}
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="displayName" className="text-sm font-medium">
-                    Nom d&apos;affichage <span className="text-muted-foreground">(optionnel)</span>
+                    Pseudo
                   </label>
                   <Input
                     id="displayName"
@@ -101,7 +125,19 @@ export default function RegisterPage() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     maxLength={50}
+                    autoComplete="nickname"
+                    required
+                    className={
+                      displayName.length > 0
+                        ? displayNameOk
+                          ? "border-green-400 focus-visible:ring-green-400"
+                          : "border-destructive focus-visible:ring-destructive"
+                        : ""
+                    }
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ce pseudo est public et doit etre unique.
+                  </p>
                 </div>
 
                 <div>
@@ -129,26 +165,35 @@ export default function RegisterPage() {
                     autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    onFocus={() => setShowRules(true)}
+                    onFocus={() => {
+                      setShowRules(true);
+                      setPasswordTouched(true);
+                    }}
                     required
                   />
-                  {showRules && (
-                    <ul className="mt-2 space-y-1">
-                      {RULES.map((r) => {
-                        const ok = r.test(password);
-                        return (
+                  {showPasswordHelp && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        {completedRules}/{RULES.length} criteres de securite valides
+                      </p>
+                      <ul className="space-y-1">
+                        {passwordChecks.map((rule) => (
                           <li
-                            key={r.label}
+                            key={rule.label}
                             className={`flex items-center gap-1.5 text-xs ${
-                              ok ? "text-green-600" : "text-muted-foreground"
+                              rule.ok ? "text-green-600" : "text-muted-foreground"
                             }`}
                           >
-                            {ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                            {r.label}
+                            {rule.ok ? (
+                              <Check className="h-3 w-3" />
+                            ) : (
+                              <X className="h-3 w-3" />
+                            )}
+                            {rule.label}
                           </li>
-                        );
-                      })}
-                    </ul>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
 
@@ -171,20 +216,30 @@ export default function RegisterPage() {
                         : ""
                     }
                   />
-                  {confirm.length > 0 && !confirmOk && (
-                    <p className="mt-1 text-xs text-destructive">
-                      Les mots de passe ne correspondent pas.
+                  {confirm.length > 0 && (
+                    <p
+                      className={`mt-1 text-xs ${
+                        confirmOk ? "text-green-600" : "text-destructive"
+                      }`}
+                    >
+                      {confirmOk
+                        ? "Les mots de passe correspondent."
+                        : "Les mots de passe ne correspondent pas."}
                     </p>
                   )}
                 </div>
 
-                <Button type="submit" className="w-full" disabled={loading || !allRulesOk || !confirmOk}>
-                  {loading ? "Création en cours..." : "Créer mon compte"}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading || !displayNameOk || !allRulesOk || !confirmOk}
+                >
+                  {loading ? "Creation en cours..." : "Creer mon compte"}
                 </Button>
               </form>
 
               <p className="mt-4 text-center text-sm text-muted-foreground">
-                Déjà inscrit ?{" "}
+                Deja inscrit ?{" "}
                 <Link href="/login" className="text-primary hover:underline">
                   Se connecter
                 </Link>

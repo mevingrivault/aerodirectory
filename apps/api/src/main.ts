@@ -7,7 +7,6 @@ import { ConfigService } from "@nestjs/config";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyCookie from "@fastify/cookie";
-import fastifyCsrf from "@fastify/csrf-protection";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
@@ -47,15 +46,6 @@ async function bootstrap() {
 
   await app.register(fastifyCookie, {
     secret: config.get<string>("JWT_SECRET"),
-  });
-
-  await app.register(fastifyCsrf, {
-    cookieOpts: {
-      signed: true,
-      httpOnly: true,
-      sameSite: "strict",
-      secure: config.get<string>("NODE_ENV") === "production",
-    },
   });
 
   app.setGlobalPrefix("api/v1");

@@ -15,10 +15,12 @@ const passwordSchema = z
   .regex(/[0-9]/, "Password must contain a digit")
   .regex(/[^a-zA-Z0-9]/, "Password must contain a special character");
 
+const displayNameSchema = z.string().min(2).max(50).trim();
+
 export const RegisterSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
-  displayName: z.string().min(2).max(50).trim().optional(),
+  displayName: displayNameSchema,
 });
 
 export const LoginSchema = z.object({
@@ -56,7 +58,7 @@ export const DeleteAccountSchema = z.object({
 });
 
 export const UpdateProfileSchema = z.object({
-  displayName: z.string().min(2).max(50).trim().optional(),
+  displayName: displayNameSchema.optional(),
   homeAerodromeId: z.string().cuid().nullable().optional(),
 });
 
