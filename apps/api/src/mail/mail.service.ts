@@ -11,7 +11,13 @@ export class MailService {
 
   constructor(private readonly config: ConfigService) {
     this.from = this.config.get<string>("MAIL_FROM", "Navventura <noreply@navventura.fr>");
-    this.appUrl = this.config.get<string>("APP_URL", "http://localhost:3000");
+
+    this.appUrl =
+      this.config.get<string>("APP_URL") ||
+      this.config.get<string>("FRONTEND_URL") ||
+      (this.config.get<string>("NODE_ENV") === "production"
+        ? "https://navventura.fr"
+        : "http://localhost:3000");
 
     this.transporter = nodemailer.createTransport({
       host: this.config.get<string>("SMTP_HOST", "localhost"),
