@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X } from "lucide-react";
+import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X, TriangleAlert } from "lucide-react";
 import type { TotpSetupResponse } from "@aerodirectory/shared";
 
 interface AerodromeOption {
@@ -35,7 +36,8 @@ function Alert({ type, msg }: { type: AlertType; msg: string }) {
 }
 
 export default function ProfilePage() {
-  const { user, refreshProfile } = useAuth();
+  const router = useRouter();
+  const { user, refreshProfile, logout } = useAuth();
 
   // TOTP state
   const [totpSetup, setTotpSetup] = useState<TotpSetupResponse | null>(null);
@@ -51,6 +53,11 @@ export default function ProfilePage() {
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [pwAlert, setPwAlert] = useState<{ type: AlertType; msg: string } | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
+
+  // Delete account state
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteAlert, setDeleteAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Home aerodrome state
   const [homeSearch, setHomeSearch] = useState("");
@@ -130,6 +137,28 @@ export default function ProfilePage() {
       setPwAlert({ type: "error", msg });
     } finally {
       setPwLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteAlert(null);
+    setDeleteLoading(true);
+
+    try {
+      await apiClient.post("/auth/delete-account", {
+        currentPassword: deletePassword,
+      });
+      logout();
+      router.push("/");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error && err.message.includes("actuel")
+          ? "Mot de passe incorrect. Le compte n'a pas été supprimé."
+          : "Impossible de supprimer le compte.";
+      setDeleteAlert({ type: "error", msg });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -406,6 +435,36 @@ export default function ProfilePage() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 border-destructive/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+            <TriangleAlert className="h-5 w-5" /> Zone dangereuse
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {deleteAlert && <Alert type={deleteAlert.type} msg={deleteAlert.msg} />}
+          <p className="mb-4 text-sm text-muted-foreground">
+            La suppression du compte est instantanée et irréversible. Toutes vos données liées au compte seront supprimées.
+          </p>
+          <form onSubmit={handleDeleteAccount} className="space-y-3">
+            <Input
+              type="password"
+              placeholder="Saisissez à nouveau votre mot de passe"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              required
+            />
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={deleteLoading || deletePassword.length === 0}
+            >
+              {deleteLoading ? "Suppression..." : "Supprimer définitivement mon compte"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

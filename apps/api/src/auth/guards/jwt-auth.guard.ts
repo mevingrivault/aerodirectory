@@ -34,6 +34,9 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync(token);
+      if (payload.totpPending && !request.url.startsWith("/api/v1/auth/login/totp")) {
+        throw new UnauthorizedException("Two-factor authentication required");
+      }
       request.user = payload;
     } catch {
       throw new UnauthorizedException("Invalid or expired token");

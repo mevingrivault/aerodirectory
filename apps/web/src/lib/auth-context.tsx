@@ -15,7 +15,7 @@ interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ requireTotp: boolean }>;
-  register: (email: string, password: string, displayName?: string) => Promise<void>;
+  register: (email: string, password: string, displayName?: string) => Promise<string>;
   logout: () => void;
   verifyTotp: (code: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -64,9 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/auth/login",
       { email, password },
     );
-    storeTokens(res.data);
 
-    if (!res.data.requireTotp) {
+    if (res.data.requireTotp) {
+      apiClient.setToken(res.data.accessToken);
+    } else {
+      storeTokens(res.data);
       await fetchProfile();
     }
 
@@ -78,13 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     displayName?: string,
   ) => {
-    const res = await apiClient.post<AuthTokens>("/auth/register", {
+    const res = await apiClient.post<{ message: string }>("/auth/register", {
       email,
       password,
       displayName,
     });
-    storeTokens(res.data);
-    await fetchProfile();
+    return res.data.message;
   };
 
   const verifyTotp = async (code: string) => {

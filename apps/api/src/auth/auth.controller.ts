@@ -9,6 +9,7 @@ import {
   UsePipes,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { FastifyRequest } from "fastify";
 import { AuthService } from "./auth.service";
@@ -21,6 +22,7 @@ import {
   TotpVerifySchema,
   UpdateProfileSchema,
   ChangePasswordSchema,
+  DeleteAccountSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
   type RegisterInput,
@@ -28,6 +30,7 @@ import {
   type TotpVerifyInput,
   type UpdateProfileInput,
   type ChangePasswordInput,
+  type DeleteAccountInput,
   type ForgotPasswordInput,
   type ResetPasswordInput,
 } from "@aerodirectory/shared";
@@ -40,12 +43,14 @@ export class AuthController {
   @Post("register")
   @UsePipes(new ZodValidationPipe(RegisterSchema))
   async register(@Body() body: RegisterInput, @Req() req: FastifyRequest) {
-    const tokens = await this.auth.register(
+    await this.auth.register(
       body,
       req.ip,
       req.headers["user-agent"],
     );
-    return ok(tokens);
+    return ok({
+      message: "Compte créé. Vérifiez votre adresse e-mail pour activer votre compte.",
+    });
   }
 
   @Public()
@@ -60,13 +65,15 @@ export class AuthController {
     return ok(result);
   }
 
-  @Public()
   @Post("login/totp")
   async loginTotp(
     @Body(new ZodValidationPipe(TotpVerifySchema)) body: TotpVerifyInput,
     @CurrentUser() user: { sub: string; totpPending: boolean },
     @Req() req: FastifyRequest,
   ) {
+    if (!user.totpPending) {
+      throw new UnauthorizedException("2FA step not initiated");
+    }
     const tokens = await this.auth.verifyTotpLogin(
       user.sub,
       body.code,
@@ -157,5 +164,15 @@ export class AuthController {
   ) {
     await this.auth.changePassword(user.sub, body, req.ip, req.headers["user-agent"]);
     return ok({ changed: true });
+  }
+
+  @Post("delete-account")
+  async deleteAccount(
+    @Body(new ZodValidationPipe(DeleteAccountSchema)) body: DeleteAccountInput,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.deleteAccount(user.sub, body.currentPassword, req.ip, req.headers["user-agent"]);
+    return ok({ deleted: true });
   }
 }

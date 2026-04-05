@@ -41,7 +41,7 @@ export class AuthService {
     input: RegisterInput,
     ip?: string,
     userAgent?: string,
-  ): Promise<AuthTokens> {
+  ): Promise<void> {
     const existing = await this.prisma.user.findUnique({
       where: { email: input.email },
     });
@@ -77,14 +77,14 @@ export class AuthService {
       },
     });
 
+    await this.mail.sendEmailVerification(user.email, token);
+
     await this.audit.log({
       userId: user.id,
       action: "ACCOUNT_CREATE",
       ip,
       userAgent,
     });
-
-    return this.generateTokens(user.id, user.role);
   }
 
   // ─── Login ──────────────────────────────────────────────
@@ -115,6 +115,10 @@ export class AuthService {
         userAgent,
       });
       throw new UnauthorizedException("Invalid credentials");
+    }
+
+    if (!user.emailVerified) {
+      throw new UnauthorizedException("Veuillez vérifier votre adresse e-mail avant de vous connecter.");
     }
 
     // If TOTP is enabled, return partial auth (frontend must complete TOTP step)
@@ -439,6 +443,34 @@ export class AuthService {
       action: "PASSWORD_CHANGE",
       ip,
       userAgent,
+    });
+  }
+
+  async deleteAccount(
+    userId: string,
+    currentPassword: string,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+
+    const valid = await argon2.verify(user.passwordHash, currentPassword);
+    if (!valid) {
+      throw new UnauthorizedException("Mot de passe actuel incorrect");
+    }
+
+    await this.audit.log({
+      userId,
+      action: "ACCOUNT_DELETE",
+      ip,
+      userAgent,
+      metadata: { email: user.email },
+    });
+
+    await this.prisma.user.delete({
+      where: { id: userId },
     });
   }
 

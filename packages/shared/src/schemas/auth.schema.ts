@@ -47,6 +47,10 @@ export const ChangePasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 
+export const DeleteAccountSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+});
+
 export const UpdateProfileSchema = z.object({
   displayName: z.string().min(2).max(50).trim().optional(),
   homeAerodromeId: z.string().cuid().nullable().optional(),
@@ -58,4 +62,5 @@ export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;

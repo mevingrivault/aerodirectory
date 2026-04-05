@@ -30,6 +30,43 @@ export class MailService {
     });
   }
 
+  async sendEmailVerification(email: string, token: string): Promise<void> {
+    const verifyUrl = `${this.appUrl}/verify-email?token=${token}`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to: email,
+        subject: "Confirmez votre adresse e-mail Navventura",
+        html: `
+          <!DOCTYPE html>
+          <html lang="fr">
+          <head><meta charset="UTF-8"></head>
+          <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+            <h2 style="margin-bottom: 8px;">Confirmez votre adresse e-mail</h2>
+            <p>Bienvenue sur Navventura.</p>
+            <p>Pour activer votre compte, confirmez votre adresse e-mail en cliquant sur le bouton ci-dessous.</p>
+            <a href="${verifyUrl}"
+               style="display: inline-block; margin: 24px 0; padding: 12px 24px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">
+              Vérifier mon adresse e-mail
+            </a>
+            <p style="color: #6b7280; font-size: 14px;">
+              Si vous n'êtes pas à l'origine de cette inscription, vous pouvez ignorer cet e-mail.
+            </p>
+            <p style="color: #6b7280; font-size: 12px;">
+              Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+              <a href="${verifyUrl}" style="color: #2563eb;">${verifyUrl}</a>
+            </p>
+          </body>
+          </html>
+        `,
+        text: `Bienvenue sur Navventura.\n\nConfirmez votre adresse e-mail en cliquant sur ce lien :\n${verifyUrl}\n\nSi vous n'êtes pas à l'origine de cette inscription, ignorez cet e-mail.`,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to send verification email to ${email}`, err);
+    }
+  }
+
   async sendPasswordReset(email: string, token: string): Promise<void> {
     const resetUrl = `${this.appUrl}/reset-password?token=${token}`;
 
