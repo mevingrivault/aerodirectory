@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Navventura - Deviens un aéroventurier",
@@ -21,7 +18,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <body
+        className="font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif]"
+        suppressHydrationWarning
+      >
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />
