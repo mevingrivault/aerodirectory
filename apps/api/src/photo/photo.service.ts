@@ -87,6 +87,15 @@ export class PhotoService {
           height: processed.height,
           status: PhotoStatus.READY,
         },
+        select: {
+          id: true,
+          storedKey: true,
+          mimeType: true,
+          width: true,
+          height: true,
+          createdAt: true,
+          user: { select: { id: true, displayName: true } },
+        },
       });
 
       await this.audit.log({
