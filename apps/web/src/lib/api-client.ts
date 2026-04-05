@@ -40,7 +40,7 @@ class ApiClient {
       throw new ApiError(
         extractErrorMessage(error) || response.statusText || "Request failed",
         response.status,
-        error && "error" in error ? error.error?.code : undefined,
+        extractErrorCode(error),
       );
     }
 
@@ -122,6 +122,24 @@ function extractErrorMessage(
   }
 
   return null;
+}
+
+function extractErrorCode(
+  error: ApiErrorResponse | NestLikeErrorResponse | null,
+): string | undefined {
+  if (
+    error &&
+    typeof error === "object" &&
+    "error" in error &&
+    typeof error.error === "object" &&
+    error.error &&
+    "code" in error.error &&
+    typeof error.error.code === "string"
+  ) {
+    return error.error.code;
+  }
+
+  return undefined;
 }
 
 export const apiClient = new ApiClient();
