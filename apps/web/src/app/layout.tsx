@@ -8,9 +8,9 @@ import { Footer } from "@/components/layout/footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AeroDirectory - Annuaire des Aérodromes Français",
+  title: "Navventura - Deviens un aéroventurier",
   description:
-    "Annuaire collaboratif des aérodromes français. Parcourez les terrains, découvrez les services, partagez vos expériences et planifiez vos vols.",
+    "Navventura vous aide à explorer les aérodromes français, préparer vos vols et rejoindre une communauté de pilotes. Deviens un aéroventurier.",
   keywords: ["aérodrome", "France", "aviation", "terrain", "pilote"],
 };
 

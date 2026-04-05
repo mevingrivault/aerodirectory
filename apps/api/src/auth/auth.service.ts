@@ -164,7 +164,7 @@ export class AuthService {
 
     const otpauthUrl = authenticator.keyuri(
       user.email,
-      "AeroDirectory",
+      "Navventura",
       secret,
     );
     const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);

@@ -8,7 +8,7 @@ export function Footer() {
           {DISCLAIMER}
         </div>
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <p>AeroDirectory &mdash; Annuaire Collaboratif des Aérodromes Français</p>
+          <p>Navventura &mdash; Deviens un aéroventurier</p>
           <p>
             Contributions sous licence{" "}
             <a

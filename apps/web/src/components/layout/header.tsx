@@ -38,17 +38,15 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        {/* Logo */}
         <Link
           href="/"
           className="flex items-center gap-2 font-bold text-xl shrink-0"
           onClick={() => setMenuOpen(false)}
         >
           <Plane className="h-6 w-6 text-primary" />
-          <span>AeroDirectory</span>
+          <span>Navventura</span>
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6">
           {links.map(({ href, icon: Icon, label }) => (
             <Link
@@ -66,7 +64,6 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Desktop user area */}
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
@@ -96,7 +93,6 @@ export function Header() {
           )}
         </div>
 
-        {/* Mobile hamburger */}
         <button
           className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
           onClick={() => setMenuOpen((v) => !v)}
@@ -106,7 +102,6 @@ export function Header() {
         </button>
       </div>
 
-      {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden border-t bg-background">
           <nav className="container mx-auto px-4 py-3 flex flex-col gap-1">
@@ -138,7 +133,10 @@ export function Header() {
                     <span className="truncate">{user.displayName || user.email}</span>
                   </Link>
                   <button
-                    onClick={() => { logout(); setMenuOpen(false); }}
+                    onClick={() => {
+                      logout();
+                      setMenuOpen(false);
+                    }}
                     className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     <LogOut className="h-4 w-4 shrink-0" />

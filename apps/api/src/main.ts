@@ -21,14 +21,12 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
 
-  // CORS
   const corsOrigins = config.get<string>("CORS_ORIGINS", "http://localhost:3000");
   await app.register(fastifyCors, {
     origin: corsOrigins.split(",").map((o: string) => o.trim()),
     credentials: true,
   });
 
-  // Helmet — strict CSP
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: {
       directives: {
@@ -47,12 +45,10 @@ async function bootstrap() {
     crossOriginEmbedderPolicy: false,
   });
 
-  // Cookies
   await app.register(fastifyCookie, {
     secret: config.get<string>("JWT_SECRET"),
   });
 
-  // CSRF protection
   await app.register(fastifyCsrf, {
     cookieOpts: {
       signed: true,
@@ -62,12 +58,11 @@ async function bootstrap() {
     },
   });
 
-  // Global prefix
   app.setGlobalPrefix("api/v1");
 
   const port = config.get<number>("PORT", 4000);
   await app.listen(port, "0.0.0.0");
-  console.log(`🛫 AeroDirectory API running on http://localhost:${port}`);
+  console.log(`🛫 Navventura API running on http://localhost:${port}`);
 }
 
 bootstrap();

@@ -57,12 +57,12 @@ export default function LoginPage() {
     <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <Plane className="mx-auto h-8 w-8 text-primary mb-2" />
-          <CardTitle>{needsTotp ? "Authentification à Deux Facteurs" : "Connexion"}</CardTitle>
+          <Plane className="mx-auto mb-2 h-8 w-8 text-primary" />
+          <CardTitle>{needsTotp ? "Authentification à deux facteurs" : "Connexion"}</CardTitle>
           <CardDescription>
             {needsTotp
               ? "Saisissez le code à 6 chiffres de votre application d'authentification"
-              : "Connectez-vous à votre compte AeroDirectory"}
+              : "Connectez-vous à votre compte Navventura"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,14 +104,14 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="pilote@exemple.fr"
+                  placeholder="pilote@navventura.fr"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="mb-1 flex items-center justify-between">
                   <label htmlFor="password" className="text-sm font-medium">
                     Mot de passe
                   </label>
@@ -129,7 +129,7 @@ export default function LoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Connexion..." : "Se Connecter"}
+                {loading ? "Connexion..." : "Se connecter"}
               </Button>
             </form>
           )}

@@ -63,9 +63,11 @@ export default function RegisterPage() {
     <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <Plane className="mx-auto h-8 w-8 text-primary mb-2" />
-          <CardTitle>Créer un Compte</CardTitle>
-          <CardDescription>Rejoignez la communauté AeroDirectory</CardDescription>
+          <Plane className="mx-auto mb-2 h-8 w-8 text-primary" />
+          <CardTitle>Créer un compte</CardTitle>
+          <CardDescription>
+            Bienvenue sur Navventura. Tu es prêt à devenir Aéroventurier ?
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -96,7 +98,7 @@ export default function RegisterPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="pilote@exemple.fr"
+                placeholder="pilote@navventura.fr"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -121,7 +123,12 @@ export default function RegisterPage() {
                   {RULES.map((r) => {
                     const ok = r.test(password);
                     return (
-                      <li key={r.label} className={`flex items-center gap-1.5 text-xs ${ok ? "text-green-600" : "text-muted-foreground"}`}>
+                      <li
+                        key={r.label}
+                        className={`flex items-center gap-1.5 text-xs ${
+                          ok ? "text-green-600" : "text-muted-foreground"
+                        }`}
+                      >
                         {ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                         {r.label}
                       </li>
@@ -157,19 +164,15 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || !allRulesOk || !confirmOk}
-            >
-              {loading ? "Création en cours..." : "Créer mon Compte"}
+            <Button type="submit" className="w-full" disabled={loading || !allRulesOk || !confirmOk}>
+              {loading ? "Création en cours..." : "Créer mon compte"}
             </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Déjà inscrit ?{" "}
             <Link href="/login" className="text-primary hover:underline">
-              Se Connecter
+              Se connecter
             </Link>
           </p>
         </CardContent>

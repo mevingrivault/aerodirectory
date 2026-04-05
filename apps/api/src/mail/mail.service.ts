@@ -10,7 +10,7 @@ export class MailService {
   private readonly appUrl: string;
 
   constructor(private readonly config: ConfigService) {
-    this.from = this.config.get<string>("MAIL_FROM", "AeroDirectory <noreply@aerodirectory.fr>");
+    this.from = this.config.get<string>("MAIL_FROM", "Navventura <noreply@navventura.fr>");
     this.appUrl = this.config.get<string>("APP_URL", "http://localhost:3000");
 
     this.transporter = nodemailer.createTransport({
@@ -31,14 +31,14 @@ export class MailService {
       await this.transporter.sendMail({
         from: this.from,
         to: email,
-        subject: "Réinitialisation de votre mot de passe AeroDirectory",
+        subject: "Réinitialisation de votre mot de passe Navventura",
         html: `
           <!DOCTYPE html>
           <html lang="fr">
           <head><meta charset="UTF-8"></head>
           <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
             <h2 style="margin-bottom: 8px;">Réinitialisation du mot de passe</h2>
-            <p>Vous avez demandé la réinitialisation de votre mot de passe AeroDirectory.</p>
+            <p>Vous avez demandé la réinitialisation de votre mot de passe Navventura.</p>
             <p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe. Ce lien est valable <strong>1 heure</strong>.</p>
             <a href="${resetUrl}"
                style="display: inline-block; margin: 24px 0; padding: 12px 24px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">
@@ -54,11 +54,11 @@ export class MailService {
           </body>
           </html>
         `,
-        text: `Réinitialisation du mot de passe AeroDirectory\n\nCliquez sur ce lien pour réinitialiser votre mot de passe (valable 1 heure) :\n${resetUrl}\n\nSi vous n'avez pas fait cette demande, ignorez cet e-mail.`,
+        text: `Réinitialisation du mot de passe Navventura\n\nCliquez sur ce lien pour réinitialiser votre mot de passe (valable 1 heure) :\n${resetUrl}\n\nSi vous n'avez pas fait cette demande, ignorez cet e-mail.`,
       });
     } catch (err) {
       this.logger.error(`Failed to send password reset email to ${email}`, err);
-      // Ne pas remonter l'erreur — la réponse API reste générique
+      // Ne pas remonter l'erreur : la réponse API reste générique
     }
   }
 }
