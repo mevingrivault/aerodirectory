@@ -1,6 +1,16 @@
-# AeroDirectory
+# Navventura
 
 Collaborative directory of French aerodromes. Browse airfields, discover pilot services, share experiences, track visited airfields, and plan flights.
+
+## Repository Status
+
+This repository is public on GitHub for transparency, demonstration, and collaboration around the Navventura product.
+
+However, Navventura is **not open source**.
+
+- The source code is publicly visible, but no right is granted to reuse, modify, redistribute, self-host, or create derivative works without prior written permission.
+- Repository visibility on GitHub does **not** mean the project is released under an open-source license.
+- External contributions, patches, or ideas may be reviewed, but maintainership and publication decisions remain under the control of the project owner.
 
 ## Architecture
 
@@ -263,4 +273,9 @@ The import is **idempotent** — running it multiple times is safe and won't cre
 
 ## License
 
-Code: MIT | User contributions: CC BY-SA 4.0
+Navventura is a public-source-available project hosted on GitHub, but it is **not open source**.
+
+- Source code: all rights reserved unless explicit written permission is granted by the project owner.
+- User-generated content and community contributions published through the product may be subject to separate terms defined by the platform.
+
+If you want to reuse part of the codebase, deploy it, adapt it, or integrate it into another project, request authorization first.
