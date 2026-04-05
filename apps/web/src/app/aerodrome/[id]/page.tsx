@@ -313,14 +313,11 @@ export default function AerodromeDetailPage() {
       }),
   });
 
-  const {
-    data: photosRes,
-    refetch: refetchPhotos,
-  } = useQuery({
+  const { data: photosRes } = useQuery({
     queryKey: ["photos", id],
     queryFn: () =>
       apiClient.get<PhotoEntry[]>(`/aerodromes/${id}/photos`),
-    enabled: !!ad,
+    enabled: !!id,
   });
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
 

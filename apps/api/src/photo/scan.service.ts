@@ -1,6 +1,6 @@
 import { Injectable, Logger, InternalServerErrorException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import NodeClam from "clamscan";
+import NodeClam = require("clamscan");
 import { tmpdir } from "os";
 import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
