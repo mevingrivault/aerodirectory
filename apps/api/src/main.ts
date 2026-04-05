@@ -7,6 +7,7 @@ import { ConfigService } from "@nestjs/config";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyCookie from "@fastify/cookie";
+import fastifyMultipart from "@fastify/multipart";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
@@ -46,6 +47,14 @@ async function bootstrap() {
 
   await app.register(fastifyCookie, {
     secret: config.get<string>("JWT_SECRET"),
+  });
+
+  // Multipart (file uploads) — limit handled per-route in PhotoController
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MB hard cap
+      files: 1,                    // one file per request
+    },
   });
 
   app.setGlobalPrefix("api/v1");

@@ -30,6 +30,56 @@ services:
     networks:
       - internal
 
+  # SeaweedFS — S3-compatible object storage (Apache 2.0)
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: master -ip=seaweedfs-master -ip.bind=0.0.0.0
+    volumes:
+      - seaweedfs_master:/data
+    networks:
+      - internal
+
+  seaweedfs-volume:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -port=8080 -dir=/data
+    depends_on:
+      - seaweedfs-master
+    volumes:
+      - seaweedfs_volume:/data
+    networks:
+      - internal
+
+  # Filer + S3 gateway — exposé via Nginx Proxy Manager pour servir les fichiers publics
+  seaweedfs-filer:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: filer -master=seaweedfs-master:9333 -ip.bind=0.0.0.0 -s3 -s3.port=8333
+    depends_on:
+      - seaweedfs-master
+      - seaweedfs-volume
+    volumes:
+      - seaweedfs_filer:/data
+    networks:
+      - internal
+      - proxy
+
+  # ClamAV antivirus — required for photo upload pipeline
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - internal
+
   api:
     image: ghcr.io/${GITHUB_REPO}/aerodirectory-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -38,6 +88,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
+      seaweedfs-filer:
+        condition: service_started
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
@@ -50,10 +104,16 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
-      S3_ENDPOINT: ${S3_ENDPOINT}
-      S3_BUCKET: ${S3_BUCKET}
+      MAIL_FROM: ${MAIL_FROM}
+      APP_URL: ${APP_URL}
+      S3_ENDPOINT: http://seaweedfs-filer:8333
+      S3_BUCKET: ${S3_BUCKET:-navventura}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      CLAMAV_ENABLED: "true"
       OPENAIP_API_KEY: ${OPENAIP_API_KEY}
       CHECKWX_API_KEY: ${CHECKWX_API_KEY}
     networks:
@@ -71,6 +131,10 @@ services:
 volumes:
   pgdata:
   redisdata:
+  seaweedfs_master:
+  seaweedfs_volume:
+  seaweedfs_filer:
+  clamav_data:
 
 networks:
   internal:

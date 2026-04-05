@@ -13,10 +13,12 @@
   "dependencies": {
     "@aerodirectory/database": "workspace:*",
     "@aerodirectory/shared": "workspace:*",
+    "@aws-sdk/client-s3": "^3.1024.0",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^11.0.0",
     "@fastify/csrf-protection": "^7.0.0",
     "@fastify/helmet": "^13.0.0",
+    "@fastify/multipart": "^9.4.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^11.0.0",
@@ -25,7 +27,9 @@
     "@nestjs/throttler": "^6.3.0",
     "@prisma/adapter-pg": "^7.6.0",
     "argon2": "^0.41.1",
+    "clamscan": "^2.4.0",
     "class-transformer": "^0.5.1",
+    "file-type": "^22.0.0",
     "ioredis": "^5.10.1",
     "nodemailer": "^8.0.4",
     "otplib": "^12.0.1",
@@ -33,6 +37,7 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -43,6 +48,7 @@
     "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.5",
+    "@types/sharp": "^0.32.0",
     "fastify": "^5.0.0",
     "typescript": "^5.6.3"
   }

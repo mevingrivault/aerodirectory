@@ -74,6 +74,41 @@ class ApiClient {
   async delete<T>(path: string): Promise<ApiResponse<T>> {
     return this.request<T>(path, { method: "DELETE" });
   }
+
+  /**
+   * Upload a file as multipart/form-data.
+   * Content-Type must NOT be set manually — the browser sets it with the boundary.
+   */
+  async upload<T>(path: string, file: File): Promise<ApiResponse<T>> {
+    const form = new FormData();
+    form.append("file", file);
+
+    const headers: Record<string, string> = {};
+    if (this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`;
+    }
+
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      body: form,
+      headers,
+      credentials: "include",
+    });
+
+    const raw = await response.text();
+    const json = raw ? safeParseJson(raw) : null;
+
+    if (!response.ok) {
+      const error = json as ApiErrorResponse | NestLikeErrorResponse | null;
+      throw new ApiError(
+        extractErrorMessage(error) || response.statusText || "Upload failed",
+        response.status,
+        extractErrorCode(error),
+      );
+    }
+
+    return json as ApiResponse<T>;
+  }
 }
 
 export class ApiError extends Error {

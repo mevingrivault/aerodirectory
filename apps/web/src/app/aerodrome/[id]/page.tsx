@@ -38,9 +38,21 @@ import {
   Gauge,
   AlertCircle,
   Trash2,
+  ImagePlus,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { PhotoUpload } from "@/components/ui/photo-upload";
 import { Input } from "@/components/ui/input";
+
+interface PhotoEntry {
+  id: string;
+  storedKey: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+  user: { id: string; displayName: string | null };
+}
 
 interface AerodromeDetail {
   id: string;
@@ -301,6 +313,17 @@ export default function AerodromeDetailPage() {
       }),
   });
 
+  const {
+    data: photosRes,
+    refetch: refetchPhotos,
+  } = useQuery({
+    queryKey: ["photos", id],
+    queryFn: () =>
+      apiClient.get<PhotoEntry[]>(`/aerodromes/${id}/photos`),
+    enabled: !!ad,
+  });
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+
   const ad = aerodromeRes?.data;
 
   // Fetch nearby aerodromes once we have coordinates
@@ -394,6 +417,10 @@ export default function AerodromeDetailPage() {
       apiClient.put(`/visits/${id}`, { status: "SEEN" }).then(() => refetchVisit()).catch(() => {});
     }
   }, [user, id, currentVisitStatus]);
+
+  useEffect(() => {
+    if (photosRes?.data) setPhotos(photosRes.data);
+  }, [photosRes]);
 
   const comments = commentsRes?.data ?? [];
   const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
@@ -1393,6 +1420,33 @@ export default function AerodromeDetailPage() {
           </Card>
         )}
 
+
+        {/* Photos */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ImagePlus className="h-5 w-5" /> Photos ({photos.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PhotoUpload
+              aerodromeId={id}
+              currentUserId={user?.id}
+              existingPhotos={photos}
+              onUploadSuccess={(photo) => {
+                setPhotos((prev) => [photo, ...prev]);
+              }}
+              onDeleteSuccess={(photoId) => {
+                setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+              }}
+            />
+            {!user && (
+              <p className="mt-3 text-sm text-muted-foreground text-center">
+                <a href="/login" className="text-primary hover:underline">Connectez-vous</a> pour ajouter des photos.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Comments */}
         <Card className="lg:col-span-2">
