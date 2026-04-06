@@ -7,10 +7,12 @@ import { AuthController } from "./auth.controller";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 import { MailModule } from "../mail/mail.module";
+import { AltchaModule } from "../altcha/altcha.module";
 
 @Module({
   imports: [
     MailModule,
+    AltchaModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

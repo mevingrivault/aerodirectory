@@ -125,6 +125,9 @@ services:
       CLAMAV_ENABLED: "true"
       OPENAIP_API_KEY: ${OPENAIP_API_KEY}
       CHECKWX_API_KEY: ${CHECKWX_API_KEY}
+      ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
+      ALTCHA_ENABLED: ${ALTCHA_ENABLED:-true}
+      ALTCHA_MAX_NUMBER: ${ALTCHA_MAX_NUMBER:-100000}
     networks:
       - internal
       - proxy

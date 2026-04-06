@@ -5,9 +5,10 @@ import { ImageService } from "./image.service";
 import { ScanService } from "./scan.service";
 import { StorageService } from "./storage.service";
 import { AuditModule } from "../audit/audit.module";
+import { AltchaModule } from "../altcha/altcha.module";
 
 @Module({
-  imports: [AuditModule],
+  imports: [AuditModule, AltchaModule],
   controllers: [PhotoController],
   providers: [PhotoService, ImageService, ScanService, StorageService],
   exports: [PhotoService],

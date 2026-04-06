@@ -80,6 +80,7 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
       ref: widgetRef,
       challengeurl: CHALLENGE_URL,
       hidelogo: "",
+      hidefooter: "",
       strings: FR_STRINGS,
       class: className,
     });
