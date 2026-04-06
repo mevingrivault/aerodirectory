@@ -23,10 +23,12 @@ RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/api build && \
     PRISMA_SKIP_POSTINSTALL_GENERATE=true pnpm --ignore-scripts --filter @aerodirectory/api --prod deploy /prod/api && \
+    PRISMA_PACKAGE_DIR="$(find /app/node_modules/.pnpm -path '*/node_modules/@prisma/client' -type d | head -n 1)" && \
     PRISMA_CLIENT_DIR="$(find /app -path '*/node_modules/.prisma/client' -type d | head -n 1)" && \
-    mkdir -p /prod/api/node_modules/.prisma /prod/api/node_modules/@prisma/client/.prisma && \
-    cp -R "$PRISMA_CLIENT_DIR" /prod/api/node_modules/.prisma/client && \
-    cp -R "$PRISMA_CLIENT_DIR" /prod/api/node_modules/@prisma/client/.prisma/client
+    mkdir -p /prod/api/node_modules/.prisma /prod/api/node_modules/@prisma && \
+    rm -rf /prod/api/node_modules/@prisma/client /prod/api/node_modules/.prisma/client && \
+    cp -R "$PRISMA_PACKAGE_DIR" /prod/api/node_modules/@prisma/client && \
+    cp -R "$PRISMA_CLIENT_DIR" /prod/api/node_modules/.prisma/client
 
 FROM node:24-alpine AS runner
 WORKDIR /app
