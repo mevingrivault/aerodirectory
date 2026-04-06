@@ -645,7 +645,7 @@ export class AuthService {
         createdAt: true,
         homeAerodromeId: true,
         visits: {
-          select: { aerodromeId: true, visitedAt: true, note: true },
+          select: { aerodromeId: true, visitedAt: true, notes: true, status: true },
           orderBy: { visitedAt: "desc" },
         },
         comments: {
@@ -655,12 +655,12 @@ export class AuthService {
         },
         aircraftProfiles: {
           select: {
-            id: true, name: true, tas: true, fuelBurnPerHour: true,
-            costPerHour: true, minRunwayLengthM: true, createdAt: true,
+            id: true, name: true, tas: true, fuelConsumption: true,
+            hourlyCost: true, minRunwayLength: true, createdAt: true,
           },
         },
         corrections: {
-          select: { id: true, aerodromeId: true, field: true, currentValue: true, proposedValue: true, createdAt: true },
+          select: { id: true, aerodromeId: true, field: true, currentValue: true, proposedValue: true, reason: true, createdAt: true },
           orderBy: { createdAt: "desc" },
         },
         photos: {
@@ -688,10 +688,11 @@ export class AuthService {
         createdAt: user.createdAt.toISOString(),
         homeAerodromeId: user.homeAerodromeId,
       },
-      visits: user.visits.map((v: { aerodromeId: string; visitedAt: Date; note: string | null }) => ({
+      visits: user.visits.map((v: { aerodromeId: string; visitedAt: Date; notes: string | null; status: string }) => ({
         aerodromeId: v.aerodromeId,
         visitedAt: v.visitedAt.toISOString(),
-        note: v.note,
+        notes: v.notes,
+        status: v.status,
       })),
       comments: user.comments.map((c: { id: string; aerodromeId: string; content: string; createdAt: Date; parentId: string | null }) => ({
         id: c.id,
@@ -700,8 +701,11 @@ export class AuthService {
         content: c.content,
         createdAt: c.createdAt.toISOString(),
       })),
-      aircraftProfiles: user.aircraftProfiles,
-      corrections: user.corrections.map((c: { id: string; aerodromeId: string; field: string; currentValue: string | null; proposedValue: string; createdAt: Date }) => ({
+      aircraftProfiles: user.aircraftProfiles.map((a: { id: string; name: string; tas: number; fuelConsumption: number; hourlyCost: number; minRunwayLength: number; createdAt: Date }) => ({
+        ...a,
+        createdAt: a.createdAt.toISOString(),
+      })),
+      corrections: user.corrections.map((c: { id: string; aerodromeId: string; field: string; currentValue: string | null; proposedValue: string; reason: string | null; createdAt: Date }) => ({
         ...c,
         createdAt: c.createdAt.toISOString(),
       })),
