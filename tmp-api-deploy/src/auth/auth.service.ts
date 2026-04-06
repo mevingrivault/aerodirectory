@@ -8,15 +8,6 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
 import { authenticator } from "otplib";
-import { Authenticator } from "@otplib/core";
-import {
-  createDigest,
-  createRandomBytes,
-} from "@otplib/plugin-crypto";
-import {
-  keyDecoder,
-  keyEncoder,
-} from "@otplib/plugin-thirty-two";
 import * as QRCode from "qrcode";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
@@ -36,13 +27,6 @@ import type {
   ResetPasswordInput,
 } from "@aerodirectory/shared";
 
-const windowedAuthenticator = new Authenticator({
-  createDigest,
-  createRandomBytes,
-  keyDecoder,
-  keyEncoder,
-});
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -60,7 +44,7 @@ export class AuthService {
         ? configuredWindow
         : 2;
 
-    return windowedAuthenticator.clone({ window }).check(code, secret);
+    return authenticator.clone({ window }).check(code, secret);
   }
 
   // ─── Registration ───────────────────────────────────────

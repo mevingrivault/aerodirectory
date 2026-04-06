@@ -13,9 +13,6 @@
   "dependencies": {
     "@aerodirectory/database": "workspace:*",
     "@aerodirectory/shared": "workspace:*",
-    "@otplib/core": "^12.0.1",
-    "@otplib/plugin-crypto": "^12.0.1",
-    "@otplib/plugin-thirty-two": "^12.0.1",
     "@aws-sdk/client-s3": "^3.1024.0",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^11.0.0",
