@@ -16,9 +16,10 @@ import {
 
 export interface ImportResult {
   total: number;
+  checked: number;
   created: number;
   updated: number;
-  skipped: number;
+  unchanged: number;
   errors: string[];
   changedAerodromeIds: string[];
 }
@@ -61,9 +62,10 @@ export async function syncOpenAipFranceAirports(
   console.log("[3/3] Upserting into database...");
   const result: ImportResult = {
     total: normalized.length,
+    checked: normalized.length,
     created: 0,
     updated: 0,
-    skipped: 0,
+    unchanged: 0,
     errors: [...normalizeErrors],
     changedAerodromeIds: [],
   };
@@ -73,14 +75,14 @@ export async function syncOpenAipFranceAirports(
       const { action, aerodromeId } = await upsertAirport(prisma, airport);
       if (action === "created") result.created++;
       else if (action === "updated") result.updated++;
-      else result.skipped++;
-      if (aerodromeId && action !== "skipped") {
+      else result.unchanged++;
+      if (aerodromeId && action !== "unchanged") {
         result.changedAerodromeIds.push(aerodromeId);
       }
 
-      if ((result.created + result.updated + result.skipped) % 50 === 0) {
+      if ((result.created + result.updated + result.unchanged) % 50 === 0) {
         console.log(
-          `  Progress: ${result.created + result.updated + result.skipped}/${normalized.length}`,
+          `  Progress: ${result.created + result.updated + result.unchanged}/${normalized.length}`,
         );
       }
     } catch (error) {
@@ -92,9 +94,10 @@ export async function syncOpenAipFranceAirports(
 
   console.log("\n=== Import Summary ===");
   console.log(`  Total fetched:  ${result.total}`);
+  console.log(`  Checked:        ${result.checked}`);
   console.log(`  Created:        ${result.created}`);
   console.log(`  Updated:        ${result.updated}`);
-  console.log(`  Skipped:        ${result.skipped}`);
+  console.log(`  Unchanged:      ${result.unchanged}`);
   console.log(`  Errors:         ${result.errors.length}`);
   console.log("======================\n");
 
@@ -104,7 +107,7 @@ export async function syncOpenAipFranceAirports(
 async function upsertAirport(
   prisma: PrismaClient,
   airport: NormalizedAerodrome,
-): Promise<{ action: "created" | "updated" | "skipped"; aerodromeId: string | null }> {
+): Promise<{ action: "created" | "updated" | "unchanged"; aerodromeId: string | null }> {
   const { runways, frequencies, fuels, ...aerodromeData } = airport;
 
   // Check if this airport already exists by source+sourceId
@@ -119,9 +122,13 @@ async function upsertAirport(
   });
 
   if (existing) {
-    // Skip if data hasn't changed
+    // Mark the source as re-checked even when nothing changed.
     if (existing.sourceRawHash === airport.sourceRawHash) {
-      return { action: "skipped", aerodromeId: existing.id };
+      await prisma.aerodrome.update({
+        where: { id: existing.id },
+        data: { lastSyncedAt: new Date() },
+      });
+      return { action: "unchanged", aerodromeId: existing.id };
     }
 
     // Update existing airport and replace children in a transaction

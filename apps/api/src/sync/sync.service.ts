@@ -432,9 +432,10 @@ export class SyncService implements OnModuleInit {
       await this.completeStep(run.id, "openaip_import", {
         metrics: {
           total: result.total,
+          checked: result.checked,
           created: result.created,
           updated: result.updated,
-          skipped: result.skipped,
+          unchanged: result.unchanged,
           errors: result.errors.length,
         },
         checkpoint: {
@@ -455,9 +456,10 @@ export class SyncService implements OnModuleInit {
         status: result.errors.length > 0 ? ("PARTIAL" as const) : ("SUCCESS" as const),
         summary: toInputJsonValue({
           total: result.total,
+          checked: result.checked,
           created: result.created,
           updated: result.updated,
-          skipped: result.skipped,
+          unchanged: result.unchanged,
           errors: result.errors,
           changedAerodromeCount: result.changedAerodromeIds.length,
         }),
