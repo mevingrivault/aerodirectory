@@ -15,6 +15,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, verifyTotp } = useAuth();
   const altchaRef = useRef<AltchaHandle>(null);
+  const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -33,7 +34,7 @@ export default function LoginPage() {
     setError("");
     setResendMessage("");
 
-    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
     if (!altcha) {
       setError("Veuillez compléter la vérification anti-robot.");
       return;
@@ -51,6 +52,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Échec de la connexion");
       altchaRef.current?.reset();
+      setAltchaPayload(null);
     } finally {
       setLoading(false);
     }
@@ -174,7 +176,17 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              <AltchaWidget ref={altchaRef} />
+              <AltchaWidget
+                ref={altchaRef}
+                className="mt-2"
+                onStateChange={(state) => {
+                  if (state === "verified") {
+                    setAltchaPayload(altchaRef.current?.getPayload() ?? null);
+                  } else {
+                    setAltchaPayload(null);
+                  }
+                }}
+              />
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Connexion..." : "Se connecter"}

@@ -47,6 +47,7 @@ export function PhotoUpload({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const altchaRef = useRef<AltchaHandle>(null);
+  const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
 
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_SIZE_BYTES) {
@@ -95,7 +96,7 @@ export function PhotoUpload({
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
     if (!altcha) {
       setErrorMsg("Veuillez compléter la vérification anti-robot.");
       return;
@@ -114,6 +115,7 @@ export function PhotoUpload({
       setPreview(null);
       setSelectedFile(null);
       altchaRef.current?.reset();
+      setAltchaPayload(null);
       if (res.data) onUploadSuccess?.(res.data);
     } catch (err) {
       setUploadState("error");
@@ -123,6 +125,7 @@ export function PhotoUpload({
           : "Une erreur est survenue lors de l'upload.",
       );
       altchaRef.current?.reset();
+      setAltchaPayload(null);
     }
   };
 
@@ -205,7 +208,17 @@ export function PhotoUpload({
                 className="w-full h-full object-contain"
               />
             </div>
-            <AltchaWidget ref={altchaRef} />
+            <AltchaWidget
+              ref={altchaRef}
+              className="mt-2"
+              onStateChange={(state) => {
+                if (state === "verified") {
+                  setAltchaPayload(altchaRef.current?.getPayload() ?? null);
+                } else {
+                  setAltchaPayload(null);
+                }
+              }}
+            />
             <div className="flex gap-2">
               <Button
                 onClick={handleUpload}

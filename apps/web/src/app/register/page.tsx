@@ -27,6 +27,7 @@ const RULES = [
 export default function RegisterPage() {
   const { register } = useAuth();
   const altchaRef = useRef<AltchaHandle>(null);
+  const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -74,7 +75,7 @@ export default function RegisterPage() {
       return;
     }
 
-    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
     if (!altcha) {
       setError("Veuillez compléter la vérification anti-robot.");
       return;
@@ -96,6 +97,7 @@ export default function RegisterPage() {
         setError("Echec de l'inscription. Veuillez reessayer.");
       }
       altchaRef.current?.reset();
+      setAltchaPayload(null);
     } finally {
       setLoading(false);
     }
@@ -294,7 +296,17 @@ export default function RegisterPage() {
                   autoComplete="off"
                 />
 
-                <AltchaWidget ref={altchaRef} />
+                <AltchaWidget
+                  ref={altchaRef}
+                  className="mt-2"
+                  onStateChange={(state) => {
+                    if (state === "verified") {
+                      setAltchaPayload(altchaRef.current?.getPayload() ?? null);
+                    } else {
+                      setAltchaPayload(null);
+                    }
+                  }}
+                />
 
                 <Button
                   type="submit"

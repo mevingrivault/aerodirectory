@@ -15,12 +15,13 @@ export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const altchaRef = useRef<AltchaHandle>(null);
+  const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
     if (!altcha) {
       setError("Veuillez compléter la vérification anti-robot.");
       return;
@@ -87,7 +88,17 @@ export default function ForgotPasswordPage() {
                     required
                   />
                 </div>
-                <AltchaWidget ref={altchaRef} />
+                <AltchaWidget
+                  ref={altchaRef}
+                  className="mt-2"
+                  onStateChange={(state) => {
+                    if (state === "verified") {
+                      setAltchaPayload(altchaRef.current?.getPayload() ?? null);
+                    } else {
+                      setAltchaPayload(null);
+                    }
+                  }}
+                />
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Envoi en cours..." : "Envoyer le lien"}
                 </Button>
