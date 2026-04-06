@@ -1,19 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, ImagePlus, MessageSquare, RefreshCw, Shield, Users } from "lucide-react";
-import type { AdminDashboardStats } from "@aerodirectory/shared";
+import {
+  Ban,
+  Clock3,
+  ImagePlus,
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  ServerCog,
+  Shield,
+  Users,
+} from "lucide-react";
+import type {
+  AdminDashboardStats,
+  AdminSyncRunItem,
+  AdminSyncStatusResponse,
+} from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
+  OPENAIP: "openAIP",
+  OSM: "OSM + flags",
+  REGIONS: "Régions / villes",
+  RGPD: "Nettoyage RGPD",
+};
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [triggeringSource, setTriggeringSource] = useState<AdminSyncRunItem["source"] | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncMsgType, setSyncMsgType] = useState<"success" | "error">("success");
 
   useEffect(() => {
     if (!loading && user?.role !== "ADMIN") {
@@ -21,25 +45,51 @@ export default function AdminPage() {
     }
   }, [loading, router, user]);
 
-  const { data } = useQuery({
+  const { data: statsData } = useQuery({
     queryKey: ["admin-stats"],
     queryFn: () => apiClient.get<AdminDashboardStats>("/admin/stats"),
     enabled: user?.role === "ADMIN",
   });
 
-  const [syncState, setSyncState] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const {
+    data: syncStatusData,
+    refetch: refetchSyncStatus,
+  } = useQuery({
+    queryKey: ["admin-sync-status"],
+    queryFn: () => apiClient.get<AdminSyncStatusResponse>("/admin/sync/status"),
+    enabled: user?.role === "ADMIN",
+    refetchInterval: 30_000,
+  });
 
-  const handleSync = async () => {
-    setSyncState("running");
+  const stats = statsData?.data;
+  const syncStatus = syncStatusData?.data;
+
+  const recentRuns = useMemo(
+    () => syncStatus?.recentRuns.slice(0, 8) ?? [],
+    [syncStatus?.recentRuns],
+  );
+
+  const handleTrigger = async (source: AdminSyncRunItem["source"]) => {
+    setTriggeringSource(source);
     setSyncMsg(null);
+
     try {
-      await apiClient.post("/admin/sync/openaip", {});
-      setSyncState("done");
-      setSyncMsg("Sync lancé en arrière-plan. Consultez les logs API pour le résultat.");
-    } catch {
-      setSyncState("error");
-      setSyncMsg("Erreur lors du lancement du sync.");
+      const response = await apiClient.post<{
+        started: boolean;
+        runId: string;
+        source: AdminSyncRunItem["source"];
+        status: string;
+        message: string;
+      }>(`/admin/sync/${source.toLowerCase()}`);
+
+      setSyncMsgType("success");
+      setSyncMsg(response.data.message);
+      await refetchSyncStatus();
+    } catch (error) {
+      setSyncMsgType("error");
+      setSyncMsg(error instanceof Error ? error.message : "Impossible de lancer la synchronisation.");
+    } finally {
+      setTriggeringSource(null);
     }
   };
 
@@ -47,10 +97,8 @@ export default function AdminPage() {
     return null;
   }
 
-  const stats = data?.data;
-
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className="container mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8 flex items-center gap-3">
         <div className="rounded-full bg-primary/10 p-3 text-primary">
           <Shield className="h-6 w-6" />
@@ -58,7 +106,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold">Administration</h1>
           <p className="text-sm text-muted-foreground">
-            Moderation et supervision de la plateforme.
+            Modération, supervision et synchronisations nocturnes de la plateforme.
           </p>
         </div>
       </div>
@@ -102,7 +150,7 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Rechercher des membres, consulter leurs informations et gerer les bannissements.
+              Rechercher des membres, consulter leurs informations et gérer les bannissements.
             </CardContent>
           </Card>
         </Link>
@@ -116,7 +164,7 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Rechercher, filtrer et moderer les commentaires avec tracabilite.
+              Rechercher, filtrer et modérer les commentaires avec traçabilité.
             </CardContent>
           </Card>
         </Link>
@@ -136,48 +184,177 @@ export default function AdminPage() {
         </Link>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
+      <div className="mt-8 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <RefreshCw className="h-5 w-5 text-primary" />
-              Synchronisation openAIP
+              <ServerCog className="h-5 w-5 text-primary" />
+              Refresh nocturne
             </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Importe les aérodromes français depuis openAIP. Tourne automatiquement chaque nuit à 2h.
+              Le worker dédié planifie, reprend et journalise les synchronisations de données.
             </p>
-            <Button
-              onClick={handleSync}
-              disabled={syncState === "running"}
-              variant="outline"
-              className="w-full"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncState === "running" ? "animate-spin" : ""}`} />
-              {syncState === "running" ? "Sync en cours…" : "Lancer le sync maintenant"}
-            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+              <span>
+                Worker :{" "}
+                <strong>{syncStatus?.workerEnabled ? "actif" : "désactivé"}</strong>
+              </span>
+              {syncStatus?.workerId && (
+                <span className="text-muted-foreground">ID : {syncStatus.workerId}</span>
+              )}
+              <span className="text-muted-foreground">
+                Exécution en cours : {syncStatus?.running ? "oui" : "non"}
+              </span>
+            </div>
+
             {syncMsg && (
-              <p className={`text-xs ${syncState === "error" ? "text-destructive" : "text-green-600"}`}>
+              <div
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  syncMsgType === "error"
+                    ? "border-destructive/40 bg-destructive/5 text-destructive"
+                    : "border-green-600/30 bg-green-50 text-green-700"
+                }`}
+              >
                 {syncMsg}
-              </p>
+              </div>
             )}
+
+            <div className="grid gap-3">
+              {syncStatus?.sources.map((source) => (
+                <div
+                  key={source.source}
+                  className="rounded-xl border p-4 transition-colors hover:border-primary/30"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{SOURCE_LABELS[source.source]}</h3>
+                        {source.running && (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                            en cours
+                          </span>
+                        )}
+                        {source.queued && !source.running && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                            en file
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{source.description}</p>
+                      <div className="text-xs text-muted-foreground">
+                        Cron : {source.schedule}
+                        {source.nextPlannedAt
+                          ? ` · prochain run ${new Date(source.nextPlannedAt).toLocaleString("fr-FR")}`
+                          : ""}
+                      </div>
+                      {source.lastRun && (
+                        <div className="text-xs text-muted-foreground">
+                          Dernier run : {source.lastRun.status.toLowerCase()} le{" "}
+                          {new Date(
+                            source.lastRun.finishedAt ??
+                              source.lastRun.startedAt ??
+                              source.lastRun.scheduledFor,
+                          ).toLocaleString("fr-FR")}
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => handleTrigger(source.source)}
+                      disabled={triggeringSource === source.source}
+                    >
+                      <RefreshCw
+                        className={`mr-2 h-4 w-4 ${
+                          triggeringSource === source.source ? "animate-spin" : ""
+                        }`}
+                      />
+                      {triggeringSource === source.source ? "Ajout..." : "Lancer maintenant"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="border-destructive/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-destructive">
-              <Ban className="h-5 w-5" />
-              Actions sensibles
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Les bannissements et modérations de contenus sont journalises avec l&apos;identite
-            de l&apos;administrateur et la date de l&apos;action.
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+                <Ban className="h-5 w-5" />
+                Actions sensibles
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Les bannissements et modérations de contenus restent journalisés avec l’identité
+              de l’administrateur et la date de l’action.
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Mail className="h-5 w-5 text-primary" />
+                Récapitulatif e-mail
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Un mail de synthèse est envoyé chaque nuit aux admins actifs et vérifiés, ou à
+              l’adresse de surcouche configurée si tu définis{" "}
+              <code>SYNC_REPORT_EMAIL_OVERRIDE</code>.
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Clock3 className="h-5 w-5 text-primary" />
+            Historique récent
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentRuns.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Aucun run de synchronisation enregistré pour le moment.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {recentRuns.map((run) => (
+                <div
+                  key={run.id}
+                  className="rounded-lg border px-4 py-3 text-sm"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="font-medium">
+                        {SOURCE_LABELS[run.source]} · {run.status.toLowerCase()}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {new Date(run.scheduledFor).toLocaleString("fr-FR")}
+                        {run.durationMs ? ` · ${Math.round(run.durationMs / 1000)} s` : ""}
+                        {run.attempt > 1 ? ` · tentative ${run.attempt}` : ""}
+                      </div>
+                    </div>
+                    {run.nextRetryAt && (
+                      <div className="text-xs text-amber-700">
+                        Reprise prévue le {new Date(run.nextRetryAt).toLocaleString("fr-FR")}
+                      </div>
+                    )}
+                  </div>
+                  {run.errorMessage && (
+                    <div className="mt-2 text-xs text-destructive">{run.errorMessage}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

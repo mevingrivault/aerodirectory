@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
-import { ScheduleModule } from "@nestjs/schedule";
+import { ScheduleModule } from "@nestjs/schedule/dist";
 import { SyncModule } from "./sync/sync.module";
 import { AltchaModule } from "./altcha/altcha.module";
 import { CryptoModule } from "./common/crypto.module";

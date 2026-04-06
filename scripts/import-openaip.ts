@@ -51,7 +51,7 @@ function loadEnv() {
 loadEnv();
 
 import { PrismaClient } from "@aerodirectory/database";
-import { syncOpenAipFranceAirports } from "../apps/api/src/services/importers/openaip/openaip.importer";
+import { runOpenAipSyncTask } from "../apps/api/src/sync/tasks/openaip-sync.task";
 import { fetchOverpassBbox } from "../apps/api/src/services/overpass/overpass.client";
 import type { OverpassElement } from "../apps/api/src/services/overpass/overpass.client";
 
@@ -174,7 +174,7 @@ async function main() {
     await prisma.$connect();
     console.log("Connected to database.\n");
 
-    const result = await syncOpenAipFranceAirports(prisma, apiKey);
+    const result = await runOpenAipSyncTask(prisma, apiKey);
 
     if (result.errors.length > 0) {
       console.error("Errors encountered during import:");

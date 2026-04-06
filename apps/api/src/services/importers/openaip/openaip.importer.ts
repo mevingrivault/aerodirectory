@@ -20,6 +20,7 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: string[];
+  changedAerodromeIds: string[];
 }
 
 export async function syncOpenAipFranceAirports(
@@ -64,14 +65,18 @@ export async function syncOpenAipFranceAirports(
     updated: 0,
     skipped: 0,
     errors: [...normalizeErrors],
+    changedAerodromeIds: [],
   };
 
   for (const airport of normalized) {
     try {
-      const action = await upsertAirport(prisma, airport);
+      const { action, aerodromeId } = await upsertAirport(prisma, airport);
       if (action === "created") result.created++;
       else if (action === "updated") result.updated++;
       else result.skipped++;
+      if (aerodromeId && action !== "skipped") {
+        result.changedAerodromeIds.push(aerodromeId);
+      }
 
       if ((result.created + result.updated + result.skipped) % 50 === 0) {
         console.log(
@@ -99,7 +104,7 @@ export async function syncOpenAipFranceAirports(
 async function upsertAirport(
   prisma: PrismaClient,
   airport: NormalizedAerodrome,
-): Promise<"created" | "updated" | "skipped"> {
+): Promise<{ action: "created" | "updated" | "skipped"; aerodromeId: string | null }> {
   const { runways, frequencies, fuels, ...aerodromeData } = airport;
 
   // Check if this airport already exists by source+sourceId
@@ -116,7 +121,7 @@ async function upsertAirport(
   if (existing) {
     // Skip if data hasn't changed
     if (existing.sourceRawHash === airport.sourceRawHash) {
-      return "skipped";
+      return { action: "skipped", aerodromeId: existing.id };
     }
 
     // Update existing airport and replace children in a transaction
@@ -161,7 +166,7 @@ async function upsertAirport(
       }
     });
 
-    return "updated";
+    return { action: "updated", aerodromeId: existing.id };
   }
 
   // Create new airport
@@ -172,7 +177,7 @@ async function upsertAirport(
     null,
   );
 
-  await prisma.aerodrome.create({
+  const created = await prisma.aerodrome.create({
     data: {
       ...aerodromeData,
       icaoCode: icaoToSet,
@@ -180,9 +185,10 @@ async function upsertAirport(
       frequencies: frequencies.length > 0 ? { create: frequencies } : undefined,
       fuels: fuels.length > 0 ? { create: fuels } : undefined,
     },
+    select: { id: true },
   });
 
-  return "created";
+  return { action: "created", aerodromeId: created.id };
 }
 
 const MEDICAL_KEYWORDS = [

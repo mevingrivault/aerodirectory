@@ -119,6 +119,46 @@ enum PhotoStatus {
   @@schema("public")
 }
 
+enum SyncSource {
+  OPENAIP
+  OSM
+  REGIONS
+  RGPD
+
+  @@schema("public")
+}
+
+enum SyncRunType {
+  SCHEDULED
+  MANUAL
+  RETRY
+  RECOVERY
+
+  @@schema("public")
+}
+
+enum SyncRunStatus {
+  QUEUED
+  RETRY_SCHEDULED
+  IN_PROGRESS
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+
+  @@schema("public")
+}
+
+enum SyncStepStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+
+  @@schema("public")
+}
+
 enum AuditAction {
   LOGIN
   LOGOUT
@@ -179,6 +219,7 @@ model User {
   bannedUsers      User[]            @relation("UserBans")
   photos           Photo[]
   reviewedPhotos   Photo[]           @relation("PhotoReviewedBy")
+  triggeredSyncRuns SyncRun[]        @relation("SyncRunTriggeredBy")
 
   @@index([email])
   @@index([status])
@@ -442,6 +483,62 @@ model AuditLog {
 }
 
 // ─── Airspace (future use) ──────────────────────────────
+
+model SyncRun {
+  id                String        @id @default(cuid())
+  source            SyncSource
+  runType           SyncRunType
+  scope             String?
+  status            SyncRunStatus @default(QUEUED)
+  attempt           Int           @default(1)
+  scheduledFor      DateTime
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  durationMs        Int?
+  summary           Json?
+  errorMessage      String?
+  recipients        String[]
+  nextRetryAt       DateTime?
+  triggeredByUserId String?
+  workerId          String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  triggeredBy User?         @relation("SyncRunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  steps       SyncRunStep[]
+
+  @@index([source, status])
+  @@index([status, scheduledFor])
+  @@index([nextRetryAt])
+  @@index([createdAt])
+  @@map("sync_runs")
+  @@schema("public")
+}
+
+model SyncRunStep {
+  id           String         @id @default(cuid())
+  runId        String
+  stepKey      String
+  stepOrder    Int
+  status       SyncStepStatus @default(PENDING)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  durationMs   Int?
+  metrics      Json?
+  checkpoint   Json?
+  artifactPath String?
+  logSummary   String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  run SyncRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stepKey])
+  @@index([status])
+  @@index([runId, stepOrder])
+  @@map("sync_run_steps")
+  @@schema("public")
+}
 
 model Airspace {
   id         String  @id @default(cuid())

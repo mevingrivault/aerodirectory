@@ -2,6 +2,18 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 
+interface SyncSummaryMailRun {
+  source: string;
+  status: string;
+  durationMs: number | null | undefined;
+  scheduledFor: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  nextRetryAt: string | null;
+  summary: Record<string, unknown>;
+  errorMessage?: string | null;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -101,7 +113,85 @@ export class MailService {
       });
     } catch (err) {
       this.logger.error(`Failed to send password reset email to ${email}`, err);
-      // Ne pas remonter l'erreur : la réponse API reste générique
+    }
+  }
+
+  async sendSyncSummary(
+    recipients: string[],
+    payload: {
+      dateLabel: string;
+      runs: SyncSummaryMailRun[];
+    },
+  ): Promise<void> {
+    if (recipients.length === 0) return;
+
+    const rowsHtml = payload.runs
+      .map((run) => {
+        const summaryEntries = Object.entries(run.summary)
+          .filter(([, value]) => typeof value !== "object")
+          .slice(0, 6)
+          .map(([key, value]) => `${key}: ${String(value)}`)
+          .join(" · ");
+
+        return `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:600;">${run.source}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${run.status}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${run.durationMs ? `${Math.round(run.durationMs / 1000)} s` : "—"}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${summaryEntries || "—"}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${run.nextRetryAt ?? "—"}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const rowsText = payload.runs
+      .map((run) => {
+        const summaryEntries = Object.entries(run.summary)
+          .filter(([, value]) => typeof value !== "object")
+          .slice(0, 6)
+          .map(([key, value]) => `${key}: ${String(value)}`)
+          .join(" | ");
+
+        return `- ${run.source} | ${run.status} | durée: ${
+          run.durationMs ? `${Math.round(run.durationMs / 1000)} s` : "—"
+        } | ${summaryEntries || "pas de résumé"}${
+          run.nextRetryAt ? ` | prochaine reprise: ${run.nextRetryAt}` : ""
+        }${run.errorMessage ? ` | erreur: ${run.errorMessage}` : ""}`;
+      })
+      .join("\n");
+
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to: recipients.join(", "),
+        subject: `Récapitulatif des synchronisations Navventura — ${payload.dateLabel}`,
+        html: `
+          <!DOCTYPE html>
+          <html lang="fr">
+          <head><meta charset="UTF-8"></head>
+          <body style="font-family:sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#111827;">
+            <h2 style="margin-bottom:8px;">Récapitulatif des synchronisations</h2>
+            <p style="color:#4b5563;">Exécutions nocturnes du ${payload.dateLabel}.</p>
+            <table style="width:100%;border-collapse:collapse;margin-top:20px;font-size:14px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:8px;border-bottom:1px solid #d1d5db;">Source</th>
+                  <th style="text-align:left;padding:8px;border-bottom:1px solid #d1d5db;">Statut</th>
+                  <th style="text-align:left;padding:8px;border-bottom:1px solid #d1d5db;">Durée</th>
+                  <th style="text-align:left;padding:8px;border-bottom:1px solid #d1d5db;">Résumé</th>
+                  <th style="text-align:left;padding:8px;border-bottom:1px solid #d1d5db;">Prochaine reprise</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </body>
+          </html>
+        `,
+        text: `Récapitulatif des synchronisations du ${payload.dateLabel}\n\n${rowsText}`,
+      });
+    } catch (error) {
+      this.logger.error("Failed to send sync summary email", error);
     }
   }
 }

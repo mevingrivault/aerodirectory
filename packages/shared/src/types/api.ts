@@ -108,6 +108,41 @@ export interface AdminDashboardStats {
   pendingPhotos: number;
 }
 
+export interface AdminSyncRunItem {
+  id: string;
+  source: "OPENAIP" | "OSM" | "REGIONS" | "RGPD";
+  runType: "SCHEDULED" | "MANUAL" | "RETRY" | "RECOVERY";
+  scope: string | null;
+  status: "QUEUED" | "RETRY_SCHEDULED" | "IN_PROGRESS" | "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
+  attempt: number;
+  scheduledFor: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+  nextRetryAt: string | null;
+  summary: Record<string, unknown> | null;
+  workerId: string | null;
+}
+
+export interface AdminSyncSourceStatus {
+  source: "OPENAIP" | "OSM" | "REGIONS" | "RGPD";
+  schedule: string;
+  description: string;
+  nextPlannedAt: string | null;
+  running: boolean;
+  queued: boolean;
+  lastRun: AdminSyncRunItem | null;
+}
+
+export interface AdminSyncStatusResponse {
+  workerEnabled: boolean;
+  workerId: string;
+  running: boolean;
+  sources: AdminSyncSourceStatus[];
+  recentRuns: AdminSyncRunItem[];
+}
+
 export interface AdminUserListItem {
   id: string;
   email: string;

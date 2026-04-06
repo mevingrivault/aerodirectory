@@ -30,7 +30,6 @@ services:
     networks:
       - internal
 
-  # SeaweedFS — S3-compatible object storage (Apache 2.0)
   seaweedfs-master:
     image: chrislusf/seaweedfs:latest
     restart: unless-stopped
@@ -51,7 +50,6 @@ services:
     networks:
       - internal
 
-  # Filer + S3 gateway — exposé via Nginx Proxy Manager pour servir les fichiers publics
   seaweedfs-filer:
     image: chrislusf/seaweedfs:latest
     restart: unless-stopped
@@ -74,7 +72,6 @@ services:
       - internal
       - proxy
 
-  # ClamAV antivirus — required for photo upload pipeline
   clamav-updater:
     image: clamav/clamav:stable
     restart: unless-stopped
@@ -105,6 +102,7 @@ services:
         condition: service_started
     environment:
       NODE_ENV: production
+      TZ: ${SYNC_TIMEZONE:-Europe/Paris}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET}
@@ -140,11 +138,89 @@ services:
       ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
       ALTCHA_ENABLED: ${ALTCHA_ENABLED:-true}
       ALTCHA_MAX_NUMBER: ${ALTCHA_MAX_NUMBER:-100000}
+      SYNC_ENABLED: "false"
+      SYNC_TIMEZONE: ${SYNC_TIMEZONE:-Europe/Paris}
+      SYNC_OPENAIP_CRON: ${SYNC_OPENAIP_CRON:-0 2 * * *}
+      SYNC_OSM_CRON: ${SYNC_OSM_CRON:-0 3 * * 0}
+      SYNC_RGPD_CRON: ${SYNC_RGPD_CRON:-30 4 * * *}
+      SYNC_REGIONS_FULL_CRON: ${SYNC_REGIONS_FULL_CRON:-0 5 1 * *}
+      SYNC_REPORT_CRON: ${SYNC_REPORT_CRON:-30 7 * * *}
+      SYNC_RETRY_ATTEMPTS: ${SYNC_RETRY_ATTEMPTS:-3}
+      SYNC_RETRY_BACKOFF_MINUTES: ${SYNC_RETRY_BACKOFF_MINUTES:-15,30,60}
+      SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
+      SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
     volumes:
       - clamav_db:/var/lib/clamav:ro
     networks:
       - internal
       - proxy
+
+  sync-worker:
+    image: ghcr.io/${GITHUB_REPO}/aerodirectory-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clamav-updater:
+        condition: service_started
+      seaweedfs-filer:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      TZ: ${SYNC_TIMEZONE:-Europe/Paris}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      TOTP_WINDOW: ${TOTP_WINDOW:-2}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      PORT: 4001
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+      APP_URL: ${APP_URL}
+      S3_ENDPOINT: http://seaweedfs-filer:8333
+      S3_BUCKET: ${S3_BUCKET:-navventura}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      PHOTO_MAX_UPLOAD_BYTES: ${PHOTO_MAX_UPLOAD_BYTES:-5242880}
+      PHOTO_MAX_WIDTH: ${PHOTO_MAX_WIDTH:-4096}
+      PHOTO_MAX_HEIGHT: ${PHOTO_MAX_HEIGHT:-4096}
+      PHOTO_MAX_INPUT_PIXELS: ${PHOTO_MAX_INPUT_PIXELS:-16777216}
+      PHOTO_UPLOAD_TMP_DIR: ${PHOTO_UPLOAD_TMP_DIR:-/tmp/navventura-uploads}
+      CLAMSCAN_ENABLED: ${CLAMSCAN_ENABLED:-true}
+      CLAMSCAN_PATH: ${CLAMSCAN_PATH:-/usr/bin/clamscan}
+      CLAMSCAN_DATABASE_PATH: ${CLAMSCAN_DATABASE_PATH:-/var/lib/clamav}
+      CLAMSCAN_TIMEOUT_MS: ${CLAMSCAN_TIMEOUT_MS:-20000}
+      CLAMSCAN_AUTO_UPDATE: ${CLAMSCAN_AUTO_UPDATE:-false}
+      OPENAIP_API_KEY: ${OPENAIP_API_KEY}
+      CHECKWX_API_KEY: ${CHECKWX_API_KEY}
+      ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
+      ALTCHA_ENABLED: ${ALTCHA_ENABLED:-true}
+      ALTCHA_MAX_NUMBER: ${ALTCHA_MAX_NUMBER:-100000}
+      SYNC_ENABLED: "true"
+      SYNC_TIMEZONE: ${SYNC_TIMEZONE:-Europe/Paris}
+      SYNC_OPENAIP_CRON: ${SYNC_OPENAIP_CRON:-0 2 * * *}
+      SYNC_OSM_CRON: ${SYNC_OSM_CRON:-0 3 * * 0}
+      SYNC_RGPD_CRON: ${SYNC_RGPD_CRON:-30 4 * * *}
+      SYNC_REGIONS_FULL_CRON: ${SYNC_REGIONS_FULL_CRON:-0 5 1 * *}
+      SYNC_REPORT_CRON: ${SYNC_REPORT_CRON:-30 7 * * *}
+      SYNC_RETRY_ATTEMPTS: ${SYNC_RETRY_ATTEMPTS:-3}
+      SYNC_RETRY_BACKOFF_MINUTES: ${SYNC_RETRY_BACKOFF_MINUTES:-15,30,60}
+      SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
+      SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
+    volumes:
+      - clamav_db:/var/lib/clamav:ro
+      - sync_data:${SYNC_DATA_DIR:-/data/sync}
+    networks:
+      - internal
 
   web:
     image: ghcr.io/${GITHUB_REPO}/aerodirectory-web:${IMAGE_TAG:-latest}
@@ -161,6 +237,7 @@ volumes:
   seaweedfs_volume:
   seaweedfs_filer:
   clamav_db:
+  sync_data:
 
 networks:
   internal:
