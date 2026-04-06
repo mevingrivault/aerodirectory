@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
@@ -59,7 +59,7 @@ const FUEL_OPTIONS = [
   { label: "UL91", value: "UL91" },
 ];
 
-export default function MapPage() {
+function MapPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -536,5 +536,13 @@ export default function MapPage() {
       {/* Map container */}
       <div ref={mapContainer} className="h-full w-full" />
     </div>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense>
+      <MapPageInner />
+    </Suspense>
   );
 }
