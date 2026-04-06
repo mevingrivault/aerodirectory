@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X, TriangleAlert } from "lucide-react";
+import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X, TriangleAlert, Download } from "lucide-react";
 import type { TotpSetupResponse } from "@aerodirectory/shared";
 
 interface AerodromeOption {
@@ -150,7 +150,7 @@ export default function ProfilePage() {
       await apiClient.post("/auth/delete-account", {
         currentPassword: deletePassword,
       });
-      logout();
+      await logout();
       router.push("/");
     } catch (err: unknown) {
       const msg =
@@ -454,6 +454,40 @@ export default function ProfilePage() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Export RGPD */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Download className="h-5 w-5" /> Mes données
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Conformément au RGPD (Article 20), vous pouvez exporter l&apos;intégralité de vos données personnelles au format JSON.
+          </p>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const res = await apiClient.get<Record<string, unknown>>("/auth/data-export");
+                const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `navventura-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch {
+                alert("Impossible d'exporter vos données. Veuillez réessayer.");
+              }
+            }}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exporter mes données (JSON)
+          </Button>
         </CardContent>
       </Card>
 

@@ -27,11 +27,38 @@ export class SyncService {
     private readonly config: ConfigService,
   ) {}
 
-  /** Cron: every night at 02:00 */
+  /** Cron: every night at 02:00 — OpenAIP sync */
   @Cron("0 2 * * *", { name: "openaip-sync" })
   async scheduledSync() {
     this.logger.log("Scheduled openAIP sync triggered");
     await this.syncOpenAip();
+  }
+
+  /** Cron: every night at 03:00 — RGPD cleanup */
+  @Cron("0 3 * * *", { name: "rgpd-cleanup" })
+  async scheduledRgpdCleanup() {
+    this.logger.log("Scheduled RGPD cleanup triggered");
+    await this.runRgpdCleanup();
+  }
+
+  async runRgpdCleanup(): Promise<{ auditLogsDeleted: number; tokensDeleted: number }> {
+    // Audit logs : suppression après 3 ans (Article 5 RGPD — minimisation)
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    const { count: auditLogsDeleted } = await this.prisma.auditLog.deleteMany({
+      where: { createdAt: { lt: threeYearsAgo } },
+    });
+
+    // Tokens email expirés et inutilisés (vérification & reset)
+    const { count: tokensDeleted } = await this.prisma.emailToken.deleteMany({
+      where: { expiresAt: { lt: new Date() }, usedAt: null },
+    });
+
+    this.logger.log(
+      `RGPD cleanup — audit logs supprimés: ${auditLogsDeleted}, tokens expirés supprimés: ${tokensDeleted}`,
+    );
+
+    return { auditLogsDeleted, tokensDeleted };
   }
 
   async syncOpenAip(triggeredByUserId?: string): Promise<SyncResult> {

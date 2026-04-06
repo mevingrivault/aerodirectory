@@ -139,8 +139,7 @@ export function Header() {
                   </Link>
                   <button
                     onClick={() => {
-                      logout();
-                      setMenuOpen(false);
+                      void logout().then(() => setMenuOpen(false));
                     }}
                     className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                   >

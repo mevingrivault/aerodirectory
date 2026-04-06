@@ -10,6 +10,30 @@ export interface AuditLogEntry {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Anonymise une adresse IP (RGPD Art. 5 — minimisation des données) :
+ * - IPv4 : supprime le dernier octet  →  192.168.1.42 → 192.168.1.0
+ * - IPv6 : garde les 48 premiers bits →  2001:db8:85a3::8a2e:0370:7334 → 2001:db8:85a3::
+ */
+function anonymizeIp(ip: string | undefined): string | undefined {
+  if (!ip) return undefined;
+  // IPv4
+  if (ip.includes(".") && !ip.includes(":")) {
+    const parts = ip.split(".");
+    if (parts.length === 4) {
+      parts[3] = "0";
+      return parts.join(".");
+    }
+  }
+  // IPv6 (ou IPv4-mapped ::ffff:x.x.x.x)
+  if (ip.includes(":")) {
+    // On ne conserve que le /48 : on coupe après les 3 premiers groupes
+    const groups = ip.split(":");
+    return groups.slice(0, 3).join(":") + "::";
+  }
+  return undefined; // format inconnu → ne pas stocker
+}
+
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
@@ -21,7 +45,7 @@ export class AuditService {
         data: {
           userId: entry.userId,
           action: entry.action,
-          ip: entry.ip,
+          ip: anonymizeIp(entry.ip),
           userAgent: entry.userAgent,
           metadata: entry.metadata as Prisma.InputJsonValue | undefined,
         },

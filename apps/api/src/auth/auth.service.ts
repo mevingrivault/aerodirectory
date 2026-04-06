@@ -22,6 +22,8 @@ import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
+import { StorageService } from "../photo/storage.service";
+import { CryptoService } from "../common/crypto.service";
 import type {
   RegisterInput,
   LoginInput,
@@ -51,6 +53,8 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    private readonly storage: StorageService,
+    private readonly crypto: CryptoService,
   ) {}
 
   private verifyTotpCode(secret: string, code: string): boolean {
@@ -217,10 +221,10 @@ export class AuthService {
 
     const secret = authenticator.generateSecret();
 
-    // Store the secret temporarily (not enabled until verified)
+    // Chiffrement AES-256-GCM avant stockage
     await this.prisma.user.update({
       where: { id: userId },
-      data: { totpSecret: secret },
+      data: { totpSecret: this.crypto.encrypt(secret) },
     });
 
     const otpauthUrl = authenticator.keyuri(
@@ -247,7 +251,8 @@ export class AuthService {
       throw new BadRequestException("TOTP setup not initiated");
     }
 
-    const valid = this.verifyTotpCode(user.totpSecret, code);
+    const secret = this.crypto.decrypt(user.totpSecret);
+    const valid = this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -280,7 +285,8 @@ export class AuthService {
       throw new BadRequestException("TOTP not enabled");
     }
 
-    const valid = this.verifyTotpCode(user.totpSecret, code);
+    const secret = this.crypto.decrypt(user.totpSecret);
+    const valid = this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -558,6 +564,9 @@ export class AuthService {
   ): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
+      include: {
+        photos: { select: { id: true, storedKey: true } },
+      },
     });
 
     const valid = await argon2.verify(user.passwordHash, currentPassword);
@@ -565,6 +574,7 @@ export class AuthService {
       throw new UnauthorizedException("Mot de passe actuel incorrect");
     }
 
+    // Log AVANT suppression (userId encore valide)
     await this.audit.log({
       userId,
       action: "ACCOUNT_DELETE",
@@ -573,9 +583,22 @@ export class AuthService {
       metadata: { email: user.email },
     });
 
-    await this.prisma.user.delete({
-      where: { id: userId },
-    });
+    // Suppression des objets S3 (photos) — best-effort, ne bloque pas la suppression
+    const s3Deletions = user.photos.map((p: { id: string; storedKey: string }) =>
+      this.storage.delete(p.storedKey).catch(() => undefined),
+    );
+    await Promise.all(s3Deletions);
+
+    // Suppression du compte (cascade DB)
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    // Anonymisation des audit logs restants (userId mis à null par SetNull, on retire l'email des metadata)
+    await this.prisma.auditLog
+      .updateMany({
+        where: { metadata: { path: ["email"], equals: user.email } },
+        data: { metadata: { anonymized: true } },
+      })
+      .catch(() => undefined);
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
@@ -605,6 +628,93 @@ export class AuthService {
       totpEnabled: user.totpEnabled,
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
+    };
+  }
+
+  // ─── RGPD : export des données (Article 20) ────────────────
+  async exportData(userId: string): Promise<Record<string, unknown>> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        emailVerified: true,
+        totpEnabled: true,
+        createdAt: true,
+        homeAerodromeId: true,
+        visits: {
+          select: { aerodromeId: true, visitedAt: true, note: true },
+          orderBy: { visitedAt: "desc" },
+        },
+        comments: {
+          where: { deletedAt: null },
+          select: { id: true, aerodromeId: true, content: true, createdAt: true, parentId: true },
+          orderBy: { createdAt: "desc" },
+        },
+        aircraftProfiles: {
+          select: {
+            id: true, name: true, tas: true, fuelBurnPerHour: true,
+            costPerHour: true, minRunwayLengthM: true, createdAt: true,
+          },
+        },
+        corrections: {
+          select: { id: true, aerodromeId: true, field: true, currentValue: true, proposedValue: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        },
+        photos: {
+          where: { status: "READY" },
+          select: { id: true, aerodromeId: true, mimeType: true, width: true, height: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        },
+        auditLogs: {
+          select: { action: true, ip: true, createdAt: true, metadata: true },
+          orderBy: { createdAt: "desc" },
+          take: 500,
+        },
+      },
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      profile: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: user.emailVerified?.toISOString() ?? null,
+        totpEnabled: user.totpEnabled,
+        createdAt: user.createdAt.toISOString(),
+        homeAerodromeId: user.homeAerodromeId,
+      },
+      visits: user.visits.map((v: { aerodromeId: string; visitedAt: Date; note: string | null }) => ({
+        aerodromeId: v.aerodromeId,
+        visitedAt: v.visitedAt.toISOString(),
+        note: v.note,
+      })),
+      comments: user.comments.map((c: { id: string; aerodromeId: string; content: string; createdAt: Date; parentId: string | null }) => ({
+        id: c.id,
+        aerodromeId: c.aerodromeId,
+        parentId: c.parentId,
+        content: c.content,
+        createdAt: c.createdAt.toISOString(),
+      })),
+      aircraftProfiles: user.aircraftProfiles,
+      corrections: user.corrections.map((c: { id: string; aerodromeId: string; field: string; currentValue: string | null; proposedValue: string; createdAt: Date }) => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+      })),
+      photos: user.photos.map((p: { id: string; aerodromeId: string; mimeType: string; width: number | null; height: number | null; createdAt: Date }) => ({
+        ...p,
+        createdAt: p.createdAt.toISOString(),
+      })),
+      activityLog: user.auditLogs.map((l: { action: string; ip: string | null; createdAt: Date; metadata: unknown }) => ({
+        action: l.action,
+        ip: l.ip,
+        createdAt: l.createdAt.toISOString(),
+        metadata: l.metadata,
+      })),
     };
   }
 }

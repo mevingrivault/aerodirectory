@@ -8,11 +8,13 @@ import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 import { MailModule } from "../mail/mail.module";
 import { AltchaModule } from "../altcha/altcha.module";
+import { PhotoModule } from "../photo/photo.module";
 
 @Module({
   imports: [
     MailModule,
     AltchaModule,
+    PhotoModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

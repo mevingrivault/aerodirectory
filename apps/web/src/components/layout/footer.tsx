@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DISCLAIMER } from "@aerodirectory/shared";
 
 export function Footer() {
@@ -9,8 +10,13 @@ export function Footer() {
         </div>
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>Navventura &mdash; Deviens un aéroventurier</p>
-          <p>
-            Contributions sous licence{" "}
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+            <Link href="/politique-de-confidentialite" className="underline hover:text-foreground">
+              Politique de confidentialité
+            </Link>
+            <Link href="/cgu" className="underline hover:text-foreground">
+              CGU
+            </Link>
             <a
               href="https://creativecommons.org/licenses/by-sa/4.0/"
               target="_blank"
@@ -19,7 +25,7 @@ export function Footer() {
             >
               CC BY-SA 4.0
             </a>
-          </p>
+          </div>
         </div>
       </div>
     </footer>

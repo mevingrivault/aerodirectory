@@ -6,6 +6,7 @@ import {
   Body,
   Query,
   Req,
+  Res,
   UsePipes,
   HttpCode,
   HttpStatus,
@@ -13,7 +14,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { FastifyRequest } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { AuthService } from "./auth.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok } from "../common/api-response";
@@ -41,6 +42,27 @@ import {
   type CheckEmailInput,
   type ResetPasswordInput,
 } from "@aerodirectory/shared";
+
+const COOKIE_OPTS = (maxAgeSeconds: number) => ({
+  httpOnly: true,
+  secure: process.env["NODE_ENV"] === "production",
+  sameSite: "strict" as const,
+  path: "/",
+  maxAge: maxAgeSeconds,
+});
+
+const ACCESS_TTL = 15 * 60;        // 15 minutes
+const REFRESH_TTL = 7 * 24 * 3600; // 7 jours
+
+function setAuthCookies(res: FastifyReply, tokens: { accessToken: string; refreshToken: string }) {
+  void res.setCookie("access_token", tokens.accessToken, COOKIE_OPTS(ACCESS_TTL));
+  void res.setCookie("refresh_token", tokens.refreshToken, COOKIE_OPTS(REFRESH_TTL));
+}
+
+function clearAuthCookies(res: FastifyReply) {
+  void res.setCookie("access_token", "", { ...COOKIE_OPTS(0), maxAge: 0 });
+  void res.setCookie("refresh_token", "", { ...COOKIE_OPTS(0), maxAge: 0 });
+}
 
 @Controller("auth")
 export class AuthController {
@@ -77,13 +99,16 @@ export class AuthController {
   @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
   @Post("login")
   @UsePipes(new ZodValidationPipe(LoginSchema))
-  async login(@Body() body: LoginInput, @Req() req: FastifyRequest) {
-    const result = await this.auth.login(
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok(result);
+  async login(
+    @Body() body: LoginInput,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const result = await this.auth.login(body, req.ip, req.headers["user-agent"]);
+    if (!result.requireTotp) {
+      setAuthCookies(res, result);
+    }
+    return ok({ requireTotp: result.requireTotp });
   }
 
   @Post("login/totp")
@@ -91,6 +116,7 @@ export class AuthController {
     @Body(new ZodValidationPipe(TotpVerifySchema)) body: TotpVerifyInput,
     @CurrentUser() user: { sub: string; totpPending: boolean },
     @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
     if (!user.totpPending) {
       throw new UnauthorizedException("2FA step not initiated");
@@ -101,14 +127,26 @@ export class AuthController {
       req.ip,
       req.headers["user-agent"],
     );
-    return ok(tokens);
+    setAuthCookies(res, tokens);
+    return ok({ success: true });
   }
 
   @Public()
   @Post("refresh")
-  async refresh(@Body() body: { refreshToken: string }) {
-    const tokens = await this.auth.refreshTokens(body.refreshToken);
-    return ok(tokens);
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+    const refreshToken = req.cookies?.["refresh_token"] ?? (req.body as { refreshToken?: string })?.refreshToken;
+    if (!refreshToken) throw new UnauthorizedException("No refresh token");
+    const tokens = await this.auth.refreshTokens(refreshToken);
+    setAuthCookies(res, tokens);
+    return ok({ refreshed: true });
+  }
+
+  @Post("logout")
+  @HttpCode(HttpStatus.OK)
+  async logout(@Res({ passthrough: true }) res: FastifyReply) {
+    clearAuthCookies(res);
+    return ok({ loggedOut: true });
   }
 
   @Public()
@@ -207,6 +245,12 @@ export class AuthController {
   ) {
     await this.auth.changePassword(user.sub, body, req.ip, req.headers["user-agent"]);
     return ok({ changed: true });
+  }
+
+  @Get("data-export")
+  async dataExport(@CurrentUser() user: { sub: string }) {
+    const data = await this.auth.exportData(user.sub);
+    return ok(data);
   }
 
   @Post("delete-account")

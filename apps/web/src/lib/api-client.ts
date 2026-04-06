@@ -3,16 +3,6 @@ import type { ApiResponse, ApiErrorResponse } from "@aerodirectory/shared";
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:4000/api/v1";
 
 class ApiClient {
-  private accessToken: string | null = null;
-
-  setToken(token: string | null) {
-    this.accessToken = token;
-  }
-
-  getToken(): string | null {
-    return this.accessToken;
-  }
-
   private async request<T>(
     path: string,
     options: RequestInit = {},
@@ -21,18 +11,14 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    if (options.body !== undefined) {
+    if (options.body !== undefined && !(options.body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
-    }
-
-    if (this.accessToken) {
-      headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
 
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers,
-      credentials: "include",
+      credentials: "include", // envoie les cookies httpOnly automatiquement
     });
 
     const raw = await response.text();
@@ -93,9 +79,6 @@ class ApiClient {
     form.append("file", file);
 
     const headers: Record<string, string> = { ...extraHeaders };
-    if (this.accessToken) {
-      headers["Authorization"] = `Bearer ${this.accessToken}`;
-    }
 
     const response = await fetch(`${API_BASE}${path}`, {
       method: "POST",

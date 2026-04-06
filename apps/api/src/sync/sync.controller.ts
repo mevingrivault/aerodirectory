@@ -34,4 +34,11 @@ export class SyncController {
 
     return ok({ started: true, message: "Sync openAIP lancé en arrière-plan." });
   }
+
+  @Post("rgpd-cleanup")
+  @HttpCode(HttpStatus.OK)
+  async triggerRgpdCleanup() {
+    const result = await this.sync.runRgpdCleanup();
+    return ok(result);
+  }
 }

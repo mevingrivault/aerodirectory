@@ -5,6 +5,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { SyncModule } from "./sync/sync.module";
 import { AltchaModule } from "./altcha/altcha.module";
+import { CryptoModule } from "./common/crypto.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AerodromeModule } from "./aerodrome/aerodrome.module";
@@ -44,6 +45,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
       },
     ]),
     AltchaModule,
+    CryptoModule,
     PrismaModule,
     AuthModule,
     AerodromeModule,

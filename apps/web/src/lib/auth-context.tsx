@@ -9,14 +9,14 @@ import {
   type ReactNode,
 } from "react";
 import { apiClient } from "./api-client";
-import type { UserProfile, AuthTokens } from "@aerodirectory/shared";
+import type { UserProfile } from "@aerodirectory/shared";
 
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string, altcha?: string) => Promise<{ requireTotp: boolean }>;
   register: (email: string, password: string, displayName: string, altcha?: string) => Promise<string>;
-  logout: () => void;
+  logout: () => Promise<void>;
   verifyTotp: (code: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -30,47 +30,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = useCallback(async () => {
     try {
       const res = await apiClient.get<UserProfile>("/auth/profile");
-      setUser(res.data);
+      setUser(res.data ?? null);
     } catch {
       setUser(null);
-      apiClient.setToken(null);
     }
   }, []);
 
+  // Au démarrage : on tente de récupérer le profil via le cookie httpOnly
   useEffect(() => {
-    const token = typeof window !== "undefined"
-      ? localStorage.getItem("accessToken")
-      : null;
-
-    if (token) {
-      apiClient.setToken(token);
-      fetchProfile().finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    fetchProfile().finally(() => setLoading(false));
   }, [fetchProfile]);
-
-  const storeTokens = (tokens: AuthTokens) => {
-    localStorage.setItem("accessToken", tokens.accessToken);
-    localStorage.setItem("refreshToken", tokens.refreshToken);
-    apiClient.setToken(tokens.accessToken);
-  };
 
   const login = async (
     email: string,
     password: string,
     altcha?: string,
   ): Promise<{ requireTotp: boolean }> => {
-    const res = await apiClient.post<AuthTokens & { requireTotp: boolean }>(
+    const res = await apiClient.post<{ requireTotp: boolean }>(
       "/auth/login",
       { email, password },
       altcha ? { "x-altcha": altcha } : undefined,
     );
 
-    if (res.data.requireTotp) {
-      apiClient.setToken(res.data.accessToken);
-    } else {
-      storeTokens(res.data);
+    if (!res.data.requireTotp) {
       await fetchProfile();
     }
 
@@ -92,17 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const verifyTotp = async (code: string) => {
-    const res = await apiClient.post<AuthTokens>("/auth/login/totp", {
-      code,
-    });
-    storeTokens(res.data);
+    await apiClient.post("/auth/login/totp", { code });
     await fetchProfile();
   };
 
-  const logout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    apiClient.setToken(null);
+  const logout = async () => {
+    await apiClient.post("/auth/logout").catch(() => undefined);
     setUser(null);
   };
 
