@@ -1436,6 +1436,7 @@ export default function AerodromeDetailPage() {
               onDeleteSuccess={(photoId) => {
                 setPhotos((prev) => prev.filter((p) => p.id !== photoId));
               }}
+              canUpload={!!user}
             />
             {!user && (
               <p className="mt-3 text-sm text-muted-foreground text-center">

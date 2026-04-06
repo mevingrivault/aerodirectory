@@ -56,16 +56,41 @@ export class VisitService {
       where: { userId },
       include: {
         aerodrome: {
-          select: { latitude: true, longitude: true },
+          select: { latitude: true, longitude: true, aerodromeType: true },
         },
       },
     });
 
-    const totalAerodromes = await this.prisma.aerodrome.count();
+    const [totalAerodromes, totalAltiport, totalUlm, totalHeli] = await Promise.all([
+      this.prisma.aerodrome.count({ where: { aerodromeType: { notIn: ["ULTRALIGHT_FIELD", "HELIPORT", "ALTIPORT"] } } }),
+      this.prisma.aerodrome.count({ where: { aerodromeType: "ALTIPORT" } }),
+      this.prisma.aerodrome.count({ where: { aerodromeType: "ULTRALIGHT_FIELD" } }),
+      this.prisma.aerodrome.count({ where: { aerodromeType: "HELIPORT" } }),
+    ]);
 
-    const visitedCount = visits.filter((v) => v.status === "VISITED" || v.status === "FAVORITE").length;
+    const visitedEntries = visits.filter((v) => v.status === "VISITED" || v.status === "FAVORITE");
+    const visitedCount = visitedEntries.length;
     const seenCount = visits.filter((v) => v.status === "SEEN").length;
     const favoriteCount = visits.filter((v) => v.status === "FAVORITE").length;
+
+    const byType = {
+      aerodromes: {
+        visited: visitedEntries.filter((v) => !["ULTRALIGHT_FIELD", "HELIPORT", "ALTIPORT"].includes(v.aerodrome.aerodromeType)).length,
+        total: totalAerodromes,
+      },
+      altiport: {
+        visited: visitedEntries.filter((v) => v.aerodrome.aerodromeType === "ALTIPORT").length,
+        total: totalAltiport,
+      },
+      ulm: {
+        visited: visitedEntries.filter((v) => v.aerodrome.aerodromeType === "ULTRALIGHT_FIELD").length,
+        total: totalUlm,
+      },
+      heli: {
+        visited: visitedEntries.filter((v) => v.aerodrome.aerodromeType === "HELIPORT").length,
+        total: totalHeli,
+      },
+    };
 
     // Estimate total distance as sum of consecutive visit distances
     let estimatedDistanceNm = 0;
@@ -96,10 +121,11 @@ export class VisitService {
       visitedCount,
       seenCount,
       favoriteCount,
-      totalAerodromes,
+      totalAerodromes: totalAerodromes + totalAltiport + totalUlm + totalHeli,
+      byType,
       badges,
       estimatedDistanceNm: Math.round(estimatedDistanceNm),
-      estimatedTotalCost: 0, // Requires aircraft profile integration
+      estimatedTotalCost: 0,
     };
   }
 }

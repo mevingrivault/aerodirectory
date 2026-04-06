@@ -26,6 +26,7 @@ interface Props {
   existingPhotos?: PhotoEntry[];
   onUploadSuccess?: (photo: PhotoEntry) => void;
   onDeleteSuccess?: (photoId: string) => void;
+  canUpload?: boolean;
 }
 
 type UploadState = "idle" | "uploading" | "success" | "error";
@@ -36,6 +37,7 @@ export function PhotoUpload({
   existingPhotos = [],
   onUploadSuccess,
   onDeleteSuccess,
+  canUpload = false,
 }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -136,9 +138,8 @@ export function PhotoUpload({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {existingPhotos.map((p) => (
             <div key={p.id} className="relative group rounded-lg overflow-hidden border bg-muted aspect-video">
-              {/* We show the storedKey as a relative path — served via your CDN/proxy */}
               <img
-                src={`${process.env["NEXT_PUBLIC_CDN_URL"]}/${p.storedKey}`}
+                src={`${process.env["NEXT_PUBLIC_API_URL"] || "/api/v1"}/aerodromes/${aerodromeId}/photos/${p.id}/file`}
                 alt="Photo aérodrome"
                 className="w-full h-full object-cover"
                 loading="lazy"
@@ -158,62 +159,64 @@ export function PhotoUpload({
       )}
 
       {/* Upload zone */}
-      {!preview ? (
-        <div
-          className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors cursor-pointer
-            ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"}`}
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-        >
-          <UploadCloud className="h-10 w-10 text-muted-foreground mb-3" />
-          <p className="text-sm font-medium">
-            Glissez une photo ou <span className="text-primary">cliquez pour parcourir</span>
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            JPEG, PNG, WebP, HEIC (iPhone) · Max {MAX_SIZE_MB} Mo
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED_EXT.join(",")}
-            className="hidden"
-            onChange={handleInputChange}
-          />
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="relative rounded-lg overflow-hidden border aspect-video bg-muted">
-            <img
-              src={preview}
-              alt="Aperçu"
-              className="w-full h-full object-contain"
+      {canUpload && (
+        !preview ? (
+          <div
+            className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors cursor-pointer
+              ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={handleDrop}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+          >
+            <UploadCloud className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">
+              Glissez une photo ou <span className="text-primary">cliquez pour parcourir</span>
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              JPEG, PNG, WebP, HEIC (iPhone) · Max {MAX_SIZE_MB} Mo
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_EXT.join(",")}
+              className="hidden"
+              onChange={handleInputChange}
             />
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleUpload}
-              disabled={uploadState === "uploading"}
-              className="flex-1"
-            >
-              {uploadState === "uploading" ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Traitement en cours…
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="h-4 w-4 mr-2" />
-                  Envoyer la photo
-                </>
-              )}
-            </Button>
-            <Button variant="outline" onClick={handleCancel} disabled={uploadState === "uploading"}>
-              <X className="h-4 w-4" />
-            </Button>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative rounded-lg overflow-hidden border aspect-video bg-muted">
+              <img
+                src={preview}
+                alt="Aperçu"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleUpload}
+                disabled={uploadState === "uploading"}
+                className="flex-1"
+              >
+                {uploadState === "uploading" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Traitement en cours…
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="h-4 w-4 mr-2" />
+                    Envoyer la photo
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={handleCancel} disabled={uploadState === "uploading"}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Feedback messages */}

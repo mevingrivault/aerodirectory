@@ -14,7 +14,6 @@ import {
   MapPin,
   Star,
   Heart,
-  Plane,
   BookOpen,
 } from "lucide-react";
 import type { AerodexStats } from "@aerodirectory/shared";
@@ -34,42 +33,26 @@ interface VisitEntry {
   };
 }
 
-type VisitBucket = "aerodromes" | "ulm" | "heli";
+type StatusFilter = "all" | "visited" | "favorite";
+type TypeFilter = "all" | "aerodromes" | "altiport" | "ulm" | "heli";
 
-const VISIT_BUCKETS: Array<{
-  key: VisitBucket;
-  title: string;
-}> = [
-  { key: "aerodromes", title: "Aérodromes et aéroports" },
-  { key: "ulm", title: "Bases ULM" },
-  { key: "heli", title: "Hélistations" },
-];
-
-function getVisitBucket(aerodromeType: string): VisitBucket {
-  if (aerodromeType === "ULTRALIGHT_FIELD") {
-    return "ulm";
-  }
-
-  if (aerodromeType === "HELIPORT") {
-    return "heli";
-  }
-
+function getTypeBucket(aerodromeType: string): TypeFilter {
+  if (aerodromeType === "ULTRALIGHT_FIELD") return "ulm";
+  if (aerodromeType === "HELIPORT") return "heli";
+  if (aerodromeType === "ALTIPORT") return "altiport";
   return "aerodromes";
 }
 
 function VisitRow({ v }: { v: VisitEntry }) {
-  const icon =
-    v.status === "FAVORITE" ? (
-      <Heart className="h-4 w-4 text-red-500" />
-    ) : (
-      <Star className="h-4 w-4 text-yellow-500" />
-    );
-
   return (
     <Link href={`/aerodrome/${v.aerodrome.id}`}>
       <div className="flex items-center justify-between rounded-md border p-3 transition-colors gap-2 hover:bg-accent/50">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="shrink-0">{icon}</div>
+          <div className="shrink-0">
+            {v.status === "FAVORITE"
+              ? <Heart className="h-4 w-4 text-red-500" />
+              : <Star className="h-4 w-4 text-yellow-500" />}
+          </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-medium truncate">{v.aerodrome.name}</span>
@@ -94,102 +77,79 @@ function VisitRow({ v }: { v: VisitEntry }) {
   );
 }
 
-function VisitList({
-  title,
-  icon,
-  items,
-  empty,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  items: VisitEntry[];
-  empty: string;
-}) {
+function VisitSection({ items }: { items: VisitEntry[] }) {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? items : items.slice(0, PAGE_SIZE);
+
+  const filtered = items.filter((v) => {
+    const statusOk =
+      statusFilter === "all" ||
+      (statusFilter === "favorite" && v.status === "FAVORITE") ||
+      (statusFilter === "visited" && v.status !== "FAVORITE");
+    const typeOk = typeFilter === "all" || getTypeBucket(v.aerodrome.aerodromeType) === typeFilter;
+    return statusOk && typeOk;
+  });
+
+  const visible = showAll ? filtered : filtered.slice(0, PAGE_SIZE);
+
+  const filterBtn = (
+    active: boolean,
+    onClick: () => void,
+    label: string,
+  ) => (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          {icon}
-          {title}
-          {items.length > 0 && (
-            <span className="ml-auto text-sm font-normal text-muted-foreground">
-              {items.length}
-            </span>
-          )}
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BookOpen className="h-4 w-4" />
+          Ma collection
+          <span className="ml-auto text-sm font-normal text-muted-foreground">{items.length}</span>
         </CardTitle>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {filterBtn(statusFilter === "all", () => { setStatusFilter("all"); setShowAll(false); }, "Tous")}
+          {filterBtn(statusFilter === "visited", () => { setStatusFilter("visited"); setShowAll(false); }, "Visités")}
+          {filterBtn(statusFilter === "favorite", () => { setStatusFilter("favorite"); setShowAll(false); }, "Favoris")}
+          <span className="w-px bg-border mx-1" />
+          {filterBtn(typeFilter === "all", () => { setTypeFilter("all"); setShowAll(false); }, "Tous types")}
+          {filterBtn(typeFilter === "aerodromes", () => { setTypeFilter("aerodromes"); setShowAll(false); }, "Aérodromes")}
+          {filterBtn(typeFilter === "altiport", () => { setTypeFilter("altiport"); setShowAll(false); }, "Altiports")}
+          {filterBtn(typeFilter === "ulm", () => { setTypeFilter("ulm"); setShowAll(false); }, "ULM")}
+          {filterBtn(typeFilter === "heli", () => { setTypeFilter("heli"); setShowAll(false); }, "Héli")}
+        </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{empty}</p>
+        {filtered.length === 0 ? (
+          <p className="text-muted-foreground text-sm">Aucune entrée pour ces filtres.</p>
         ) : (
           <>
             <div className="space-y-2">
-              {visible.map((v) => (
-                <VisitRow key={v.id} v={v} />
-              ))}
+              {visible.map((v) => <VisitRow key={v.id} v={v} />)}
             </div>
-            {items.length > PAGE_SIZE && (
+            {filtered.length > PAGE_SIZE && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="mt-3 w-full"
                 onClick={() => setShowAll((s) => !s)}
               >
-                {showAll ? "Voir moins" : `Voir les ${items.length - PAGE_SIZE} suivants`}
+                {showAll ? "Voir moins" : `Voir les ${filtered.length - PAGE_SIZE} suivants`}
               </Button>
             )}
           </>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function VisitGroupSection({
-  title,
-  icon,
-  items,
-  emptyMessages,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  items: VisitEntry[];
-  emptyMessages: Record<VisitBucket, string>;
-}) {
-  const groupedItems: Record<VisitBucket, VisitEntry[]> = {
-    aerodromes: items.filter(
-      (item) => getVisitBucket(item.aerodrome.aerodromeType) === "aerodromes",
-    ),
-    ulm: items.filter((item) => getVisitBucket(item.aerodrome.aerodromeType) === "ulm"),
-    heli: items.filter((item) => getVisitBucket(item.aerodrome.aerodromeType) === "heli"),
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          {icon}
-          {title}
-          {items.length > 0 && (
-            <span className="ml-auto text-sm font-normal text-muted-foreground">
-              {items.length}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {VISIT_BUCKETS.map((bucket) => (
-          <VisitList
-            key={`${title}-${bucket.key}`}
-            title={bucket.title}
-            icon={<Plane className="h-4 w-4 text-primary" />}
-            items={groupedItems[bucket.key]}
-            empty={emptyMessages[bucket.key]}
-          />
-        ))}
       </CardContent>
     </Card>
   );
@@ -212,9 +172,6 @@ export default function AerodexPage() {
 
   const stats = statsRes?.data;
   const visits = visitsRes?.data ?? [];
-
-  const visited = visits.filter((v) => v.status === "VISITED" || v.status === "FAVORITE");
-  const favorites = visits.filter((v) => v.status === "FAVORITE");
 
   if (!user) {
     return (
@@ -240,53 +197,43 @@ export default function AerodexPage() {
 
       {stats && (
         <>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <Card>
-              <CardContent className="p-3 sm:p-4 text-center">
-                <Plane className="mx-auto h-5 w-5 sm:h-6 sm:w-6 text-primary mb-1" />
-                <div className="text-xl sm:text-2xl font-bold">{stats.visitedCount}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground">Visités</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 sm:p-4 text-center">
-                <Heart className="mx-auto h-5 w-5 sm:h-6 sm:w-6 text-red-500 mb-1" />
-                <div className="text-xl sm:text-2xl font-bold">{stats.favoriteCount}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground">Favoris</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 sm:p-4 text-center">
-                <MapPin className="mx-auto h-5 w-5 sm:h-6 sm:w-6 text-green-500 mb-1" />
-                <div className="text-xl sm:text-2xl font-bold">
-                  {formatNm(stats.estimatedDistanceNm)}
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground">Dist. estimée</div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: "Aérodromes", icon: <Star className="h-4 w-4 text-primary" />, ...stats.byType.aerodromes },
+              { label: "Altiports", icon: <Star className="h-4 w-4 text-blue-500" />, ...stats.byType.altiport },
+              { label: "Bases ULM", icon: <Star className="h-4 w-4 text-orange-500" />, ...stats.byType.ulm },
+              { label: "Hélistations", icon: <Star className="h-4 w-4 text-purple-500" />, ...stats.byType.heli },
+            ].map(({ label, icon, visited, total }) => (
+              <Card key={label}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-sm font-medium">
+                      {icon}
+                      {label}
+                    </div>
+                    <span className="text-sm text-muted-foreground">{visited} / {total}</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-secondary">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, (visited / Math.max(1, total)) * 100)}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
-          <Card className="mb-6">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Progression de la collection</span>
-                <span className="text-sm text-muted-foreground">
-                  {stats.visitedCount} / {stats.totalAerodromes}
-                </span>
-              </div>
-              <div className="h-3 w-full rounded-full bg-secondary">
-                <div
-                  className="h-3 rounded-full bg-primary transition-all"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      (stats.visitedCount / Math.max(1, stats.totalAerodromes)) * 100,
-                    )}%`,
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center gap-4 mb-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Heart className="h-4 w-4 text-red-500" />
+              <span>{stats.favoriteCount} favoris</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4 text-green-500" />
+              <span>{formatNm(stats.estimatedDistanceNm)} estimés</span>
+            </div>
+          </div>
 
           <Card className="mb-6">
             <CardHeader>
@@ -320,28 +267,7 @@ export default function AerodexPage() {
         </>
       )}
 
-      <div className="space-y-6">
-        <VisitGroupSection
-          title="Mes visites"
-          icon={<Star className="h-5 w-5 text-yellow-500" />}
-          items={visited}
-          emptyMessages={{
-            aerodromes: "Aucune visite sur des aérodromes ou aéroports pour l'instant.",
-            ulm: "Aucune base ULM visitée pour l'instant.",
-            heli: "Aucune hélistation visitée pour l'instant.",
-          }}
-        />
-        <VisitGroupSection
-          title="Mes favoris"
-          icon={<Heart className="h-5 w-5 text-red-500" />}
-          items={favorites}
-          emptyMessages={{
-            aerodromes: "Aucun aérodrome ou aéroport en favori pour l'instant.",
-            ulm: "Aucune base ULM en favori pour l'instant.",
-            heli: "Aucune hélistation en favori pour l'instant.",
-          }}
-        />
-      </div>
+      <VisitSection items={visits.filter((v) => v.status === "VISITED" || v.status === "FAVORITE")} />
     </div>
   );
 }

@@ -157,11 +157,32 @@ pnpm import:openaip
 
 1. Fetches all airports for France from the openAIP API (paginated)
 2. Normalizes each airport: trims strings, uppercases ICAO, converts elevation to feet, maps surface/frequency types to our enums
-3. Upserts each airport using `source + sourceId` as the unique key
-4. Replaces runway and frequency data per airport (inside a transaction)
-5. Skips airports whose data hasn't changed (hash comparison)
+3. Excludes medical helipads (hospital/CHU/CHR keywords in name)
+4. Upserts each airport using `source + sourceId` as the unique key
+5. Replaces runway and frequency data per airport (inside a transaction)
+6. Skips airports whose data hasn't changed (hash comparison)
 
 The import is **idempotent** — running it multiple times is safe and won't create duplicates. Changed records are updated, unchanged records are skipped.
+
+### Automated sync (production)
+
+The sync runs automatically every night at **02:00** via `@nestjs/schedule` (built into the API process).
+
+As a fallback in case the API container restarts at that time, add a system crontab on the host:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line — triggers via the admin API endpoint
+0 2 * * * curl -s -X POST https://api.navventura.fr/api/v1/admin/sync/openaip \
+  -H "Authorization: Bearer $NAVVENTURA_ADMIN_TOKEN" \
+  >> /var/log/navventura-sync.log 2>&1
+```
+
+Where `NAVVENTURA_ADMIN_TOKEN` is a long-lived JWT for an ADMIN account. Store it in `/etc/environment` or a secrets manager, not in the crontab directly.
+
+You can also trigger a sync manually from the **Admin > Synchronisation openAIP** panel in the web interface, or via curl as above.
 
 ### What is imported
 
@@ -252,6 +273,17 @@ The import is **idempotent** — running it multiple times is safe and won't cre
 - `DELETE /api/v1/planner/profiles/:id` — Delete profile
 - `POST /api/v1/planner/calculate` — Calculate reachable aerodromes
 
+### Admin
+- `GET /api/v1/admin/stats` — Dashboard stats (ADMIN)
+- `GET /api/v1/admin/users` — List users (ADMIN)
+- `POST /api/v1/admin/users:userId/ban` — Ban user (ADMIN)
+- `POST /api/v1/admin/users:userId/unban` — Unban user (ADMIN)
+- `GET /api/v1/admin/comments` — List comments (ADMIN)
+- `POST /api/v1/admin/comments:commentId/delete` — Delete comment (ADMIN)
+- `POST /api/v1/admin/comments:commentId/restore` — Restore comment (ADMIN)
+- `GET /api/v1/admin/sync/status` — Sync running status (ADMIN)
+- `POST /api/v1/admin/sync/openaip` — Trigger openAIP sync (ADMIN)
+
 ### Health
 - `GET /api/v1/health` — Health check
 
@@ -263,8 +295,6 @@ The import is **idempotent** — running it multiple times is safe and won't cre
 - Airspace import (table exists, parser placeholder ready)
 - NOTAM / weather integration
 - Advanced collaborative editing
-- Photo uploads
-- Admin backoffice
 
 ## References
 

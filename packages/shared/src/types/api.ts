@@ -48,12 +48,23 @@ export interface PlannerResult {
   tripFuelLiters: number;  // total trip fuel  (accounts for outbound/round_trip)
 }
 
+export interface AerodexTypeStats {
+  visited: number;
+  total: number;
+}
+
 /** Aérodex stats */
 export interface AerodexStats {
   visitedCount: number;
   seenCount: number;
   favoriteCount: number;
   totalAerodromes: number;
+  byType: {
+    aerodromes: AerodexTypeStats;
+    altiport: AerodexTypeStats;
+    ulm: AerodexTypeStats;
+    heli: AerodexTypeStats;
+  };
   badges: Badge[];
   estimatedDistanceNm: number;
   estimatedTotalCost: number;

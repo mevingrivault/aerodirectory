@@ -6,7 +6,9 @@ import {
   DeleteObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import type { Readable } from "stream";
 import { randomUUID } from "crypto";
 
 @Injectable()
@@ -71,6 +73,18 @@ export class StorageService implements OnModuleInit {
 
     const url = this.publicUrl ? `${this.publicUrl}/${key}` : key;
     return { key, filename, url };
+  }
+
+  /** Get an object stream by its key */
+  async getObject(key: string): Promise<{ stream: Readable; contentType: string; contentLength?: number }> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    return {
+      stream: response.Body as Readable,
+      contentType: response.ContentType ?? "application/octet-stream",
+      contentLength: response.ContentLength,
+    };
   }
 
   /** Delete an object by its key */

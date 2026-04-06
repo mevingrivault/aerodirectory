@@ -5,19 +5,25 @@ import {
   Delete,
   Param,
   Req,
+  Res,
   BadRequestException,
   PayloadTooLargeException,
+  NotFoundException,
 } from "@nestjs/common";
-import { FastifyRequest } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { PhotoService } from "./photo.service";
-import { CurrentUser } from "../common/decorators";
+import { StorageService } from "./storage.service";
+import { CurrentUser, Public } from "../common/decorators";
 import { ok } from "../common/api-response";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @Controller("aerodromes/:aerodromeId/photos")
 export class PhotoController {
-  constructor(private readonly photos: PhotoService) {}
+  constructor(
+    private readonly photos: PhotoService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Post()
   async upload(
@@ -57,12 +63,30 @@ export class PhotoController {
     return ok(photo);
   }
 
+  @Public()
   @Get()
   async list(
     @Param("aerodromeId") aerodromeId: string,
   ) {
     const photos = await this.photos.listForAerodrome(aerodromeId);
     return ok(photos);
+  }
+
+  @Public()
+  @Get(":photoId/file")
+  async serve(
+    @Param("photoId") photoId: string,
+    @Res() res: FastifyReply,
+  ) {
+    const photo = await this.photos.findById(photoId);
+    if (!photo) throw new NotFoundException("Photo introuvable.");
+
+    const { stream, contentType, contentLength } = await this.storage.getObject(photo.storedKey);
+
+    res.header("Content-Type", contentType);
+    res.header("Cache-Control", "public, max-age=31536000, immutable");
+    if (contentLength) res.header("Content-Length", contentLength);
+    res.send(stream);
   }
 
   @Delete(":photoId")

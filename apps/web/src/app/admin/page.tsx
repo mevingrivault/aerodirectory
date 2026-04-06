@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, MessageSquare, Shield, Users } from "lucide-react";
+import { Ban, MessageSquare, RefreshCw, Shield, Users } from "lucide-react";
 import type { AdminDashboardStats } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
@@ -25,6 +26,22 @@ export default function AdminPage() {
     queryFn: () => apiClient.get<AdminDashboardStats>("/admin/stats"),
     enabled: user?.role === "ADMIN",
   });
+
+  const [syncState, setSyncState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncState("running");
+    setSyncMsg(null);
+    try {
+      await apiClient.post("/admin/sync/openaip", {});
+      setSyncState("done");
+      setSyncMsg("Sync lancé en arrière-plan. Consultez les logs API pour le résultat.");
+    } catch {
+      setSyncState("error");
+      setSyncMsg("Erreur lors du lancement du sync.");
+    }
+  };
 
   if (loading || !user || user.role !== "ADMIN") {
     return null;
@@ -105,18 +122,48 @@ export default function AdminPage() {
         </Link>
       </div>
 
-      <Card className="mt-8 border-destructive/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg text-destructive">
-            <Ban className="h-5 w-5" />
-            Actions sensibles
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Les bannissements et suppressions de commentaires sont journalises avec l&apos;identite
-          de l&apos;administrateur et la date de l&apos;action.
-        </CardContent>
-      </Card>
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Synchronisation openAIP
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Importe les aérodromes français depuis openAIP. Tourne automatiquement chaque nuit à 2h.
+            </p>
+            <Button
+              onClick={handleSync}
+              disabled={syncState === "running"}
+              variant="outline"
+              className="w-full"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncState === "running" ? "animate-spin" : ""}`} />
+              {syncState === "running" ? "Sync en cours…" : "Lancer le sync maintenant"}
+            </Button>
+            {syncMsg && (
+              <p className={`text-xs ${syncState === "error" ? "text-destructive" : "text-green-600"}`}>
+                {syncMsg}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+              <Ban className="h-5 w-5" />
+              Actions sensibles
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Les bannissements et suppressions de commentaires sont journalises avec l&apos;identite
+            de l&apos;administrateur et la date de l&apos;action.
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

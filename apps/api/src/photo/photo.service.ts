@@ -121,6 +121,13 @@ export class PhotoService {
     }
   }
 
+  async findById(photoId: string) {
+    return this.prisma.photo.findUnique({
+      where: { id: photoId, status: PhotoStatus.READY },
+      select: { id: true, storedKey: true, mimeType: true },
+    });
+  }
+
   async listForAerodrome(aerodromeId: string) {
     return this.prisma.photo.findMany({
       where: { aerodromeId, status: PhotoStatus.READY },

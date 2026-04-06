@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { ScheduleModule } from "@nestjs/schedule";
+import { SyncModule } from "./sync/sync.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AerodromeModule } from "./aerodrome/aerodrome.module";
@@ -20,6 +22,7 @@ import { PhotoModule } from "./photo/photo.module";
       isGlobal: true,
       envFilePath: [".env.local", ".env"],
     }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         name: "short",
@@ -49,6 +52,7 @@ import { PhotoModule } from "./photo/photo.module";
     RestaurantModule,
     AdminModule,
     PhotoModule,
+    SyncModule,
   ],
 })
 export class AppModule {}

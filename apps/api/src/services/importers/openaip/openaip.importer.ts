@@ -192,6 +192,8 @@ const MEDICAL_KEYWORDS = [
   "centre hospitalier",
   "chu ",
   "chr ",
+  "hosp ",
+  " hosp",
   "clinique",
   "médipôle",
   "medipole",

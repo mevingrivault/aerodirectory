@@ -80,7 +80,16 @@ const AIRPORT_TYPE_MAP: Record<number, AerodromeType> = {
   15: "SMALL_AIRPORT",       // Light aircraft only
   16: "SMALL_AIRPORT",       // Private
   17: "MILITARY",            // Military helipad
+  18: "ALTIPORT",            // Altiport (openAIP type 18 — confirmed in UI)
 };
+
+// Keywords that identify altiports by name (fallback when type code is unknown)
+const ALTIPORT_KEYWORDS = ["ALTIPORT", "ALTI PORT"];
+
+function isAltiportByName(name: string): boolean {
+  const upper = name.toUpperCase();
+  return ALTIPORT_KEYWORDS.some((kw) => upper.includes(kw));
+}
 
 const SURFACE_TYPE_MAP: Record<number, SurfaceType> = {
   0: "ASPHALT",
@@ -132,6 +141,8 @@ const FREQUENCY_TYPE_MAP: Record<number, FrequencyType> = {
 export function normalizeOpenAipAirport(
   raw: OpenAipAirport,
 ): NormalizedAerodrome {
+  const name = (raw.name || "").trim();
+
   const icao = raw.icaoCode?.trim().toUpperCase() || null;
   const validIcao = icao && /^[A-Z]{4}$/.test(icao) ? icao : null;
 
@@ -139,13 +150,15 @@ export function normalizeOpenAipAirport(
   const elevation = normalizeElevationToFeet(raw.elevation);
 
   const baseType: AerodromeType = AIRPORT_TYPE_MAP[raw.type] ?? "OTHER";
-  const aerodromeType =
-    baseType === "SMALL_AIRPORT" && isLargeAirport(raw.runways ?? [])
-      ? "INTERNATIONAL_AIRPORT"
-      : baseType;
+  const aerodromeType: AerodromeType =
+    isAltiportByName(name)
+      ? "ALTIPORT"
+      : baseType === "SMALL_AIRPORT" && isLargeAirport(raw.runways ?? [])
+        ? "INTERNATIONAL_AIRPORT"
+        : baseType;
 
   return {
-    name: (raw.name || "").trim(),
+    name,
     icaoCode: validIcao,
     altIdentifier: raw.altIdentifier?.trim() || null,
     latitude: lat,
