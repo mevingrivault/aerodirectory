@@ -211,12 +211,8 @@ export function PhotoUpload({
             <AltchaWidget
               ref={altchaRef}
               className="mt-2"
-              onStateChange={(state) => {
-                if (state === "verified") {
-                  setAltchaPayload(altchaRef.current?.getPayload() ?? null);
-                } else {
-                  setAltchaPayload(null);
-                }
+              onStateChange={(state, payload) => {
+                setAltchaPayload(state === "verified" ? (payload ?? null) : null);
               }}
             />
             <div className="flex gap-2">

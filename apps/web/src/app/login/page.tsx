@@ -35,7 +35,7 @@ export default function LoginPage() {
     setResendMessage("");
 
     const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
-    if (!altcha) {
+    if (!altcha || altcha.length === 0) {
       setError("Veuillez compléter la vérification anti-robot.");
       return;
     }
@@ -179,12 +179,8 @@ export default function LoginPage() {
               <AltchaWidget
                 ref={altchaRef}
                 className="mt-2"
-                onStateChange={(state) => {
-                  if (state === "verified") {
-                    setAltchaPayload(altchaRef.current?.getPayload() ?? null);
-                  } else {
-                    setAltchaPayload(null);
-                  }
+                onStateChange={(state, payload) => {
+                  setAltchaPayload(state === "verified" ? (payload ?? null) : null);
                 }}
               />
 

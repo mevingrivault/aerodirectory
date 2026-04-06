@@ -5,10 +5,12 @@
  *
  * Usage:
  *   const altchaRef = useRef<AltchaHandle>(null);
- *   // In submit handler:
- *   const payload = altchaRef.current?.getPayload();
- *   if (!payload) { setError("Captcha requis"); return; }
- *   // Pass as header: { "x-altcha": payload }
+ *   // Capture payload via onStateChange:
+ *   <AltchaWidget ref={altchaRef} onStateChange={(state, payload) => {
+ *     if (state === "verified") setAltchaPayload(payload ?? null);
+ *     else setAltchaPayload(null);
+ *   }} />
+ *   // In submit handler: pass altchaPayload as header { "x-altcha": altchaPayload }
  */
 
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
@@ -21,7 +23,8 @@ export interface AltchaHandle {
 }
 
 interface AltchaWidgetProps {
-  onStateChange?: (state: string) => void;
+  /** Called when the widget state changes. `payload` is set when state === "verified". */
+  onStateChange?: (state: string, payload?: string) => void;
   className?: string;
 }
 
@@ -45,7 +48,10 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
 
     useImperativeHandle(ref, () => ({
       getPayload() {
-        return widgetRef.current?.value ?? null;
+        const el = widgetRef.current;
+        if (!el) return null;
+        const v = el.value;
+        return v && v.length > 0 ? v : null;
       },
       reset() {
         widgetRef.current?.reset?.();
@@ -68,14 +74,15 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
       if (!el) return;
 
       const handler = (e: Event) => {
-        const detail = (e as CustomEvent<{ state: string }>).detail;
-        onStateChange?.(detail?.state ?? "");
+        const detail = (e as CustomEvent<{ state: string; payload?: string }>).detail;
+        const state = detail?.state ?? "";
+        // payload is included directly in the statechange event detail
+        onStateChange?.(state, detail?.payload);
       };
       el.addEventListener("statechange", handler);
       return () => el.removeEventListener("statechange", handler);
     }, [onStateChange]);
 
-    // Use createElement to avoid JSX type issues with custom elements
     return React.createElement("altcha-widget", {
       ref: widgetRef,
       challengeurl: CHALLENGE_URL,
