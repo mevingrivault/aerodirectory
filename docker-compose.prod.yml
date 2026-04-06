@@ -78,11 +78,13 @@ services:
   clamav-updater:
     image: clamav/clamav:stable
     restart: unless-stopped
+    user: "0:0"
     entrypoint: /bin/sh
     command:
       - -c
       - |
         mkdir -p /var/lib/clamav
+        chown -R 100:101 /var/lib/clamav
         exec freshclam --foreground=true --checks=${CLAMAV_FRESHCLAM_CHECKS:-12}
     volumes:
       - clamav_db:/var/lib/clamav
@@ -130,14 +132,14 @@ services:
       CLAMSCAN_PATH: ${CLAMSCAN_PATH:-/usr/bin/clamscan}
       CLAMSCAN_DATABASE_PATH: ${CLAMSCAN_DATABASE_PATH:-/var/lib/clamav}
       CLAMSCAN_TIMEOUT_MS: ${CLAMSCAN_TIMEOUT_MS:-20000}
-      CLAMSCAN_AUTO_UPDATE: ${CLAMSCAN_AUTO_UPDATE:-true}
+      CLAMSCAN_AUTO_UPDATE: ${CLAMSCAN_AUTO_UPDATE:-false}
       OPENAIP_API_KEY: ${OPENAIP_API_KEY}
       CHECKWX_API_KEY: ${CHECKWX_API_KEY}
       ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
       ALTCHA_ENABLED: ${ALTCHA_ENABLED:-true}
       ALTCHA_MAX_NUMBER: ${ALTCHA_MAX_NUMBER:-100000}
     volumes:
-      - clamav_db:/var/lib/clamav
+      - clamav_db:/var/lib/clamav:ro
     networks:
       - internal
       - proxy

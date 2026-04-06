@@ -12,5 +12,4 @@ if [ "${CLAMSCAN_ENABLED:-true}" = "true" ] && command -v clamscan >/dev/null 2>
   chown -R apiuser:nodejs /var/lib/clamav || true
 fi
 
-exec su-exec apiuser node apps/api/dist/main
-
+exec su-exec apiuser node dist/main
