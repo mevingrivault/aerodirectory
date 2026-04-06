@@ -42,7 +42,7 @@ export class AuthService {
     const window =
       Number.isInteger(configuredWindow) && configuredWindow >= 0
         ? configuredWindow
-        : 1;
+        : 2;
 
     return authenticator.create({ window }).check(code, secret);
   }
