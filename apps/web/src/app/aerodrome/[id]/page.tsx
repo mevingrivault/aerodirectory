@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
+import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
 
@@ -297,6 +298,7 @@ export default function AerodromeDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const solveAltcha = useAltchaAuto();
   const [commentText, setCommentText] = useState("");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
@@ -418,9 +420,18 @@ export default function AerodromeDetailPage() {
   // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
   useEffect(() => {
     if (user && currentVisitStatus === null) {
-      apiClient.put(`/visits/${id}`, { status: "SEEN" }).then(() => refetchVisit()).catch(() => {});
+      apiClient
+        .put(`/visits/${id}`, { status: "SEEN" })
+        .then(async () => {
+          await Promise.all([
+            refetchVisit(),
+            queryClient.invalidateQueries({ queryKey: ["visits"] }),
+            queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
+          ]);
+        })
+        .catch(() => {});
     }
-  }, [user, id, currentVisitStatus]);
+  }, [user, id, currentVisitStatus, refetchVisit, queryClient]);
 
   useEffect(() => {
     if (photosRes?.data) setPhotos(photosRes.data);
@@ -436,7 +447,11 @@ export default function AerodromeDetailPage() {
     if (status === "FAVORITE" && currentVisitStatus === "FAVORITE") nextStatus = "VISITED";
     else if (status === "VISITED" && currentVisitStatus === "VISITED") nextStatus = "SEEN";
     await apiClient.put(`/visits/${id}`, { status: nextStatus });
-    refetchVisit();
+    await Promise.all([
+      refetchVisit(),
+      queryClient.invalidateQueries({ queryKey: ["visits"] }),
+      queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
+    ]);
   };
 
   const handleComment = async (e: React.FormEvent) => {
@@ -748,6 +763,15 @@ export default function AerodromeDetailPage() {
       <div className="mb-6 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
         {DISCLAIMER}
       </div>
+
+      <AerodromeLocationMap
+        aerodromeId={ad.id}
+        name={ad.name}
+        icaoCode={ad.icaoCode}
+        latitude={ad.latitude}
+        longitude={ad.longitude}
+        elevation={ad.elevation}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Runways */}

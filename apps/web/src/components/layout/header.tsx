@@ -29,7 +29,7 @@ const navLinks = (isAuthenticated: boolean) => [
 ];
 
 export function Header() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -70,7 +70,9 @@ export function Header() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {user ? (
+          {loading ? (
+            <div className="h-9 w-40 rounded-md bg-muted/40" aria-hidden="true" />
+          ) : user ? (
             <>
               <Link
                 href="/membre"
@@ -127,7 +129,7 @@ export function Header() {
             ))}
 
             <div className="mt-2 pt-2 border-t">
-              {user ? (
+              {loading ? null : user ? (
                 <>
                   <Link
                     href="/membre"

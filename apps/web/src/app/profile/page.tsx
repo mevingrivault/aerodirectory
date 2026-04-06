@@ -37,7 +37,7 @@ function Alert({ type, msg }: { type: AlertType; msg: string }) {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, refreshProfile, logout } = useAuth();
+  const { user, loading, refreshProfile, logout } = useAuth();
 
   // TOTP state
   const [totpSetup, setTotpSetup] = useState<TotpSetupResponse | null>(null);
@@ -82,6 +82,14 @@ export default function ProfilePage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-8">
+        <div className="h-10 w-40 rounded-md bg-muted/40" aria-hidden="true" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -524,4 +532,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { apiClient } from "./api-client";
+import { ApiError, apiClient } from "./api-client";
 import type { UserProfile } from "@aerodirectory/shared";
 
 interface AuthContextType {
@@ -32,11 +32,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (allowRefresh = true) => {
     try {
       const res = await apiClient.get<UserProfile>("/auth/profile");
       setUser(res.data ?? null);
-    } catch {
+    } catch (error) {
+      if (
+        allowRefresh &&
+        error instanceof ApiError &&
+        error.status === 401
+      ) {
+        try {
+          await apiClient.post("/auth/refresh");
+          await fetchProfile(false);
+          return;
+        } catch {
+          // fall through to clear user state
+        }
+      }
+
       setUser(null);
     }
   }, []);

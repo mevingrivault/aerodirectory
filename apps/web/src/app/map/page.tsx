@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
@@ -60,11 +61,13 @@ const FUEL_OPTIONS = [
 
 export default function MapPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [mapLoaded, setMapLoaded] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -83,10 +86,22 @@ export default function MapPage() {
       apiClient.get<AerodromeMarker[]>("/aerodromes/map", query ? { q: query } : undefined),
   });
 
+  const { data: visitsRes } = useQuery({
+    queryKey: ["visits"],
+    queryFn: () => apiClient.get<{ aerodromeId: string; status: string }[]>("/visits"),
+    enabled: !!user,
+  });
+
   const aerodromes = data?.data ?? [];
+  const visits = visitsRes?.data ?? [];
+  const highlightedAerodromeId = searchParams.get("highlight");
+  const visitsByAerodrome = new Map(
+    visits.map((visit) => [visit.aerodromeId, visit.status]),
+  );
 
   // Apply all filters client-side
   const filtered = aerodromes.filter((ad) => {
+    if (ad.id === highlightedAerodromeId) return true;
     if (hiddenTypes.has(ad.aerodromeType)) return false;
     if (minRunway > 0) {
       const maxLen = ad.runways.length > 0 ? Math.max(...ad.runways.map((r) => r.length)) : 0;
@@ -100,6 +115,16 @@ export default function MapPage() {
     }
     return true;
   });
+
+  const highlightedAerodrome = useMemo(
+    () => aerodromes.find((ad) => ad.id === highlightedAerodromeId) ?? null,
+    [aerodromes, highlightedAerodromeId],
+  );
+
+  useEffect(() => {
+    const urlQuery = searchParams.get("q") ?? "";
+    setQuery((current) => (current === urlQuery ? current : urlQuery));
+  }, [searchParams]);
 
   const activeFilterCount =
     (minRunway > 0 ? 1 : 0) +
@@ -167,6 +192,8 @@ export default function MapPage() {
     const map = mapRef.current;
 
     if (map.getSource("aerodromes")) {
+      if (map.getLayer("aerodrome-highlight")) map.removeLayer("aerodrome-highlight");
+      if (map.getLayer("aerodrome-visited-halo")) map.removeLayer("aerodrome-visited-halo");
       if (map.getLayer("aerodrome-points")) map.removeLayer("aerodrome-points");
       map.removeSource("aerodromes");
     }
@@ -182,6 +209,7 @@ export default function MapPage() {
           icaoCode: ad.icaoCode || "",
           status: ad.status,
           aerodromeType: ad.aerodromeType || "OTHER",
+          visitStatus: visitsByAerodrome.get(ad.id) ?? "",
           elevation: ad.elevation ?? "",
           runways: ad.runways?.map((r) => `${r.identifier} (${r.length}m)`).join(", ") ?? "",
         },
@@ -189,6 +217,51 @@ export default function MapPage() {
     };
 
     map.addSource("aerodromes", { type: "geojson", data: geojson });
+
+    map.addLayer({
+      id: "aerodrome-highlight",
+      type: "circle",
+      source: "aerodromes",
+      filter: highlightedAerodromeId
+        ? ["==", ["get", "id"], highlightedAerodromeId]
+        : ["==", ["get", "id"], ""],
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 10, 8, 15, 12, 22],
+        "circle-color": "#2563eb",
+        "circle-opacity": 0.14,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#2563eb",
+      },
+    });
+
+    map.addLayer({
+      id: "aerodrome-visited-halo",
+      type: "circle",
+      source: "aerodromes",
+      paint: {
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          5,
+          0,
+          8,
+          ["case", ["!=", ["get", "visitStatus"], ""], 9, 0],
+          12,
+          ["case", ["!=", ["get", "visitStatus"], ""], 14, 0],
+        ],
+        "circle-color": [
+          "match",
+          ["get", "visitStatus"],
+          "FAVORITE", "#f59e0b",
+          "VISITED", "#2563eb",
+          "SEEN", "#94a3b8",
+          "rgba(0,0,0,0)",
+        ],
+        "circle-opacity": 0.22,
+        "circle-stroke-width": 0,
+      },
+    });
 
     map.addLayer({
       id: "aerodrome-points",
@@ -208,8 +281,20 @@ export default function MapPage() {
           "SEAPLANE_BASE", TYPE_COLORS.SEAPLANE_BASE,
           TYPE_COLORS.OTHER,
         ],
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": [
+          "case",
+          ["==", ["get", "visitStatus"], "FAVORITE"], 3,
+          ["!=", ["get", "visitStatus"], ""], 2.5,
+          2,
+        ],
+        "circle-stroke-color": [
+          "match",
+          ["get", "visitStatus"],
+          "FAVORITE", "#f59e0b",
+          "VISITED", "#2563eb",
+          "SEEN", "#94a3b8",
+          "#ffffff",
+        ],
       },
     });
 
@@ -242,7 +327,29 @@ export default function MapPage() {
       map.getCanvas().style.cursor = "";
       popupRef.current?.remove();
     });
-  }, [filtered, mapLoaded, navigateToDetail]);
+
+    if (highlightedAerodrome) {
+      const coords: [number, number] = [
+        highlightedAerodrome.longitude,
+        highlightedAerodrome.latitude,
+      ];
+      map.flyTo({
+        center: coords,
+        zoom: Math.max(map.getZoom(), 11),
+        essential: true,
+      });
+
+      popupRef.current
+        ?.setLngLat(coords)
+        .setHTML(
+          `<div style="font-weight:600">${highlightedAerodrome.name}${
+            highlightedAerodrome.icaoCode ? ` (${highlightedAerodrome.icaoCode})` : ""
+          }</div>` +
+            `<div style="font-size:12px;color:#666">Terrain mis en évidence</div>`,
+        )
+        .addTo(map);
+    }
+  }, [filtered, highlightedAerodrome, highlightedAerodromeId, mapLoaded, navigateToDetail, visitsByAerodrome]);
 
   const toggleFuel = (fuel: string) =>
     setRequiredFuels((prev) => {
@@ -361,6 +468,13 @@ export default function MapPage() {
         <div className="mt-1 rounded-md bg-background/95 backdrop-blur shadow-md p-2 text-xs text-muted-foreground">
           {filtered.length} aérodrome{filtered.length !== 1 ? "s" : ""} affiché{filtered.length !== 1 ? "s" : ""}
         </div>
+        {highlightedAerodrome && (
+          <div className="mt-2 rounded-md border border-primary/25 bg-background/95 p-2 text-xs text-foreground shadow-md backdrop-blur">
+            <span className="font-medium">Mise en évidence :</span>{" "}
+            {highlightedAerodrome.name}
+            {highlightedAerodrome.icaoCode ? ` (${highlightedAerodrome.icaoCode})` : ""}
+          </div>
+        )}
       </div>
 
       {/* Legend */}
@@ -390,6 +504,33 @@ export default function MapPage() {
             </div>
           );
         })}
+        {user && (
+          <>
+            <div className="my-2 border-t border-border/70" />
+            <div className="font-semibold mb-1.5">Mes repères</div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border-2 shrink-0"
+                style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#94a3b8" }}
+              />
+              <span>Vu</span>
+            </div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border-2 shrink-0"
+                style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#2563eb" }}
+              />
+              <span>Visité</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border-[3px] shrink-0"
+                style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#f59e0b" }}
+              />
+              <span>Favori</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Map container */}

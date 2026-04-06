@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback } from "react";
+
 /**
  * Resolves an ALTCHA challenge automatically in a Web Worker — invisible to the user.
  * Use this for actions where showing the widget would break the UX (e.g. comment form).
@@ -41,7 +43,7 @@ function buildPayload(challenge: AltchaChallenge, number: number): string {
 }
 
 export function useAltchaAuto() {
-  return async function solveAltcha(): Promise<string | null> {
+  return useCallback(async function solveAltcha(): Promise<string | null> {
     try {
       const res = await fetch(CHALLENGE_URL);
       if (!res.ok) return null;
@@ -85,5 +87,5 @@ export function useAltchaAuto() {
     } catch {
       return null;
     }
-  };
+  }, []);
 }
