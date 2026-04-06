@@ -14,10 +14,15 @@ import type { UserProfile } from "@aerodirectory/shared";
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
-  login: (email: string, password: string, altcha?: string) => Promise<{ requireTotp: boolean }>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe: boolean,
+    altcha?: string,
+  ) => Promise<{ requireTotp: boolean }>;
   register: (email: string, password: string, displayName: string, altcha?: string) => Promise<string>;
   logout: () => Promise<void>;
-  verifyTotp: (code: string) => Promise<void>;
+  verifyTotp: (code: string, rememberMe: boolean) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -44,11 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     email: string,
     password: string,
+    rememberMe: boolean,
     altcha?: string,
   ): Promise<{ requireTotp: boolean }> => {
     const res = await apiClient.post<{ requireTotp: boolean }>(
       "/auth/login",
-      { email, password },
+      { email, password, rememberMe },
       altcha ? { "x-altcha": altcha } : undefined,
     );
 
@@ -73,8 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.message;
   };
 
-  const verifyTotp = async (code: string) => {
-    await apiClient.post("/auth/login/totp", { code });
+  const verifyTotp = async (code: string, rememberMe: boolean) => {
+    await apiClient.post("/auth/login/totp", { code, rememberMe });
     await fetchProfile();
   };
 

@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,7 +44,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await login(email, password, altcha);
+      const result = await login(email, password, rememberMe, altcha);
       if (result.requireTotp) {
         setNeedsTotp(true);
       } else {
@@ -65,7 +66,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await verifyTotp(totpCode);
+      await verifyTotp(totpCode, rememberMe);
       router.push("/");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Code TOTP invalide");
@@ -138,6 +139,22 @@ export default function LoginPage() {
                   required
                 />
               </div>
+              <label className="flex items-start gap-3 rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-foreground">
+                    Rester connecté sur cet appareil
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Optionnelle. À éviter sur un appareil partagé.
+                  </span>
+                </span>
+              </label>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Vérification..." : "Vérifier"}
               </Button>
@@ -176,6 +193,23 @@ export default function LoginPage() {
                   required
                 />
               </div>
+              <label className="flex items-start gap-3 rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-foreground">
+                    Rester connecté sur cet appareil
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Session classique par défaut. Si vous activez cette option, Navventura gardera
+                    votre connexion sur cet appareil pendant 7 jours.
+                  </span>
+                </span>
+              </label>
               <AltchaWidget
                 ref={altchaRef}
                 onStateChange={(state, payload) => {

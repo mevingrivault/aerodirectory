@@ -19,8 +19,6 @@ export class CommentService {
     private readonly audit: AuditService,
   ) {}
 
-  // ─── Comments ────────────────────────────────────────
-
   async createComment(
     userId: string,
     aerodromeId: string,
@@ -125,14 +123,19 @@ export class CommentService {
   async deleteComment(userId: string, commentId: string, role: string) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
+      select: {
+        id: true,
+        userId: true,
+        replies: {
+          select: { id: true },
+        },
+      },
     });
 
-    if (!comment) throw new NotFoundException("Commentaire introuvable.");
-    if (comment.deletedAt) {
-      throw new BadRequestException("Commentaire déjà supprimé.");
+    if (!comment) {
+      throw new NotFoundException("Commentaire introuvable.");
     }
 
-    // Only author, moderators, or admins can delete
     if (
       comment.userId !== userId &&
       role !== "ADMIN" &&
@@ -141,13 +144,19 @@ export class CommentService {
       throw new ForbiddenException("Vous ne pouvez pas supprimer ce commentaire.");
     }
 
-    await this.prisma.comment.update({
-      where: { id: commentId },
-      data: {
-        deletedAt: new Date(),
-        deletedById: userId,
-      },
-    });
+    const targetCommentIds = [comment.id, ...comment.replies.map((reply) => reply.id)];
+
+    await this.prisma.$transaction([
+      this.prisma.report.deleteMany({
+        where: {
+          targetType: "comment",
+          targetId: { in: targetCommentIds },
+        },
+      }),
+      this.prisma.comment.delete({
+        where: { id: commentId },
+      }),
+    ]);
 
     await this.audit.log({
       userId,
@@ -155,8 +164,6 @@ export class CommentService {
       metadata: { commentId },
     });
   }
-
-  // ─── Corrections ─────────────────────────────────────
 
   async proposeCorrection(
     userId: string,
@@ -183,8 +190,6 @@ export class CommentService {
 
     return correction;
   }
-
-  // ─── Reports ──────────────────────────────────────────
 
   async createReport(
     userId: string,

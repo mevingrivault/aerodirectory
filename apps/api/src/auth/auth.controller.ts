@@ -43,25 +43,39 @@ import {
   type ResetPasswordInput,
 } from "@aerodirectory/shared";
 
-const COOKIE_OPTS = (maxAgeSeconds: number) => ({
+const COOKIE_BASE_OPTS = {
   httpOnly: true,
   secure: process.env["NODE_ENV"] === "production",
   sameSite: "strict" as const,
   path: "/",
-  maxAge: maxAgeSeconds,
-});
+};
+
+const COOKIE_OPTS = (persistent: boolean, maxAgeSeconds: number) =>
+  persistent ? { ...COOKIE_BASE_OPTS, maxAge: maxAgeSeconds } : COOKIE_BASE_OPTS;
 
 const ACCESS_TTL = 15 * 60;        // 15 minutes
 const REFRESH_TTL = 7 * 24 * 3600; // 7 jours
+const REMEMBER_COOKIE = "remember_session";
 
-function setAuthCookies(res: FastifyReply, tokens: { accessToken: string; refreshToken: string }) {
-  void res.setCookie("access_token", tokens.accessToken, COOKIE_OPTS(ACCESS_TTL));
-  void res.setCookie("refresh_token", tokens.refreshToken, COOKIE_OPTS(REFRESH_TTL));
+function setAuthCookies(
+  res: FastifyReply,
+  tokens: { accessToken: string; refreshToken: string },
+  rememberMe: boolean,
+) {
+  void res.setCookie("access_token", tokens.accessToken, COOKIE_OPTS(rememberMe, ACCESS_TTL));
+  void res.setCookie("refresh_token", tokens.refreshToken, COOKIE_OPTS(rememberMe, REFRESH_TTL));
+
+  if (rememberMe) {
+    void res.setCookie(REMEMBER_COOKIE, "1", COOKIE_OPTS(true, REFRESH_TTL));
+  } else {
+    void res.setCookie(REMEMBER_COOKIE, "", { ...COOKIE_BASE_OPTS, maxAge: 0 });
+  }
 }
 
 function clearAuthCookies(res: FastifyReply) {
-  void res.setCookie("access_token", "", { ...COOKIE_OPTS(0), maxAge: 0 });
-  void res.setCookie("refresh_token", "", { ...COOKIE_OPTS(0), maxAge: 0 });
+  void res.setCookie("access_token", "", { ...COOKIE_BASE_OPTS, maxAge: 0 });
+  void res.setCookie("refresh_token", "", { ...COOKIE_BASE_OPTS, maxAge: 0 });
+  void res.setCookie(REMEMBER_COOKIE, "", { ...COOKIE_BASE_OPTS, maxAge: 0 });
 }
 
 @Controller("auth")
@@ -106,7 +120,7 @@ export class AuthController {
   ) {
     const result = await this.auth.login(body, req.ip, req.headers["user-agent"]);
     if (!result.requireTotp) {
-      setAuthCookies(res, result);
+      setAuthCookies(res, result, body.rememberMe ?? false);
     }
     return ok({ requireTotp: result.requireTotp });
   }
@@ -127,7 +141,7 @@ export class AuthController {
       req.ip,
       req.headers["user-agent"],
     );
-    setAuthCookies(res, tokens);
+    setAuthCookies(res, tokens, body.rememberMe ?? false);
     return ok({ success: true });
   }
 
@@ -138,7 +152,7 @@ export class AuthController {
     const refreshToken = req.cookies?.["refresh_token"] ?? (req.body as { refreshToken?: string })?.refreshToken;
     if (!refreshToken) throw new UnauthorizedException("No refresh token");
     const tokens = await this.auth.refreshTokens(refreshToken);
-    setAuthCookies(res, tokens);
+    setAuthCookies(res, tokens, req.cookies?.[REMEMBER_COOKIE] === "1");
     return ok({ refreshed: true });
   }
 

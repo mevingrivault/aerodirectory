@@ -480,8 +480,9 @@ export default function ProfilePage() {
                 a.download = `navventura-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-              } catch {
-                alert("Impossible d'exporter vos données. Veuillez réessayer.");
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "Erreur inconnue";
+                alert(`Impossible d'exporter vos données : ${msg}`);
               }
             }}
           >

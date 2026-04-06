@@ -10,7 +10,7 @@ export const AdminUsersQuerySchema = PaginationSchema.extend({
 
 export const AdminCommentsQuerySchema = PaginationSchema.extend({
   search: z.string().trim().max(255).optional(),
-  state: z.enum(["active", "reported", "deleted", "all"]).optional(),
+  state: z.enum(["active", "reported", "all"]).optional(),
 });
 
 export const AdminPhotosQuerySchema = PaginationSchema.extend({

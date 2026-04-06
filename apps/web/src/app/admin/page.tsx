@@ -64,7 +64,7 @@ export default function AdminPage() {
       </div>
 
       {stats && (
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardContent className="p-5">
               <div className="mb-2 text-sm text-muted-foreground">Utilisateurs</div>
@@ -81,12 +81,6 @@ export default function AdminPage() {
             <CardContent className="p-5">
               <div className="mb-2 text-sm text-muted-foreground">Commentaires actifs</div>
               <div className="text-3xl font-bold">{stats.activeComments}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Commentaires supprimes</div>
-              <div className="text-3xl font-bold">{stats.deletedComments}</div>
             </CardContent>
           </Card>
           <Card>

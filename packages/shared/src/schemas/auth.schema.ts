@@ -26,6 +26,7 @@ export const RegisterSchema = z.object({
 export const LoginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1).max(128),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 export const TotpVerifySchema = z.object({
@@ -33,6 +34,7 @@ export const TotpVerifySchema = z.object({
     .string()
     .length(6)
     .regex(/^\d{6}$/, "TOTP code must be 6 digits"),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 export const ForgotPasswordSchema = z.object({

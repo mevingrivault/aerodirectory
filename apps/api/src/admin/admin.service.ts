@@ -29,7 +29,7 @@ export class AdminService {
   ) {}
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
-    const [totalUsers, bannedUsers, activeComments, deletedComments, pendingPhotos] =
+    const [totalUsers, bannedUsers, activeComments, pendingPhotos] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: "BANNED" } }),
@@ -39,7 +39,6 @@ export class AdminService {
             contentStatus: { not: "FLAGGED" },
           },
         }),
-        this.prisma.comment.count({ where: { deletedAt: { not: null } } }),
         this.prisma.photo.count({ where: { status: "PENDING" } }),
       ]);
 
@@ -47,7 +46,7 @@ export class AdminService {
       totalUsers,
       bannedUsers,
       activeComments,
-      deletedComments,
+      deletedComments: 0,
       pendingPhotos,
     };
   }
@@ -225,12 +224,11 @@ export class AdminService {
     const state = query.state ?? "active";
 
     const where = {
+      deletedAt: null,
       ...(state === "active"
-        ? { deletedAt: null, contentStatus: { not: "FLAGGED" as const } }
+        ? { contentStatus: { not: "FLAGGED" as const } }
         : state === "reported"
-          ? { deletedAt: null, contentStatus: "FLAGGED" as const }
-        : state === "deleted"
-          ? { deletedAt: { not: null as Date | null } }
+          ? { contentStatus: "FLAGGED" as const }
           : {}),
       ...(search
         ? {
@@ -272,9 +270,6 @@ export class AdminService {
         where,
         include: {
           user: {
-            select: { id: true, displayName: true, email: true },
-          },
-          deletedBy: {
             select: { id: true, displayName: true, email: true },
           },
           aerodrome: {
@@ -341,38 +336,31 @@ export class AdminService {
   ): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, deletedAt: true },
+      select: {
+        id: true,
+        replies: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!comment) {
       throw new NotFoundException("Commentaire introuvable");
     }
 
-    if (comment.deletedAt) {
-      throw new BadRequestException("Ce commentaire est déjà supprimé.");
-    }
+    const targetCommentIds = [comment.id, ...comment.replies.map((reply) => reply.id)];
 
-    await this.prisma.comment.update({
-      where: { id: commentId },
-      data: {
-        deletedAt: new Date(),
-        deletedReason: input.reason?.trim() || null,
-        deletedById: adminId,
-      },
-    });
-
-    await this.prisma.report.updateMany({
-      where: {
-        targetType: "comment",
-        targetId: commentId,
-        contentStatus: "PENDING",
-      },
-      data: {
-        contentStatus: "APPROVED",
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.report.deleteMany({
+        where: {
+          targetType: "comment",
+          targetId: { in: targetCommentIds },
+        },
+      }),
+      this.prisma.comment.delete({
+        where: { id: commentId },
+      }),
+    ]);
 
     await this.audit.log({
       userId: adminId,
@@ -504,9 +492,7 @@ export class AdminService {
             select: { id: true, displayName: true, email: true },
           },
         },
-        orderBy: [
-          { createdAt: "desc" },
-        ],
+        orderBy: [{ createdAt: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -644,28 +630,27 @@ export class AdminService {
     };
   }
 
-  private toAdminCommentListItem(comment: {
-    id: string;
-    content: string;
-    contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
-    createdAt: Date;
-    deletedAt: Date | null;
-    deletedReason: string | null;
-    aerodrome: { id: string; name: string; icaoCode: string | null };
-    user: { id: string; displayName: string | null; email: string };
-    deletedBy?: { id: string; displayName: string | null; email: string } | null;
-  },
-  pendingReports: { count: number; reasons: string[] }): AdminCommentListItem {
+  private toAdminCommentListItem(
+    comment: {
+      id: string;
+      content: string;
+      contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+      createdAt: Date;
+      aerodrome: { id: string; name: string; icaoCode: string | null };
+      user: { id: string; displayName: string | null; email: string };
+    },
+    pendingReports: { count: number; reasons: string[] },
+  ): AdminCommentListItem {
     return {
       id: comment.id,
       content: comment.content,
       contentStatus: comment.contentStatus,
       createdAt: comment.createdAt.toISOString(),
-      deletedAt: comment.deletedAt?.toISOString() ?? null,
-      deletedReason: comment.deletedReason,
+      deletedAt: null,
+      deletedReason: null,
       aerodrome: comment.aerodrome,
       user: comment.user,
-      deletedBy: comment.deletedBy ?? null,
+      deletedBy: null,
       pendingReports,
     };
   }

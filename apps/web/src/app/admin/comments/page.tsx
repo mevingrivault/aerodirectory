@@ -17,7 +17,7 @@ export default function AdminCommentsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [state, setState] = useState<"active" | "reported" | "deleted" | "all">("active");
+  const [state, setState] = useState<"active" | "reported" | "all">("active");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -132,13 +132,12 @@ export default function AdminCommentsPage() {
         <select
           value={state}
           onChange={(event) =>
-            setState(event.target.value as "active" | "reported" | "deleted" | "all")
+            setState(event.target.value as "active" | "reported" | "all")
           }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="active">Commentaires actifs</option>
           <option value="reported">Commentaires signales</option>
-          <option value="deleted">Commentaires supprimes</option>
           <option value="all">Tous les commentaires</option>
         </select>
       </div>
@@ -161,18 +160,12 @@ export default function AdminCommentsPage() {
                 <div className="flex flex-wrap gap-2">
                   <Badge
                     variant={
-                      comment.deletedAt
-                        ? "destructive"
-                        : comment.contentStatus === "FLAGGED"
+                      comment.contentStatus === "FLAGGED"
                           ? "warning"
                           : "success"
                     }
                   >
-                    {comment.deletedAt
-                      ? "Supprime"
-                      : comment.contentStatus === "FLAGGED"
-                        ? "Signale"
-                        : "Actif"}
+                    {comment.contentStatus === "FLAGGED" ? "Signale" : "Actif"}
                   </Badge>
                   <Badge variant="outline">
                     {comment.aerodrome.icaoCode
@@ -192,41 +185,30 @@ export default function AdminCommentsPage() {
                 {comment.pendingReports.reasons.map((reason, index) => (
                   <div key={`${comment.id}-report-${index}`}>Signalement : {reason}</div>
                 ))}
-                {comment.deletedAt && (
-                  <div>
-                    Supprime le {new Date(comment.deletedAt).toLocaleString("fr-FR")}
-                    {comment.deletedBy
-                      ? ` par ${comment.deletedBy.displayName || comment.deletedBy.email}`
-                      : ""}
-                  </div>
-                )}
-                {comment.deletedReason && <div>Raison : {comment.deletedReason}</div>}
               </div>
 
-              {!comment.deletedAt && (
-                <div className="mt-3">
-                  <div className="flex flex-wrap gap-2">
-                    {comment.contentStatus === "FLAGGED" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleRestore(comment)}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Reafficher
-                      </Button>
-                    )}
+              <div className="mt-3">
+                <div className="flex flex-wrap gap-2">
+                  {comment.contentStatus === "FLAGGED" && (
                     <Button
                       type="button"
-                      variant="destructive"
-                      onClick={() => handleDelete(comment)}
+                      variant="outline"
+                      onClick={() => handleRestore(comment)}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Supprimer
+                      <Eye className="mr-2 h-4 w-4" />
+                      Reafficher
                     </Button>
-                  </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => handleDelete(comment)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer
+                  </Button>
                 </div>
-              )}
+              </div>
             </div>
           ))}
 
