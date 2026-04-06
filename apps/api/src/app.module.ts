@@ -1,8 +1,10 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { APP_GUARD } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { SyncModule } from "./sync/sync.module";
+import { AltchaModule } from "./altcha/altcha.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AerodromeModule } from "./aerodrome/aerodrome.module";
@@ -15,6 +17,7 @@ import { HealthModule } from "./health/health.module";
 import { RestaurantModule } from "./restaurant/restaurant.module";
 import { AdminModule } from "./admin/admin.module";
 import { PhotoModule } from "./photo/photo.module";
+import { ThrottlerGuard } from "@nestjs/throttler";
 
 @Module({
   imports: [
@@ -40,6 +43,7 @@ import { PhotoModule } from "./photo/photo.module";
         limit: 200,
       },
     ]),
+    AltchaModule,
     PrismaModule,
     AuthModule,
     AerodromeModule,
@@ -53,6 +57,10 @@ import { PhotoModule } from "./photo/photo.module";
     AdminModule,
     PhotoModule,
     SyncModule,
+  ],
+  providers: [
+    // Activate rate limiting globally
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

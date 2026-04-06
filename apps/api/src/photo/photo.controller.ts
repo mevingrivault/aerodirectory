@@ -9,12 +9,15 @@ import {
   BadRequestException,
   PayloadTooLargeException,
   NotFoundException,
+  UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { FastifyRequest, FastifyReply } from "fastify";
 import { PhotoService } from "./photo.service";
 import { StorageService } from "./storage.service";
 import { CurrentUser, Public } from "../common/decorators";
 import { ok } from "../common/api-response";
+import { AltchaGuard } from "../altcha/altcha.guard";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -25,6 +28,8 @@ export class PhotoController {
     private readonly storage: StorageService,
   ) {}
 
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
   @Post()
   async upload(
     @Param("aerodromeId") aerodromeId: string,

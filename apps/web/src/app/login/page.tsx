@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Plane } from "lucide-react";
+import { AltchaWidget, type AltchaHandle } from "@/components/ui/altcha-widget";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, verifyTotp } = useAuth();
+  const altchaRef = useRef<AltchaHandle>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -30,10 +32,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setResendMessage("");
+
+    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    if (!altcha) {
+      setError("Veuillez compléter la vérification anti-robot.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, altcha);
       if (result.requireTotp) {
         setNeedsTotp(true);
       } else {
@@ -41,6 +50,7 @@ export default function LoginPage() {
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Échec de la connexion");
+      altchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -164,6 +174,8 @@ export default function LoginPage() {
                   required
                 />
               </div>
+              <AltchaWidget ref={altchaRef} />
+
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Connexion..." : "Se connecter"}
               </Button>

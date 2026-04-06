@@ -14,8 +14,8 @@ import type { UserProfile, AuthTokens } from "@aerodirectory/shared";
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ requireTotp: boolean }>;
-  register: (email: string, password: string, displayName: string) => Promise<string>;
+  login: (email: string, password: string, altcha?: string) => Promise<{ requireTotp: boolean }>;
+  register: (email: string, password: string, displayName: string, altcha?: string) => Promise<string>;
   logout: () => void;
   verifyTotp: (code: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -59,10 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     email: string,
     password: string,
+    altcha?: string,
   ): Promise<{ requireTotp: boolean }> => {
     const res = await apiClient.post<AuthTokens & { requireTotp: boolean }>(
       "/auth/login",
       { email, password },
+      altcha ? { "x-altcha": altcha } : undefined,
     );
 
     if (res.data.requireTotp) {
@@ -79,12 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     displayName: string,
+    altcha?: string,
   ) => {
-    const res = await apiClient.post<{ message: string }>("/auth/register", {
-      email,
-      password,
-      displayName,
-    });
+    const res = await apiClient.post<{ message: string }>(
+      "/auth/register",
+      { email, password, displayName },
+      altcha ? { "x-altcha": altcha } : undefined,
+    );
     return res.data.message;
   };
 

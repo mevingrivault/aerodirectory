@@ -57,10 +57,15 @@ class ApiClient {
     return this.request<T>(url);
   }
 
-  async post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
+  async post<T>(
+    path: string,
+    body?: unknown,
+    extraHeaders?: Record<string, string>,
+  ): Promise<ApiResponse<T>> {
     return this.request<T>(path, {
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
+      headers: extraHeaders,
     });
   }
 
@@ -79,11 +84,15 @@ class ApiClient {
    * Upload a file as multipart/form-data.
    * Content-Type must NOT be set manually — the browser sets it with the boundary.
    */
-  async upload<T>(path: string, file: File): Promise<ApiResponse<T>> {
+  async upload<T>(
+    path: string,
+    file: File,
+    extraHeaders?: Record<string, string>,
+  ): Promise<ApiResponse<T>> {
     const form = new FormData();
     form.append("file", file);
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...extraHeaders };
     if (this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
     }

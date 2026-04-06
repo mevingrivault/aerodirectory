@@ -1,26 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Plane, CheckCircle } from "lucide-react";
+import { AltchaWidget, type AltchaHandle } from "@/components/ui/altcha-widget";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const altchaRef = useRef<AltchaHandle>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    if (!altcha) {
+      setError("Veuillez compléter la vérification anti-robot.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await apiClient.post("/auth/forgot-password", { email });
+      await apiClient.post(
+        "/auth/forgot-password",
+        { email },
+        { "x-altcha": altcha },
+      );
       setSubmitted(true);
     } catch {
       // Message générique même en cas d'erreur réseau
@@ -74,6 +87,7 @@ export default function ForgotPasswordPage() {
                     required
                   />
                 </div>
+                <AltchaWidget ref={altchaRef} />
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Envoi en cours..." : "Envoyer le lien"}
                 </Button>

@@ -7,12 +7,15 @@ import {
   Body,
   Query,
   Req,
+  UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { FastifyRequest } from "fastify";
 import { CommentService } from "./comment.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { Public, CurrentUser } from "../common/decorators";
+import { AltchaGuard } from "../altcha/altcha.guard";
 import {
   CommentCreateSchema,
   CorrectionCreateSchema,
@@ -42,6 +45,8 @@ export class CommentController {
     return paginated(data, total, query.page, query.limit);
   }
 
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
   @Post("comments")
   async createComment(
     @CurrentUser() user: { sub: string },

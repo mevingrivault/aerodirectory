@@ -10,12 +10,15 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { FastifyRequest } from "fastify";
 import { AuthService } from "./auth.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok } from "../common/api-response";
 import { Public, CurrentUser } from "../common/decorators";
+import { AltchaGuard } from "../altcha/altcha.guard";
 import {
   RegisterSchema,
   LoginSchema,
@@ -44,6 +47,8 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 3, ttl: 60000 }, medium: { limit: 10, ttl: 3600000 } })
   @Post("register")
   @UsePipes(new ZodValidationPipe(RegisterSchema))
   async register(@Body() body: RegisterInput, @Req() req: FastifyRequest) {
@@ -68,6 +73,8 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
   @Post("login")
   @UsePipes(new ZodValidationPipe(LoginSchema))
   async login(@Body() body: LoginInput, @Req() req: FastifyRequest) {
@@ -148,6 +155,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 3, ttl: 300000 } })
   @Post("resend-verification")
   @HttpCode(HttpStatus.OK)
   async resendVerification(
@@ -167,6 +175,8 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 3, ttl: 300000 }, medium: { limit: 5, ttl: 3600000 } })
   @Post("forgot-password")
   @HttpCode(HttpStatus.OK)
   async forgotPassword(

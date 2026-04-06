@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X, Loader2, UploadCloud, CheckCircle, AlertCircle } from "lucide-react";
+import { AltchaWidget, type AltchaHandle } from "@/components/ui/altcha-widget";
 
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -45,6 +46,7 @@ export function PhotoUpload({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const altchaRef = useRef<AltchaHandle>(null);
 
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_SIZE_BYTES) {
@@ -92,6 +94,13 @@ export function PhotoUpload({
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+
+    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    if (!altcha) {
+      setErrorMsg("Veuillez compléter la vérification anti-robot.");
+      return;
+    }
+
     setUploadState("uploading");
     setErrorMsg(null);
 
@@ -99,10 +108,12 @@ export function PhotoUpload({
       const res = await apiClient.upload<PhotoEntry>(
         `/aerodromes/${aerodromeId}/photos`,
         selectedFile,
+        { "x-altcha": altcha },
       );
       setUploadState("success");
       setPreview(null);
       setSelectedFile(null);
+      altchaRef.current?.reset();
       if (res.data) onUploadSuccess?.(res.data);
     } catch (err) {
       setUploadState("error");
@@ -111,6 +122,7 @@ export function PhotoUpload({
           ? err.message
           : "Une erreur est survenue lors de l'upload.",
       );
+      altchaRef.current?.reset();
     }
   };
 
@@ -193,6 +205,7 @@ export function PhotoUpload({
                 className="w-full h-full object-contain"
               />
             </div>
+            <AltchaWidget ref={altchaRef} />
             <div className="flex gap-2">
               <Button
                 onClick={handleUpload}

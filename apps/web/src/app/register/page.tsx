@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
@@ -14,6 +14,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Plane, Check, X, Mail } from "lucide-react";
+import { AltchaWidget, type AltchaHandle } from "@/components/ui/altcha-widget";
 
 const RULES = [
   { label: "12 caracteres minimum", test: (p: string) => p.length >= 12 },
@@ -25,6 +26,7 @@ const RULES = [
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const altchaRef = useRef<AltchaHandle>(null);
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -72,11 +74,17 @@ export default function RegisterPage() {
       return;
     }
 
+    const altcha = altchaRef.current?.getPayload() ?? undefined;
+    if (!altcha) {
+      setError("Veuillez compléter la vérification anti-robot.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const message = await register(email, password, displayName.trim());
+      const message = await register(email, password, displayName.trim(), altcha);
       setSuccess(message);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message.toLowerCase() : "";
@@ -87,6 +95,7 @@ export default function RegisterPage() {
       } else {
         setError("Echec de l'inscription. Veuillez reessayer.");
       }
+      altchaRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -274,6 +283,18 @@ export default function RegisterPage() {
                     </p>
                   )}
                 </div>
+
+                {/* Honeypot — must remain empty */}
+                <input
+                  type="text"
+                  name="website"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ display: "none" }}
+                  autoComplete="off"
+                />
+
+                <AltchaWidget ref={altchaRef} />
 
                 <Button
                   type="submit"
