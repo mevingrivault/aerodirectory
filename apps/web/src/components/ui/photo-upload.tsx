@@ -210,7 +210,6 @@ export function PhotoUpload({
             </div>
             <AltchaWidget
               ref={altchaRef}
-              className="mt-2"
               onStateChange={(state, payload) => {
                 setAltchaPayload(state === "verified" ? (payload ?? null) : null);
               }}

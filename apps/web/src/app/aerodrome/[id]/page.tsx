@@ -43,6 +43,7 @@ import {
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { Input } from "@/components/ui/input";
+import { useAltchaAuto } from "@/lib/use-altcha-auto";
 
 interface PhotoEntry {
   id: string;
@@ -293,6 +294,7 @@ export default function AerodromeDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { user } = useAuth();
+  const solveAltcha = useAltchaAuto();
   const [commentText, setCommentText] = useState("");
   const [commentActionAlert, setCommentActionAlert] = useState<{
     type: "success" | "error";
@@ -436,9 +438,12 @@ export default function AerodromeDetailPage() {
     e.preventDefault();
     if (!commentText.trim()) return;
     setCommentActionAlert(null);
-    await apiClient.post(`/aerodromes/${id}/comments`, {
-      content: commentText,
-    });
+    const altcha = await solveAltcha();
+    await apiClient.post(
+      `/aerodromes/${id}/comments`,
+      { content: commentText },
+      altcha ? { "x-altcha": altcha } : undefined,
+    );
     setCommentText("");
     refetchComments();
   };

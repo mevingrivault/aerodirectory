@@ -90,7 +90,6 @@ export default function ForgotPasswordPage() {
                 </div>
                 <AltchaWidget
                   ref={altchaRef}
-                  className="mt-2"
                   onStateChange={(state, payload) => {
                     setAltchaPayload(state === "verified" ? (payload ?? null) : null);
                   }}

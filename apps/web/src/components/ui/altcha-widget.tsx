@@ -83,14 +83,18 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
       return () => el.removeEventListener("statechange", handler);
     }, [onStateChange]);
 
-    return React.createElement("altcha-widget", {
-      ref: widgetRef,
-      challengeurl: CHALLENGE_URL,
-      hidelogo: "",
-      hidefooter: "",
-      strings: FR_STRINGS,
-      class: className,
-    });
+    return (
+      <div className={`mt-4 rounded-lg border border-input bg-background overflow-hidden${className ? ` ${className}` : ""}`}>
+        {React.createElement("altcha-widget", {
+          ref: widgetRef,
+          challengeurl: CHALLENGE_URL,
+          hidelogo: "",
+          hidefooter: "",
+          strings: FR_STRINGS,
+          style: { width: "100%", display: "block" },
+        })}
+      </div>
+    );
   },
 );
 
