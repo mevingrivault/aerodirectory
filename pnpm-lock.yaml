@@ -26,6 +26,15 @@ importers:
       '@aerodirectory/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@otplib/core':
+        specifier: ^12.0.1
+        version: 12.0.1
+      '@otplib/plugin-crypto':
+        specifier: ^12.0.1
+        version: 12.0.1
+      '@otplib/plugin-thirty-two':
+        specifier: ^12.0.1
+        version: 12.0.1
       '@aws-sdk/client-s3':
         specifier: ^3.1024.0
         version: 3.1024.0
