@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule/dist";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, type SyncRun, type SyncRunStatus, type SyncSource } from "@aerodirectory/database";
+import Redis from "ioredis";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
@@ -25,6 +26,8 @@ const RGPD_CRON = process.env["SYNC_RGPD_CRON"] ?? "30 4 * * *";
 const REPORT_CRON = process.env["SYNC_REPORT_CRON"] ?? "30 7 * * *";
 const REGIONS_FULL_CRON = process.env["SYNC_REGIONS_FULL_CRON"] ?? "0 5 1 * *";
 const SYNC_TIMEZONE = process.env["SYNC_TIMEZONE"] ?? "Europe/Paris";
+const WORKER_HEARTBEAT_KEY = "navventura:sync:worker-heartbeat";
+const WORKER_HEARTBEAT_TTL_SECONDS = 120;
 
 function asBoolean(value: string | boolean | undefined, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -59,6 +62,7 @@ export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private readonly workerEnabled: boolean;
   private readonly workerId: string;
+  private readonly redis: Redis | null;
   private dispatching = false;
 
   constructor(
@@ -73,6 +77,8 @@ export class SyncService implements OnModuleInit {
       this.config.get<string>("SYNC_WORKER_ID") ??
       process.env["HOSTNAME"] ??
       "sync-worker";
+    const redisUrl = this.config.get<string>("REDIS_URL");
+    this.redis = redisUrl ? new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
   }
 
   async onModuleInit() {
@@ -80,8 +86,18 @@ export class SyncService implements OnModuleInit {
       return;
     }
 
+    await this.updateWorkerHeartbeat();
     await this.recoverInterruptedRuns();
     await this.processDueRuns();
+  }
+
+  @Cron("*/30 * * * * *", {
+    name: "sync-worker-heartbeat",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async publishWorkerHeartbeat() {
+    if (!this.workerEnabled) return;
+    await this.updateWorkerHeartbeat();
   }
 
   @Cron(OPENAIP_CRON, {
@@ -145,6 +161,7 @@ export class SyncService implements OnModuleInit {
   }
 
   async getStatusOverview() {
+    const heartbeat = await this.getWorkerHeartbeat();
     const [recentRuns, activeRuns] = await Promise.all([
       this.prisma.syncRun.findMany({
         take: 20,
@@ -179,8 +196,8 @@ export class SyncService implements OnModuleInit {
     );
 
     return {
-      workerEnabled: this.workerEnabled,
-      workerId: this.workerId,
+      workerEnabled: heartbeat?.alive ?? this.workerEnabled,
+      workerId: heartbeat?.workerId ?? this.workerId,
       running: activeRuns.some((run) => run.status === "IN_PROGRESS"),
       sources: sourceStatuses,
       recentRuns,
@@ -815,5 +832,53 @@ export class SyncService implements OnModuleInit {
     }
 
     return computeNextCronOccurrence(this.getScheduleForSource(source), now);
+  }
+
+  private async updateWorkerHeartbeat() {
+    if (!this.redis) {
+      return;
+    }
+
+    try {
+      await this.redis.set(
+        WORKER_HEARTBEAT_KEY,
+        JSON.stringify({
+          workerId: this.workerId,
+          heartbeatAt: new Date().toISOString(),
+        }),
+        "EX",
+        WORKER_HEARTBEAT_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn(`Impossible de publier le heartbeat du worker: ${asErrorMessage(error)}`);
+    }
+  }
+
+  private async getWorkerHeartbeat(): Promise<{ alive: boolean; workerId: string | null } | null> {
+    if (!this.redis) {
+      return null;
+    }
+
+    try {
+      const raw = await this.redis.get(WORKER_HEARTBEAT_KEY);
+      if (!raw) {
+        return { alive: false, workerId: null };
+      }
+
+      const parsed = JSON.parse(raw) as { workerId?: string; heartbeatAt?: string };
+      const heartbeatAt = parsed.heartbeatAt ? new Date(parsed.heartbeatAt) : null;
+      const alive =
+        heartbeatAt instanceof Date &&
+        !Number.isNaN(heartbeatAt.getTime()) &&
+        Date.now() - heartbeatAt.getTime() <= WORKER_HEARTBEAT_TTL_SECONDS * 1000;
+
+      return {
+        alive,
+        workerId: parsed.workerId ?? null,
+      };
+    } catch (error) {
+      this.logger.warn(`Impossible de lire le heartbeat du worker: ${asErrorMessage(error)}`);
+      return null;
+    }
   }
 }
