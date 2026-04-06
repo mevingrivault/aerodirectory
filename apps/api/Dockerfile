@@ -7,9 +7,6 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate && \
 FROM base AS fetch
 WORKDIR /app
 COPY pnpm-lock.yaml ./pnpm-workspace.yaml ./package.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY packages/shared/package.json ./packages/shared/package.json
-COPY packages/database/package.json ./packages/database/package.json
 RUN pnpm fetch
 
 FROM fetch AS builder
@@ -21,14 +18,7 @@ RUN pnpm install --frozen-lockfile --offline
 RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/database build && \
     pnpm --filter @aerodirectory/shared build && \
-    pnpm --filter @aerodirectory/api build && \
-    PRISMA_SKIP_POSTINSTALL_GENERATE=true pnpm --ignore-scripts --filter @aerodirectory/api --prod deploy /prod/api && \
-    PRISMA_PACKAGE_DIR="$(find /app/node_modules/.pnpm -path '*/node_modules/@prisma/client' -type d | head -n 1)" && \
-    PRISMA_CLIENT_DIR="$(find /app -path '*/node_modules/.prisma/client' -type d | head -n 1)" && \
-    mkdir -p /prod/api/node_modules/.prisma /prod/api/node_modules/@prisma && \
-    rm -rf /prod/api/node_modules/@prisma/client /prod/api/node_modules/.prisma/client && \
-    cp -R "$PRISMA_PACKAGE_DIR" /prod/api/node_modules/@prisma/client && \
-    cp -R "$PRISMA_CLIENT_DIR" /prod/api/node_modules/.prisma/client
+    pnpm --filter @aerodirectory/api build
 
 FROM node:24-alpine AS runner
 WORKDIR /app
@@ -37,7 +27,21 @@ ENV NODE_ENV=production
 
 RUN apk add --no-cache clamav su-exec
 
-COPY --from=builder /prod/api ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
+
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
+COPY --from=builder /app/packages/database/prisma.config.ts ./packages/database/
+
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/apps/api/docker/entrypoint.sh /entrypoint.sh
 
 RUN addgroup --system --gid 1001 nodejs && \
