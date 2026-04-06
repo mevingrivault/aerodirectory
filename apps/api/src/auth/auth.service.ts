@@ -44,7 +44,7 @@ export class AuthService {
         ? configuredWindow
         : 2;
 
-    return authenticator.create({ window }).check(code, secret);
+    return authenticator.clone({ window }).check(code, secret);
   }
 
   // ─── Registration ───────────────────────────────────────
