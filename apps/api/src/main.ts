@@ -52,8 +52,8 @@ async function bootstrap() {
   // Multipart (file uploads) — limit handled per-route in PhotoController
   await app.register(fastifyMultipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10 MB hard cap
-      files: 1,                    // one file per request
+      fileSize: 5 * 1024 * 1024,
+      files: 1,
     },
   });
 

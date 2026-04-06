@@ -1,15 +1,16 @@
 import {
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
-  ForbiddenException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { PhotoStatus } from "@aerodirectory/database";
 import { AuditService } from "../audit/audit.service";
+import { PrismaService } from "../prisma/prisma.service";
 import { ImageService } from "./image.service";
 import { ScanService } from "./scan.service";
 import { StorageService } from "./storage.service";
-import { PhotoStatus } from "@aerodirectory/database";
+import type { UploadedTempFile } from "./upload.middleware";
 
 @Injectable()
 export class PhotoService {
@@ -23,64 +24,65 @@ export class PhotoService {
     private readonly storage: StorageService,
   ) {}
 
-  /**
-   * Full upload pipeline:
-   * UPLOAD → validate type → scan → convert/compress → store → save DB
-   */
   async upload(
     userId: string,
     aerodromeId: string,
-    buffer: Buffer,
-    originalFilename: string,
+    upload: UploadedTempFile,
     ip?: string,
     userAgent?: string,
   ) {
-    // Verify aerodrome exists
     const aerodrome = await this.prisma.aerodrome.findUnique({
       where: { id: aerodromeId },
       select: { id: true },
     });
-    if (!aerodrome) throw new NotFoundException("Aérodrome introuvable.");
 
-    // Create a PENDING record immediately (for traceability)
+    if (!aerodrome) {
+      throw new NotFoundException("Aérodrome introuvable.");
+    }
+
     const record = await this.prisma.photo.create({
       data: {
         userId,
         aerodromeId,
-        originalFilename: originalFilename.slice(0, 255),
+        originalFilename: upload.originalFilename.slice(0, 255),
         storedFilename: "",
         storedKey: "",
         mimeType: "",
-        size: buffer.length,
+        size: upload.size,
         status: PhotoStatus.PENDING,
       },
     });
 
+    let storedKey: string | null = null;
+
     try {
-      // Step 1: Validate type + process image (magic bytes, HEIC conv, compress)
+      const validated = await this.image.validateSource(
+        upload.tempFilePath,
+        upload.originalFilename,
+        upload.declaredMimeType,
+      );
+
       await this.prisma.photo.update({
         where: { id: record.id },
         data: { status: PhotoStatus.SCANNING },
       });
 
-      const processed = await this.image.process(buffer, originalFilename);
+      await this.scan.scan(upload.tempFilePath);
 
-      // Step 2: Antivirus scan
-      await this.scan.scan(processed.buffer);
+      const processed = await this.image.reencode(validated);
 
-      // Step 3: Store to S3
-      const { key, filename } = await this.storage.upload(
+      const stored = await this.storage.upload(
         processed.buffer,
         processed.ext,
         processed.mimeType,
       );
+      storedKey = stored.key;
 
-      // Step 4: Finalize DB record
       const final = await this.prisma.photo.update({
         where: { id: record.id },
         data: {
-          storedFilename: filename,
-          storedKey: key,
+          storedFilename: stored.filename,
+          storedKey: stored.key,
           mimeType: processed.mimeType,
           size: processed.size,
           width: processed.width,
@@ -107,17 +109,28 @@ export class PhotoService {
       });
 
       return final;
-    } catch (err) {
-      // Mark as rejected and clean up
-      await this.prisma.photo.update({
-        where: { id: record.id },
-        data: {
-          status: PhotoStatus.REJECTED,
-          rejectedReason: (err as Error).message,
-        },
-      }).catch(() => undefined);
+    } catch (error) {
+      if (storedKey) {
+        await this.storage.delete(storedKey);
+      }
 
-      throw err;
+      this.logger.warn(
+        `Upload photo rejeté pour ${upload.originalFilename}: ${(error as Error).message}`,
+      );
+
+      await this.prisma.photo
+        .update({
+          where: { id: record.id },
+          data: {
+            status: PhotoStatus.REJECTED,
+            rejectedReason: (error as Error).message,
+          },
+        })
+        .catch(() => undefined);
+
+      throw error;
+    } finally {
+      await upload.cleanup();
     }
   }
 
@@ -146,10 +159,13 @@ export class PhotoService {
 
   async delete(photoId: string, userId: string, role: string) {
     const photo = await this.prisma.photo.findUnique({ where: { id: photoId } });
-    if (!photo) throw new NotFoundException("Photo introuvable.");
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable.");
+    }
 
     const isOwner = photo.userId === userId;
     const isModerator = role === "MODERATOR" || role === "ADMIN";
+
     if (!isOwner && !isModerator) {
       throw new ForbiddenException("Vous ne pouvez pas supprimer cette photo.");
     }
@@ -164,3 +180,4 @@ export class PhotoService {
     });
   }
 }
+

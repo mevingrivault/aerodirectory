@@ -37,6 +37,16 @@ export class AuthService {
     private readonly mail: MailService,
   ) {}
 
+  private verifyTotpCode(secret: string, code: string): boolean {
+    const configuredWindow = Number(this.config.get("TOTP_WINDOW"));
+    const window =
+      Number.isInteger(configuredWindow) && configuredWindow >= 0
+        ? configuredWindow
+        : 1;
+
+    return authenticator.create({ window }).check(code, secret);
+  }
+
   // ─── Registration ───────────────────────────────────────
 
   async register(
@@ -221,10 +231,7 @@ export class AuthService {
       throw new BadRequestException("TOTP setup not initiated");
     }
 
-    const valid = authenticator.verify({
-      token: code,
-      secret: user.totpSecret,
-    });
+    const valid = this.verifyTotpCode(user.totpSecret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -257,10 +264,7 @@ export class AuthService {
       throw new BadRequestException("TOTP not enabled");
     }
 
-    const valid = authenticator.verify({
-      token: code,
-      secret: user.totpSecret,
-    });
+    const valid = this.verifyTotpCode(user.totpSecret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");

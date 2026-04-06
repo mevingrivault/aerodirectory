@@ -4,13 +4,20 @@ import { PhotoService } from "./photo.service";
 import { ImageService } from "./image.service";
 import { ScanService } from "./scan.service";
 import { StorageService } from "./storage.service";
+import { PhotoUploadMiddleware } from "./upload.middleware";
 import { AuditModule } from "../audit/audit.module";
 import { AltchaModule } from "../altcha/altcha.module";
 
 @Module({
   imports: [AuditModule, AltchaModule],
   controllers: [PhotoController],
-  providers: [PhotoService, ImageService, ScanService, StorageService],
+  providers: [
+    PhotoService,
+    PhotoUploadMiddleware,
+    ImageService,
+    ScanService,
+    StorageService,
+  ],
   exports: [PhotoService],
 })
 export class PhotoModule {}

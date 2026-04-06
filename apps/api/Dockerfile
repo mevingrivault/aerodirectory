@@ -29,6 +29,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+RUN apk add --no-cache clamav su-exec
+
 # Copy node_modules and built artifacts from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
@@ -45,13 +47,13 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/apps/api/docker/entrypoint.sh /entrypoint.sh
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 apiuser && \
+    chmod +x /entrypoint.sh && \
     npm uninstall -g npm corepack || true
-
-USER apiuser
 
 EXPOSE 4000
 
-CMD ["node", "apps/api/dist/main"]
+ENTRYPOINT ["/entrypoint.sh"]

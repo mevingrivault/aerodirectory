@@ -1,31 +1,29 @@
 import {
   Controller,
-  Post,
-  Get,
   Delete,
+  Get,
+  NotFoundException,
   Param,
+  Post,
   Req,
   Res,
-  BadRequestException,
-  PayloadTooLargeException,
-  NotFoundException,
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import { AltchaGuard } from "../altcha/altcha.guard";
+import { ok } from "../common/api-response";
+import { CurrentUser, Public } from "../common/decorators";
 import { PhotoService } from "./photo.service";
 import { StorageService } from "./storage.service";
-import { CurrentUser, Public } from "../common/decorators";
-import { ok } from "../common/api-response";
-import { AltchaGuard } from "../altcha/altcha.guard";
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+import { PhotoUploadMiddleware } from "./upload.middleware";
 
 @Controller("aerodromes/:aerodromeId/photos")
 export class PhotoController {
   constructor(
     private readonly photos: PhotoService,
     private readonly storage: StorageService,
+    private readonly uploadMiddleware: PhotoUploadMiddleware,
   ) {}
 
   @UseGuards(AltchaGuard)
@@ -36,31 +34,12 @@ export class PhotoController {
     @CurrentUser() user: { sub: string; role: string },
     @Req() req: FastifyRequest,
   ) {
-    if (!req.isMultipart()) {
-      throw new BadRequestException("La requête doit être de type multipart/form-data.");
-    }
-
-    const data = await req.file({
-      limits: { fileSize: MAX_FILE_SIZE },
-    });
-
-    if (!data) {
-      throw new BadRequestException("Aucun fichier trouvé dans la requête.");
-    }
-
-    // Read buffer (toBuffer() throws if file exceeds limits)
-    let buffer: Buffer;
-    try {
-      buffer = await data.toBuffer();
-    } catch {
-      throw new PayloadTooLargeException("La taille du fichier dépasse la limite de 10 Mo.");
-    }
+    const upload = await this.uploadMiddleware.parseSingleImage(req);
 
     const photo = await this.photos.upload(
       user.sub,
       aerodromeId,
-      buffer,
-      data.filename,
+      upload,
       req.ip,
       req.headers["user-agent"],
     );
@@ -70,9 +49,7 @@ export class PhotoController {
 
   @Public()
   @Get()
-  async list(
-    @Param("aerodromeId") aerodromeId: string,
-  ) {
+  async list(@Param("aerodromeId") aerodromeId: string) {
     const photos = await this.photos.listForAerodrome(aerodromeId);
     return ok(photos);
   }
@@ -84,13 +61,17 @@ export class PhotoController {
     @Res() res: FastifyReply,
   ) {
     const photo = await this.photos.findById(photoId);
-    if (!photo) throw new NotFoundException("Photo introuvable.");
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable.");
+    }
 
     const { stream, contentType, contentLength } = await this.storage.getObject(photo.storedKey);
 
     res.header("Content-Type", contentType);
     res.header("Cache-Control", "public, max-age=31536000, immutable");
-    if (contentLength) res.header("Content-Length", contentLength);
+    if (contentLength) {
+      res.header("Content-Length", contentLength);
+    }
     res.send(stream);
   }
 
@@ -103,3 +84,4 @@ export class PhotoController {
     return ok({ deleted: true });
   }
 }
+

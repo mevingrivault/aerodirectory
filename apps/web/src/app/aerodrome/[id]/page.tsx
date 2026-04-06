@@ -1483,6 +1483,14 @@ export default function AerodromeDetailPage() {
                 </Button>
               </form>
             )}
+            {!user && (
+              <p className="mb-4 text-center text-sm text-muted-foreground">
+                <a href="/login" className="text-primary hover:underline">
+                  Connectez-vous
+                </a>{" "}
+                pour ajouter un commentaire.
+              </p>
+            )}
             {comments.length === 0 ? (
               <p className="text-muted-foreground">Aucun commentaire. Soyez le premier à partager !</p>
             ) : (

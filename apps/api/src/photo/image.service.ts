@@ -1,38 +1,37 @@
 import {
-  Injectable,
   BadRequestException,
+  Injectable,
   Logger,
   PayloadTooLargeException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { readFile, stat } from "fs/promises";
+import { extname } from "path";
 import sharp from "sharp";
+import {
+  PHOTO_ALLOWED_EXTENSIONS,
+  PHOTO_ALLOWED_MIME_TYPES,
+  PHOTO_MAX_HEIGHT,
+  PHOTO_MAX_INPUT_PIXELS,
+  PHOTO_MAX_UPLOAD_BYTES,
+  PHOTO_MAX_WIDTH,
+  type AllowedPhotoMimeType,
+  type NormalizedPhotoMimeType,
+} from "./photo.constants";
 
-export const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-]);
-
-export const ALLOWED_EXTENSIONS = new Set([
-  "jpg",
-  "jpeg",
-  "png",
-  "webp",
-  "heic",
-  "heif",
-]);
-
-// HEIC/HEIF magic bytes (ftyp box at offset 4)
-const HEIC_BRANDS = ["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"];
-
-const MAX_DIMENSION = 2560; // px
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+export interface ValidatedImageSource {
+  sourceBuffer: Buffer;
+  sourceMimeType: AllowedPhotoMimeType;
+  outputMimeType: NormalizedPhotoMimeType;
+  outputExtension: "jpg" | "webp";
+  width: number;
+  height: number;
+}
 
 export interface ProcessedImage {
   buffer: Buffer;
-  mimeType: string;
-  ext: string;
+  mimeType: NormalizedPhotoMimeType;
+  ext: "jpg" | "webp";
   width: number;
   height: number;
   size: number;
@@ -41,123 +40,171 @@ export interface ProcessedImage {
 @Injectable()
 export class ImageService {
   private readonly logger = new Logger(ImageService.name);
+  private readonly maxBytes: number;
+  private readonly maxWidth: number;
+  private readonly maxHeight: number;
+  private readonly maxInputPixels: number;
 
-  /**
-   * Full validation + processing pipeline:
-   * 1. Size check
-   * 2. Extension check
-   * 3. Magic bytes validation (real MIME type)
-   * 4. HEIC/HEIF → WebP conversion
-   * 5. Sharp compression + resize
-   */
-  async process(
-    buffer: Buffer,
+  constructor(private readonly config: ConfigService) {
+    this.maxBytes = this.getPositiveNumber("PHOTO_MAX_UPLOAD_BYTES", PHOTO_MAX_UPLOAD_BYTES);
+    this.maxWidth = this.getPositiveNumber("PHOTO_MAX_WIDTH", PHOTO_MAX_WIDTH);
+    this.maxHeight = this.getPositiveNumber("PHOTO_MAX_HEIGHT", PHOTO_MAX_HEIGHT);
+    this.maxInputPixels = this.getPositiveNumber("PHOTO_MAX_INPUT_PIXELS", PHOTO_MAX_INPUT_PIXELS);
+  }
+
+  async validateSource(
+    tempFilePath: string,
     originalFilename: string,
-  ): Promise<ProcessedImage> {
-    // 1. Size check
-    if (buffer.length > MAX_FILE_SIZE) {
+    declaredMimeType?: string,
+  ): Promise<ValidatedImageSource> {
+    const fileStats = await stat(tempFilePath);
+    if (fileStats.size === 0) {
+      throw new BadRequestException("Le fichier envoyé est vide.");
+    }
+
+    if (fileStats.size > this.maxBytes) {
       throw new PayloadTooLargeException(
-        `La taille du fichier dépasse la limite de ${MAX_FILE_SIZE / 1024 / 1024} Mo.`,
+        `La taille maximale autorisée est de ${Math.floor(this.maxBytes / 1024 / 1024)} Mo.`,
       );
     }
 
-    // 2. Extension check
-    const ext = originalFilename.split(".").pop()?.toLowerCase() ?? "";
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
+    const extension = extname(originalFilename).replace(".", "").toLowerCase();
+    if (extension && !PHOTO_ALLOWED_EXTENSIONS.has(extension)) {
       throw new BadRequestException(
-        `Extension non autorisée : .${ext}. Formats acceptés : JPEG, PNG, WebP, HEIC.`,
+        `Extension non autorisée: .${extension}. Formats acceptés: JPEG, PNG, WebP, HEIC, HEIF.`,
       );
     }
 
-    // 3. Real MIME type detection (magic bytes)
-    const realMime = this.detectMimeFromBuffer(buffer);
+    const sourceBuffer = await readFile(tempFilePath);
+    const detectedType = await this.detectFileType(sourceBuffer);
 
-    if (!realMime || !ALLOWED_MIME_TYPES.has(realMime)) {
+    if (!detectedType || !PHOTO_ALLOWED_MIME_TYPES.has(detectedType.mime)) {
       throw new BadRequestException(
-        `Type de fichier non autorisé (${realMime ?? "inconnu"}). Formats acceptés : JPEG, PNG, WebP, HEIC.`,
+        `Le fichier n'est pas une image autorisée (${detectedType?.mime ?? "type inconnu"}).`,
       );
     }
 
-    // Guard against extension spoofing
-    const isHeic = realMime === "image/heic" || realMime === "image/heif";
-    const isImage = realMime.startsWith("image/");
-    if (!isImage) {
-      throw new BadRequestException("Le fichier n'est pas une image valide.");
+    if (declaredMimeType && declaredMimeType !== detectedType.mime) {
+      this.logger.warn(
+        `MIME déclaré incohérent pour ${originalFilename}: ${declaredMimeType} -> ${detectedType.mime}`,
+      );
     }
 
-    // 4 & 5. Process with Sharp (handles HEIC natively on most systems via libvips)
+    const metadata = await sharp(sourceBuffer, {
+      limitInputPixels: this.maxInputPixels,
+      failOn: "error",
+    }).metadata();
+
+    if (!metadata.width || !metadata.height) {
+      throw new BadRequestException("Impossible de lire les dimensions de l'image.");
+    }
+
+    const outputMimeType: NormalizedPhotoMimeType =
+      detectedType.mime === "image/jpeg" && !metadata.hasAlpha
+        ? "image/jpeg"
+        : "image/webp";
+
+    return {
+      sourceBuffer,
+      sourceMimeType: detectedType.mime,
+      outputMimeType,
+      outputExtension: outputMimeType === "image/jpeg" ? "jpg" : "webp",
+      width: metadata.width,
+      height: metadata.height,
+    };
+  }
+
+  async reencode(source: ValidatedImageSource): Promise<ProcessedImage> {
     try {
-      let pipeline = sharp(buffer);
+      let pipeline = sharp(source.sourceBuffer, {
+        limitInputPixels: this.maxInputPixels,
+        failOn: "error",
+      })
+        .rotate()
+        .resize({
+          width: this.maxWidth,
+          height: this.maxHeight,
+          fit: "inside",
+          withoutEnlargement: true,
+        });
 
-      // Convert HEIC/HEIF to WebP
-      if (isHeic) {
-        pipeline = pipeline.webp({ quality: 85 });
-      } else {
-        // Optimize each format
-        switch (realMime) {
-          case "image/jpeg":
-            pipeline = pipeline.jpeg({ quality: 85, progressive: true });
-            break;
-          case "image/png":
-            pipeline = pipeline.png({ compressionLevel: 8 });
-            break;
-          case "image/webp":
-            pipeline = pipeline.webp({ quality: 85 });
-            break;
-        }
-      }
-
-      // Resize if too large (preserve aspect ratio)
-      pipeline = pipeline.resize(MAX_DIMENSION, MAX_DIMENSION, {
-        fit: "inside",
-        withoutEnlargement: true,
-      });
+      pipeline =
+        source.outputMimeType === "image/jpeg"
+          ? pipeline.jpeg({
+              quality: 86,
+              mozjpeg: true,
+              progressive: true,
+            })
+          : pipeline.webp({
+              quality: 86,
+              effort: 4,
+            });
 
       const processed = await pipeline.toBuffer({ resolveWithObject: true });
-      const outputMime = isHeic ? "image/webp" : realMime;
-      const outputExt = this.mimeToExt(outputMime);
+
+      if (processed.info.size > this.maxBytes) {
+        throw new PayloadTooLargeException(
+          `Le fichier dépasse la taille maximale autorisée de ${Math.floor(this.maxBytes / 1024 / 1024)} Mo après traitement.`,
+        );
+      }
+
+      if (!processed.info.width || !processed.info.height) {
+        throw new BadRequestException("Le traitement de l'image n'a pas produit de dimensions valides.");
+      }
 
       return {
         buffer: processed.data,
-        mimeType: outputMime,
-        ext: outputExt,
+        mimeType: source.outputMimeType,
+        ext: source.outputExtension,
         width: processed.info.width,
         height: processed.info.height,
         size: processed.info.size,
       };
-    } catch (err) {
-      if (err instanceof BadRequestException) throw err;
-      this.logger.error("Image processing failed", err);
-      throw new BadRequestException("Impossible de traiter l'image. Vérifiez que le fichier n'est pas corrompu.");
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof PayloadTooLargeException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Échec du re-encodage de l'image: ${(error as Error).message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new BadRequestException(
+        "Impossible de traiter cette image. Vérifiez qu'elle n'est pas corrompue.",
+      );
     }
   }
 
-  /**
-   * Detects MIME type from magic bytes (no external library needed).
-   */
-  private detectMimeFromBuffer(buffer: Buffer): string | null {
-    if (buffer.length < 12) return null;
-    // JPEG: FF D8 FF
-    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return "image/png";
-    // WebP: RIFF....WEBP
-    if (buffer.slice(0, 4).toString("ascii") === "RIFF" && buffer.slice(8, 12).toString("ascii") === "WEBP") return "image/webp";
-    // HEIC/HEIF: ftyp box at offset 4
-    const marker = buffer.slice(4, 8).toString("ascii");
-    if (marker === "ftyp") {
-      const brand = buffer.slice(8, 12).toString("ascii").toLowerCase();
-      if (HEIC_BRANDS.includes(brand)) return "image/heic";
-    }
-    return null;
-  }
-
-  private mimeToExt(mime: string): string {
-    const map: Record<string, string> = {
-      "image/jpeg": "jpg",
-      "image/png": "png",
-      "image/webp": "webp",
+  private async detectFileType(
+    sourceBuffer: Buffer,
+  ): Promise<{ ext: string; mime: AllowedPhotoMimeType } | null> {
+    const fileTypeModule = (await import("file-type")) as {
+      fileTypeFromBuffer: (
+        buffer: Buffer,
+      ) => Promise<{ ext: string; mime: string } | undefined>;
     };
-    return map[mime] ?? "jpg";
+
+    const detected = await fileTypeModule.fileTypeFromBuffer(sourceBuffer);
+    if (!detected) {
+      return null;
+    }
+
+    if (!PHOTO_ALLOWED_MIME_TYPES.has(detected.mime)) {
+      return null;
+    }
+
+    return {
+      ext: detected.ext,
+      mime: detected.mime as AllowedPhotoMimeType,
+    };
+  }
+
+  private getPositiveNumber(key: string, fallback: number): number {
+    const value = Number(this.config.get(key));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
   }
 }
+

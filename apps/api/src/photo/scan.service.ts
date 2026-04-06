@@ -1,73 +1,116 @@
-import { Injectable, Logger, InternalServerErrorException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import NodeClam = require("clamscan");
-import { tmpdir } from "os";
-import { writeFile, unlink } from "fs/promises";
-import { join } from "path";
-import { randomUUID } from "crypto";
+import { execFile, type ExecFileException } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class ScanService {
   private readonly logger = new Logger(ScanService.name);
-  private scanner: NodeClam | null = null;
   private readonly enabled: boolean;
+  private readonly binaryPath: string;
+  private readonly timeoutMs: number;
+  private readonly databasePath?: string;
 
   constructor(private readonly config: ConfigService) {
-    this.enabled = this.config.get<string>("CLAMAV_ENABLED", "true") !== "false";
+    this.enabled = this.config.get<string>("CLAMSCAN_ENABLED", "true") !== "false";
+    this.binaryPath = this.config.get<string>("CLAMSCAN_PATH", "clamscan");
+
+    const configuredTimeoutMs = Number(this.config.get("CLAMSCAN_TIMEOUT_MS"));
+    this.timeoutMs =
+      Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+        ? configuredTimeoutMs
+        : 20_000;
+
+    const configuredDatabasePath = this.config.get<string>("CLAMSCAN_DATABASE_PATH");
+    this.databasePath = configuredDatabasePath?.trim() || undefined;
+
+    if (!this.enabled) {
+      this.logger.warn("Le scan ClamAV est désactivé. À réserver au développement.");
+    }
   }
 
-  async onModuleInit() {
+  async scan(filePath: string): Promise<void> {
     if (!this.enabled) {
-      this.logger.warn("ClamAV scanning is DISABLED — not recommended for production");
       return;
     }
+
+    const args = ["--no-summary", "--stdout"];
+    if (this.databasePath) {
+      args.push(`--database=${this.databasePath}`);
+    }
+    args.push(filePath);
+
     try {
-      const clam = new NodeClam();
-      this.scanner = await clam.init({
-        clamdscan: {
-          host: this.config.get<string>("CLAMAV_HOST", "127.0.0.1"),
-          port: this.config.get<number>("CLAMAV_PORT", 3310),
-          timeout: 60000,
-          localFallback: false,
-          active: true,
-        },
-        preference: "clamdscan",
+      await execFileAsync(this.binaryPath, args, {
+        timeout: this.timeoutMs,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
       });
-      this.logger.log("ClamAV scanner initialized");
-    } catch (err) {
-      this.logger.error("ClamAV initialization failed", err);
-      // scanner stays null — scan() will throw (fail-secure)
+    } catch (error) {
+      throw this.toClamException(error, filePath);
     }
   }
 
-  /**
-   * Scans a buffer. Throws if:
-   * - ClamAV is unavailable (fail-secure)
-   * - A virus/threat is detected
-   */
-  async scan(buffer: Buffer): Promise<void> {
-    if (!this.enabled) return;
+  private toClamException(error: unknown, filePath: string): Error {
+    const execError = error as ExecFileException & {
+      stdout?: string;
+      stderr?: string;
+      killed?: boolean;
+      signal?: NodeJS.Signals;
+    };
 
-    if (!this.scanner) {
-      throw new InternalServerErrorException(
-        "Scanner antivirus indisponible. Upload refusé.",
+    const stdout = execError.stdout?.trim() ?? "";
+    const stderr = execError.stderr?.trim() ?? "";
+    const combinedOutput = [stdout, stderr].filter(Boolean).join(" | ");
+
+    if (execError.code === 1) {
+      const threatName = this.extractThreatName(stdout || stderr);
+      this.logger.warn(
+        `ClamAV a détecté une menace dans ${filePath}: ${threatName ?? combinedOutput ?? "menace inconnue"}`,
+      );
+      return new BadRequestException(
+        threatName
+          ? `Fichier rejeté par l'antivirus: ${threatName}.`
+          : "Fichier rejeté par l'antivirus.",
       );
     }
 
-    // Write to a temp file — clamscan operates on files
-    const tmpPath = join(tmpdir(), `upload-${randomUUID()}`);
-    try {
-      await writeFile(tmpPath, buffer);
-      const { isInfected, viruses } = await this.scanner.isInfected(tmpPath);
-      if (isInfected) {
-        this.logger.warn(`Threat detected: ${viruses.join(", ")}`);
-        throw new InternalServerErrorException(
-          `Fichier rejeté : menace détectée (${viruses.join(", ")})`,
-        );
-      }
-      this.logger.log("ClamAV scan passed — file is clean");
-    } finally {
-      await unlink(tmpPath).catch(() => undefined);
+    if (execError.code === "ENOENT") {
+      this.logger.error(
+        `Binaire ClamAV introuvable (${this.binaryPath}).`,
+      );
+      return new ServiceUnavailableException(
+        "Analyse antivirus indisponible sur le serveur.",
+      );
     }
+
+    if (execError.killed || execError.signal === "SIGTERM") {
+      this.logger.error(
+        `ClamAV a dépassé le timeout de ${this.timeoutMs} ms pour ${filePath}.`,
+      );
+      return new ServiceUnavailableException(
+        "L'analyse antivirus a expiré.",
+      );
+    }
+
+    this.logger.error(
+      `Échec de l'analyse ClamAV pour ${filePath}: ${combinedOutput || execError.message || "erreur inconnue"}`,
+    );
+    return new ServiceUnavailableException(
+      "L'analyse antivirus a échoué.",
+    );
+  }
+
+  private extractThreatName(output: string): string | null {
+    const match = output.match(/:\s(.+)\sFOUND$/m);
+    return match?.[1]?.trim() ?? null;
   }
 }
+
