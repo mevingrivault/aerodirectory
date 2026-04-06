@@ -138,6 +138,8 @@ enum AuditAction {
   PASSWORD_RESET_REQUEST
   PASSWORD_RESET
   PHOTO_UPLOAD
+  PHOTO_APPROVE
+  PHOTO_REJECT
   PHOTO_DELETE
   USER_BAN
   USER_UNBAN
@@ -176,6 +178,7 @@ model User {
   bannedBy         User?             @relation("UserBans", fields: [bannedById], references: [id], onDelete: SetNull)
   bannedUsers      User[]            @relation("UserBans")
   photos           Photo[]
+  reviewedPhotos   Photo[]           @relation("PhotoReviewedBy")
 
   @@index([email])
   @@index([status])
@@ -334,6 +337,7 @@ model Comment {
   id            String        @id @default(cuid())
   userId        String
   aerodromeId   String
+  parentId      String?
   content       String
   contentStatus ContentStatus @default(PENDING)
   deletedAt     DateTime?
@@ -344,9 +348,12 @@ model Comment {
 
   user      User      @relation("CommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
   deletedBy User?     @relation("CommentDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@index([aerodromeId])
+  @@index([parentId])
   @@index([deletedAt])
   @@map("comments")
   @@schema("public")
@@ -470,14 +477,19 @@ model Photo {
   height           Int?
   status           PhotoStatus @default(PENDING)
   rejectedReason   String?
+  reviewedById     String?
+  reviewedAt       DateTime?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?     @relation("PhotoReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  aerodrome  Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@index([aerodromeId, status])
+  @@index([status, createdAt])
   @@index([userId])
+  @@index([reviewedById])
   @@map("photos")
   @@schema("public")
 }

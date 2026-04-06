@@ -87,7 +87,10 @@ export class PhotoService {
           size: processed.size,
           width: processed.width,
           height: processed.height,
-          status: PhotoStatus.READY,
+          status: PhotoStatus.PENDING,
+          rejectedReason: null,
+          reviewedAt: null,
+          reviewedById: null,
         },
         select: {
           id: true,
@@ -95,6 +98,7 @@ export class PhotoService {
           mimeType: true,
           width: true,
           height: true,
+          status: true,
           createdAt: true,
           user: { select: { id: true, displayName: true } },
         },
@@ -141,6 +145,13 @@ export class PhotoService {
     });
   }
 
+  async findAnyById(photoId: string) {
+    return this.prisma.photo.findUnique({
+      where: { id: photoId },
+      select: { id: true, storedKey: true, mimeType: true, status: true },
+    });
+  }
+
   async listForAerodrome(aerodromeId: string) {
     return this.prisma.photo.findMany({
       where: { aerodromeId, status: PhotoStatus.READY },
@@ -180,4 +191,3 @@ export class PhotoService {
     });
   }
 }
-

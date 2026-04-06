@@ -8,29 +8,40 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from "@nestjs/common";
-import { FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from "fastify";
 import {
+  AdminPhotosQuerySchema,
   AdminCommentsQuerySchema,
   AdminUsersQuerySchema,
+  ApproveAdminPhotoSchema,
   BanUserSchema,
   DeleteAdminCommentSchema,
+  RejectAdminPhotoSchema,
   RestoreAdminCommentSchema,
+  type AdminPhotosQueryInput,
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
+  type ApproveAdminPhotoInput,
   type BanUserInput,
   type DeleteAdminCommentInput,
+  type RejectAdminPhotoInput,
   type RestoreAdminCommentInput,
 } from "@aerodirectory/shared";
 import { Roles, CurrentUser } from "../common/decorators";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { AdminService } from "./admin.service";
+import { StorageService } from "../photo/storage.service";
 
 @Controller("admin")
 @Roles("ADMIN")
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get("stats")
   async stats() {
@@ -81,6 +92,68 @@ export class AdminController {
   ) {
     const { data, total } = await this.admin.listComments(query);
     return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get("photos")
+  async photos(
+    @Query(new ZodValidationPipe(AdminPhotosQuerySchema))
+    query: AdminPhotosQueryInput,
+  ) {
+    const { data, total } = await this.admin.listPhotos(query);
+    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get("photos/:photoId/file")
+  async photoFile(
+    @Param("photoId") photoId: string,
+    @Res() res: FastifyReply,
+  ) {
+    const photo = await this.admin.getPhotoFile(photoId);
+    const { stream, contentType, contentLength } = await this.storage.getObject(photo.storedKey);
+
+    res.header("Content-Type", contentType || photo.mimeType);
+    if (contentLength) {
+      res.header("Content-Length", contentLength);
+    }
+    res.send(stream);
+  }
+
+  @Post("photos/:photoId/approve")
+  @HttpCode(HttpStatus.OK)
+  async approvePhoto(
+    @CurrentUser() user: { sub: string },
+    @Param("photoId") photoId: string,
+    @Body(new ZodValidationPipe(ApproveAdminPhotoSchema))
+    body: ApproveAdminPhotoInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.approvePhoto(
+      user.sub,
+      photoId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ approved: true });
+  }
+
+  @Post("photos/:photoId/reject")
+  @HttpCode(HttpStatus.OK)
+  async rejectPhoto(
+    @CurrentUser() user: { sub: string },
+    @Param("photoId") photoId: string,
+    @Body(new ZodValidationPipe(RejectAdminPhotoSchema))
+    body: RejectAdminPhotoInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.rejectPhoto(
+      user.sub,
+      photoId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ rejected: true });
   }
 
   @Post("comments/:commentId/delete")

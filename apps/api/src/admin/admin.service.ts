@@ -7,14 +7,18 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type {
   AdminCommentsQueryInput,
+  AdminPhotosQueryInput,
   AdminUsersQueryInput,
+  ApproveAdminPhotoInput,
   BanUserInput,
   DeleteAdminCommentInput,
+  RejectAdminPhotoInput,
   RestoreAdminCommentInput,
   AdminDashboardStats,
   AdminUserDetail,
   AdminUserListItem,
   AdminCommentListItem,
+  AdminPhotoListItem,
 } from "@aerodirectory/shared";
 
 @Injectable()
@@ -25,7 +29,7 @@ export class AdminService {
   ) {}
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
-    const [totalUsers, bannedUsers, activeComments, deletedComments] =
+    const [totalUsers, bannedUsers, activeComments, deletedComments, pendingPhotos] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: "BANNED" } }),
@@ -36,9 +40,16 @@ export class AdminService {
           },
         }),
         this.prisma.comment.count({ where: { deletedAt: { not: null } } }),
+        this.prisma.photo.count({ where: { status: "PENDING" } }),
       ]);
 
-    return { totalUsers, bannedUsers, activeComments, deletedComments };
+    return {
+      totalUsers,
+      bannedUsers,
+      activeComments,
+      deletedComments,
+      pendingPhotos,
+    };
   }
 
   async listUsers(query: AdminUsersQueryInput) {
@@ -431,6 +442,182 @@ export class AdminService {
     });
   }
 
+  async listPhotos(query: AdminPhotosQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const search = query.search?.trim();
+    const state = query.state ?? "pending";
+
+    const where = {
+      ...(state === "pending"
+        ? { status: "PENDING" as const }
+        : state === "approved"
+          ? { status: "READY" as const }
+          : state === "rejected"
+            ? { status: "REJECTED" as const }
+            : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                user: {
+                  email: { contains: search, mode: "insensitive" as const },
+                },
+              },
+              {
+                user: {
+                  displayName: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+              {
+                aerodrome: {
+                  name: { contains: search, mode: "insensitive" as const },
+                },
+              },
+              {
+                aerodrome: {
+                  icaoCode: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [photos, total] = await Promise.all([
+      this.prisma.photo.findMany({
+        where,
+        include: {
+          user: {
+            select: { id: true, displayName: true, email: true },
+          },
+          aerodrome: {
+            select: { id: true, name: true, icaoCode: true },
+          },
+          reviewedBy: {
+            select: { id: true, displayName: true, email: true },
+          },
+        },
+        orderBy: [
+          { createdAt: "desc" },
+        ],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.photo.count({ where }),
+    ]);
+
+    return {
+      data: photos.map((photo) => this.toAdminPhotoListItem(photo)),
+      total,
+    };
+  }
+
+  async getPhotoFile(photoId: string) {
+    const photo = await this.prisma.photo.findUnique({
+      where: { id: photoId },
+      select: { id: true, storedKey: true, mimeType: true },
+    });
+
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable");
+    }
+
+    return photo;
+  }
+
+  async approvePhoto(
+    adminId: string,
+    photoId: string,
+    input: ApproveAdminPhotoInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const photo = await this.prisma.photo.findUnique({
+      where: { id: photoId },
+      select: { id: true, status: true, aerodromeId: true },
+    });
+
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable");
+    }
+
+    if (photo.status !== "PENDING") {
+      throw new BadRequestException("Cette photo n'est pas en attente de validation.");
+    }
+
+    await this.prisma.photo.update({
+      where: { id: photoId },
+      data: {
+        status: "READY",
+        rejectedReason: null,
+        reviewedAt: new Date(),
+        reviewedById: adminId,
+      },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "PHOTO_APPROVE",
+      ip,
+      userAgent,
+      metadata: {
+        photoId,
+        aerodromeId: photo.aerodromeId,
+        note: input.note?.trim() || null,
+      },
+    });
+  }
+
+  async rejectPhoto(
+    adminId: string,
+    photoId: string,
+    input: RejectAdminPhotoInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const photo = await this.prisma.photo.findUnique({
+      where: { id: photoId },
+      select: { id: true, status: true, aerodromeId: true },
+    });
+
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable");
+    }
+
+    if (photo.status !== "PENDING") {
+      throw new BadRequestException("Cette photo n'est pas en attente de validation.");
+    }
+
+    await this.prisma.photo.update({
+      where: { id: photoId },
+      data: {
+        status: "REJECTED",
+        rejectedReason: input.reason?.trim() || null,
+        reviewedAt: new Date(),
+        reviewedById: adminId,
+      },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "PHOTO_REJECT",
+      ip,
+      userAgent,
+      metadata: {
+        photoId,
+        aerodromeId: photo.aerodromeId,
+        reason: input.reason?.trim() || null,
+      },
+    });
+  }
+
   private toAdminUserListItem(user: {
     id: string;
     email: string;
@@ -480,6 +667,34 @@ export class AdminService {
       user: comment.user,
       deletedBy: comment.deletedBy ?? null,
       pendingReports,
+    };
+  }
+
+  private toAdminPhotoListItem(photo: {
+    id: string;
+    status: "PENDING" | "SCANNING" | "REJECTED" | "READY";
+    createdAt: Date;
+    reviewedAt: Date | null;
+    rejectedReason: string | null;
+    mimeType: string;
+    width: number | null;
+    height: number | null;
+    aerodrome: { id: string; name: string; icaoCode: string | null };
+    user: { id: string; displayName: string | null; email: string };
+    reviewedBy?: { id: string; displayName: string | null; email: string } | null;
+  }): AdminPhotoListItem {
+    return {
+      id: photo.id,
+      status: photo.status,
+      createdAt: photo.createdAt.toISOString(),
+      reviewedAt: photo.reviewedAt?.toISOString() ?? null,
+      rejectedReason: photo.rejectedReason,
+      mimeType: photo.mimeType,
+      width: photo.width,
+      height: photo.height,
+      aerodrome: photo.aerodrome,
+      user: photo.user,
+      reviewedBy: photo.reviewedBy ?? null,
     };
   }
 }

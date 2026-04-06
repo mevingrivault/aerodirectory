@@ -638,7 +638,7 @@ export default function PlannerPage() {
 
   // ── Render ──
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="relative z-0 container mx-auto px-4 py-8">
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -685,7 +685,12 @@ export default function PlannerPage() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="pl-9 pr-8"
+                    autoCapitalize="none"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    name="planner-departure-search"
                     placeholder="Nom ou code ICAO..."
+                    spellCheck={false}
                     value={departureSearch}
                     onChange={(e) => {
                       setDepartureSearch(e.target.value);
@@ -769,9 +774,12 @@ export default function PlannerPage() {
               {showProfileForm && (
                 <form
                   onSubmit={handleCreateProfile}
+                  autoComplete="off"
                   className="rounded-md border p-3 space-y-2.5 mb-1"
                 >
                   <Input
+                    autoComplete="off"
+                    name="planner-aircraft-name"
                     placeholder="Nom (ex. C172 F-GABCD)"
                     value={profileForm.name}
                     onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
@@ -784,6 +792,8 @@ export default function PlannerPage() {
                       </label>
                       <Input
                         type="number"
+                        autoComplete="off"
+                        name="planner-aircraft-tas"
                         placeholder="100"
                         value={profileForm.tas}
                         onChange={(e) => setProfileForm((f) => ({ ...f, tas: e.target.value }))}
@@ -796,6 +806,8 @@ export default function PlannerPage() {
                       </label>
                       <Input
                         type="number"
+                        autoComplete="off"
+                        name="planner-aircraft-fuel-consumption"
                         placeholder="28"
                         value={profileForm.fuelConsumption}
                         onChange={(e) =>
@@ -810,6 +822,8 @@ export default function PlannerPage() {
                       </label>
                       <Input
                         type="number"
+                        autoComplete="off"
+                        name="planner-aircraft-hourly-cost"
                         placeholder="120"
                         value={profileForm.hourlyCost}
                         onChange={(e) =>
@@ -824,6 +838,8 @@ export default function PlannerPage() {
                       </label>
                       <Input
                         type="number"
+                        autoComplete="off"
+                        name="planner-aircraft-range"
                         placeholder="400"
                         value={profileForm.fuelRange}
                         onChange={(e) =>
@@ -838,6 +854,8 @@ export default function PlannerPage() {
                       </label>
                       <Input
                         type="number"
+                        autoComplete="off"
+                        name="planner-aircraft-runway-length"
                         placeholder="0"
                         value={profileForm.minRunwayLength}
                         onChange={(e) =>
@@ -997,6 +1015,8 @@ export default function PlannerPage() {
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
+                      autoComplete="off"
+                      name="planner-max-time-minutes"
                       min={10}
                       max={480}
                       value={maxTimeMinutes}
@@ -1013,6 +1033,8 @@ export default function PlannerPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
+                    autoComplete="off"
+                    name="planner-max-cost"
                     min={10}
                     max={10000}
                     value={maxCost}
@@ -1069,6 +1091,8 @@ export default function PlannerPage() {
                     </label>
                     <Input
                       type="number"
+                      autoComplete="off"
+                      name="planner-reserve-minutes"
                       min={0}
                       max={120}
                       value={reserveMinutes}
@@ -1081,6 +1105,8 @@ export default function PlannerPage() {
                     </label>
                     <Input
                       type="number"
+                      autoComplete="off"
+                      name="planner-fuel-price"
                       step="0.01"
                       min={0}
                       max={10}
@@ -1101,6 +1127,8 @@ export default function PlannerPage() {
                     </label>
                     <Input
                       type="number"
+                      autoComplete="off"
+                      name="planner-departure-ground-minutes"
                       min={0}
                       max={60}
                       value={departureGroundMinutes}
@@ -1113,6 +1141,8 @@ export default function PlannerPage() {
                     </label>
                     <Input
                       type="number"
+                      autoComplete="off"
+                      name="planner-arrival-ground-minutes"
                       min={0}
                       max={60}
                       value={arrivalGroundMinutes}

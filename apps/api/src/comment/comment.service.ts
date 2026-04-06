@@ -27,12 +27,45 @@ export class CommentService {
     input: CommentCreateInput,
     ip?: string,
   ) {
+    if (input.parentId) {
+      const parent = await this.prisma.comment.findUnique({
+        where: { id: input.parentId },
+        select: {
+          id: true,
+          aerodromeId: true,
+          parentId: true,
+          deletedAt: true,
+          contentStatus: true,
+        },
+      });
+
+      if (!parent || parent.aerodromeId !== aerodromeId || parent.deletedAt) {
+        throw new NotFoundException("Commentaire parent introuvable.");
+      }
+
+      if (parent.contentStatus !== "APPROVED") {
+        throw new BadRequestException(
+          "Impossible de répondre à un commentaire en attente de modération.",
+        );
+      }
+
+      if (parent.parentId) {
+        throw new BadRequestException(
+          "Les réponses imbriquées ne sont pas autorisées pour le moment.",
+        );
+      }
+    }
+
     const comment = await this.prisma.comment.create({
       data: {
         userId,
         aerodromeId,
+        parentId: input.parentId,
         content: input.content,
-        contentStatus: "APPROVED", // Auto-approve for now; add moderation later
+        contentStatus: "APPROVED",
+      },
+      include: {
+        user: { select: { id: true, displayName: true } },
       },
     });
 
@@ -40,7 +73,11 @@ export class CommentService {
       userId,
       action: "COMMENT_CREATE",
       ip,
-      metadata: { commentId: comment.id, aerodromeId },
+      metadata: {
+        commentId: comment.id,
+        aerodromeId,
+        parentId: input.parentId ?? null,
+      },
     });
 
     return comment;
@@ -51,11 +88,22 @@ export class CommentService {
       this.prisma.comment.findMany({
         where: {
           aerodromeId,
+          parentId: null,
           deletedAt: null,
           contentStatus: "APPROVED",
         },
         include: {
           user: { select: { id: true, displayName: true } },
+          replies: {
+            where: {
+              deletedAt: null,
+              contentStatus: "APPROVED",
+            },
+            include: {
+              user: { select: { id: true, displayName: true } },
+            },
+            orderBy: { createdAt: "asc" },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -64,6 +112,7 @@ export class CommentService {
       this.prisma.comment.count({
         where: {
           aerodromeId,
+          parentId: null,
           deletedAt: null,
           contentStatus: "APPROVED",
         },
@@ -78,9 +127,9 @@ export class CommentService {
       where: { id: commentId },
     });
 
-    if (!comment) throw new NotFoundException("Comment not found");
+    if (!comment) throw new NotFoundException("Commentaire introuvable.");
     if (comment.deletedAt) {
-      throw new BadRequestException("Comment already deleted");
+      throw new BadRequestException("Commentaire déjà supprimé.");
     }
 
     // Only author, moderators, or admins can delete
@@ -89,7 +138,7 @@ export class CommentService {
       role !== "ADMIN" &&
       role !== "MODERATOR"
     ) {
-      throw new ForbiddenException("Not authorized to delete this comment");
+      throw new ForbiddenException("Vous ne pouvez pas supprimer ce commentaire.");
     }
 
     await this.prisma.comment.update({
@@ -155,11 +204,11 @@ export class CommentService {
       });
 
       if (!comment || comment.aerodromeId !== aerodromeId || comment.deletedAt) {
-        throw new NotFoundException("Comment not found");
+        throw new NotFoundException("Commentaire introuvable.");
       }
 
       if (comment.userId === userId) {
-        throw new BadRequestException("You cannot report your own comment");
+        throw new BadRequestException("Vous ne pouvez pas signaler votre propre commentaire.");
       }
 
       const existingPendingReport = await this.prisma.report.findFirst({
@@ -174,7 +223,7 @@ export class CommentService {
       });
 
       if (existingPendingReport) {
-        throw new BadRequestException("You have already reported this comment");
+        throw new BadRequestException("Vous avez déjà signalé ce commentaire.");
       }
     }
 

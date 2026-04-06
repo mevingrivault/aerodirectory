@@ -105,6 +105,7 @@ export interface AdminDashboardStats {
   bannedUsers: number;
   activeComments: number;
   deletedComments: number;
+  pendingPhotos: number;
 }
 
 export interface AdminUserListItem {
@@ -155,4 +156,30 @@ export interface AdminCommentListItem {
     count: number;
     reasons: string[];
   };
+}
+
+export interface AdminPhotoListItem {
+  id: string;
+  status: "PENDING" | "SCANNING" | "REJECTED" | "READY";
+  createdAt: string;
+  reviewedAt: string | null;
+  rejectedReason: string | null;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
 }

@@ -3,6 +3,7 @@ import { MAX_COMMENT_LENGTH } from "../constants";
 
 export const CommentCreateSchema = z.object({
   content: z.string().min(1).max(MAX_COMMENT_LENGTH).trim(),
+  parentId: z.string().cuid().optional(),
 });
 
 export const CorrectionCreateSchema = z.object({

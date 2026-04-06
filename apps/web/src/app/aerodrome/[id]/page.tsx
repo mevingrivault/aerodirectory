@@ -39,6 +39,7 @@ import {
   AlertCircle,
   Trash2,
   ImagePlus,
+  Reply,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
@@ -122,7 +123,9 @@ interface Comment {
   id: string;
   content: string;
   createdAt: string;
+  parentId?: string | null;
   user: { id: string; displayName: string | null };
+  replies?: Comment[];
 }
 
 interface NearbyRestaurant {
@@ -296,6 +299,8 @@ export default function AerodromeDetailPage() {
   const { user } = useAuth();
   const solveAltcha = useAltchaAuto();
   const [commentText, setCommentText] = useState("");
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
   const [commentActionAlert, setCommentActionAlert] = useState<{
     type: "success" | "error";
     message: string;
@@ -448,6 +453,21 @@ export default function AerodromeDetailPage() {
     refetchComments();
   };
 
+  const handleReply = async (e: React.FormEvent, parentCommentId: string) => {
+    e.preventDefault();
+    if (!replyText.trim()) return;
+    setCommentActionAlert(null);
+    const altcha = await solveAltcha();
+    await apiClient.post(
+      `/aerodromes/${id}/comments`,
+      { content: replyText, parentId: parentCommentId },
+      altcha ? { "x-altcha": altcha } : undefined,
+    );
+    setReplyText("");
+    setReplyTargetId(null);
+    refetchComments();
+  };
+
   const handleReportComment = async (comment: Comment) => {
     const reason = window.prompt("Pourquoi signalez-vous ce commentaire ?");
     if (!reason || !reason.trim()) return;
@@ -497,6 +517,92 @@ export default function AerodromeDetailPage() {
       });
     }
   };
+
+  const renderCommentCard = (comment: Comment, nested = false) => (
+    <div
+      key={comment.id}
+      className={`rounded-md border p-3 ${nested ? "bg-muted/30 ml-4 mt-3" : ""}`}
+    >
+      <div className="mb-1 flex items-center justify-between">
+        <span className="font-medium text-sm">
+          {comment.user.displayName || "Anonyme"}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {new Date(comment.createdAt).toLocaleDateString("fr-FR")}
+        </span>
+      </div>
+      <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+      {user && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {user.id !== comment.user.id && !nested && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setReplyTargetId((current) => (current === comment.id ? null : comment.id))
+              }
+            >
+              <Reply className="mr-1 h-3.5 w-3.5" />
+              Répondre
+            </Button>
+          )}
+          {user.id === comment.user.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteComment(comment)}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Supprimer
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleReportComment(comment)}
+            >
+              Signaler
+            </Button>
+          )}
+        </div>
+      )}
+
+      {user && replyTargetId === comment.id && !nested && (
+        <form onSubmit={(e) => handleReply(e, comment.id)} className="mt-3 space-y-2">
+          <Input
+            placeholder="Répondez à ce commentaire..."
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            maxLength={2000}
+          />
+          <div className="flex gap-2">
+            <Button type="submit" disabled={!replyText.trim()}>
+              Répondre
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setReplyTargetId(null);
+                setReplyText("");
+              }}
+            >
+              Annuler
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="mt-3 space-y-2 border-l pl-3">
+          {comment.replies.map((reply) => renderCommentCard(reply, true))}
+        </div>
+      )}
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -1435,9 +1541,6 @@ export default function AerodromeDetailPage() {
               aerodromeId={id}
               currentUserId={user?.id}
               existingPhotos={photos}
-              onUploadSuccess={(photo) => {
-                setPhotos((prev) => [photo, ...prev]);
-              }}
               onDeleteSuccess={(photoId) => {
                 setPhotos((prev) => prev.filter((p) => p.id !== photoId));
               }}
@@ -1495,43 +1598,7 @@ export default function AerodromeDetailPage() {
               <p className="text-muted-foreground">Aucun commentaire. Soyez le premier à partager !</p>
             ) : (
               <div className="space-y-3">
-                {comments.map((c) => (
-                  <div key={c.id} className="rounded-md border p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">
-                        {c.user.displayName || "Anonyme"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(c.createdAt).toLocaleDateString("fr-FR")}
-                      </span>
-                    </div>
-                    <p className="text-sm">{c.content}</p>
-                    {user && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {user.id === c.user.id ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteComment(c)}
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            Supprimer
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleReportComment(c)}
-                          >
-                            Signaler
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {comments.map((c) => renderCommentCard(c))}
               </div>
             )}
             <p className="mt-4 text-xs text-muted-foreground">

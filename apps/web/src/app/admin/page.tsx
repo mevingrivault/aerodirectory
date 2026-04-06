@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, MessageSquare, RefreshCw, Shield, Users } from "lucide-react";
+import { Ban, ImagePlus, MessageSquare, RefreshCw, Shield, Users } from "lucide-react";
 import type { AdminDashboardStats } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -64,7 +64,7 @@ export default function AdminPage() {
       </div>
 
       {stats && (
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card>
             <CardContent className="p-5">
               <div className="mb-2 text-sm text-muted-foreground">Utilisateurs</div>
@@ -89,10 +89,16 @@ export default function AdminPage() {
               <div className="text-3xl font-bold">{stats.deletedComments}</div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-2 text-sm text-muted-foreground">Photos en attente</div>
+              <div className="text-3xl font-bold text-primary">{stats.pendingPhotos}</div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Link href="/admin/users">
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
@@ -117,6 +123,20 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               Rechercher, filtrer et moderer les commentaires avec tracabilite.
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/photos">
+          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <ImagePlus className="h-5 w-5" />
+                Photos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Valider ou rejeter les photos avant leur publication publique.
             </CardContent>
           </Card>
         </Link>
@@ -159,7 +179,7 @@ export default function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Les bannissements et suppressions de commentaires sont journalises avec l&apos;identite
+            Les bannissements et modérations de contenus sont journalises avec l&apos;identite
             de l&apos;administrateur et la date de l&apos;action.
           </CardContent>
         </Card>
