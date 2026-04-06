@@ -1,8 +1,7 @@
-FROM node:24-alpine AS base
+FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate && \
-    apk upgrade --no-cache zlib
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 FROM base AS fetch
 WORKDIR /app
@@ -20,12 +19,14 @@ RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/api build
 
-FROM node:24-alpine AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache clamav osmium-tool su-exec tzdata
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends clamav gosu osmium-tool tzdata && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
@@ -44,8 +45,8 @@ COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/apps/api/docker/entrypoint.sh /entrypoint.sh
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 apiuser && \
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid 1001 --no-create-home apiuser && \
     chmod +x /entrypoint.sh && \
     npm uninstall -g npm corepack || true
 
