@@ -6,6 +6,7 @@ import React, {
   useState,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import { LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
@@ -41,6 +42,11 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
     const [payload, setPayload] = useState<string | null>(null);
     const [mode, setMode] = useState<"checking" | "verified" | "fallback">("checking");
     const [attempt, setAttempt] = useState(0);
+    const onStateChangeRef = useRef(onStateChange);
+    useEffect(() => { onStateChangeRef.current = onStateChange; });
+    const stableOnStateChange = useCallback((state: string, p?: string) => {
+      onStateChangeRef.current?.(state, p);
+    }, []);
 
     useImperativeHandle(ref, () => ({
       getPayload() {
@@ -61,7 +67,7 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
 
       setPayload(null);
       setMode("checking");
-      onStateChange?.("verifying");
+      stableOnStateChange("verifying");
 
       void solveAltcha().then((nextPayload) => {
         if (cancelled) return;
@@ -69,18 +75,18 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
         if (nextPayload) {
           setPayload(nextPayload);
           setMode("verified");
-          onStateChange?.("verified", nextPayload);
+          stableOnStateChange("verified", nextPayload);
           return;
         }
 
         setMode("fallback");
-        onStateChange?.("fallback");
+        stableOnStateChange("fallback");
       });
 
       return () => {
         cancelled = true;
       };
-    }, [attempt, onStateChange, solveAltcha]);
+    }, [attempt, stableOnStateChange, solveAltcha]);
 
     useEffect(() => {
       if (mode !== "fallback" || typeof window === "undefined") return;
@@ -112,12 +118,12 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
         if (state === "verified" && nextPayload) {
           setMode("verified");
         }
-        onStateChange?.(state, detail?.payload);
+        stableOnStateChange(state, detail?.payload);
       };
 
       el.addEventListener("statechange", handler);
       return () => el.removeEventListener("statechange", handler);
-    }, [mode, onStateChange]);
+    }, [mode, stableOnStateChange]);
 
     return (
       <div className={`mt-4 space-y-2${className ? ` ${className}` : ""}`}>
