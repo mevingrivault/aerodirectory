@@ -41,6 +41,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @aerodirectory/database prisma:generate
 
+      - name: Build database package
+        run: pnpm --filter @aerodirectory/database build
+
       - name: Build shared package
         run: pnpm --filter @aerodirectory/shared build
 
