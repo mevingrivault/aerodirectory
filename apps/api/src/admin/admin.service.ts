@@ -1229,16 +1229,15 @@ export class AdminService {
     reviewersById: Map<string, { id: string; displayName: string | null; email: string }>,
   ): AdminReportListItem {
     const isComment = report.targetType === "comment";
-    const target = isComment
-      ? commentsById.get(report.targetId)
-      : correctionsById.get(report.targetId);
+    const commentTarget = isComment ? commentsById.get(report.targetId) : undefined;
+    const correctionTarget = !isComment ? correctionsById.get(report.targetId) : undefined;
 
-    const targetPreview = target
-      ? isComment
-        ? target.content.slice(0, 180)
-        : `${(target as { field: string }).field}: ${(target as { proposedValue: string }).proposedValue}`.slice(0, 180)
-      : null;
-    const targetStatus = target?.contentStatus ?? null;
+    const targetPreview = commentTarget
+      ? commentTarget.content.slice(0, 180)
+      : correctionTarget
+        ? `${correctionTarget.field}: ${correctionTarget.proposedValue}`.slice(0, 180)
+        : null;
+    const targetStatus = commentTarget?.contentStatus ?? correctionTarget?.contentStatus ?? null;
 
     return {
       id: report.id,

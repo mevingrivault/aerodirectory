@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@aerodirectory/database";
 import { PrismaService } from "../prisma/prisma.service";
 import type { NotificationMarkReadInput, NotificationsQueryInput } from "@aerodirectory/shared";
 
@@ -8,7 +9,7 @@ interface NotifyUserInput {
   title: string;
   message: string;
   linkUrl?: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: Prisma.InputJsonValue | null;
 }
 
 @Injectable()
