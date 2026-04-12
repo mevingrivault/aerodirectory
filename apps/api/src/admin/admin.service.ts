@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import * as argon2 from "argon2";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { NotificationService } from "../notification/notification.service";
@@ -18,6 +19,7 @@ import type {
   AdminUsersQueryInput,
   ApproveAdminPhotoInput,
   BanUserInput,
+  DeleteAdminUserInput,
   DeleteAdminCommentInput,
   RejectAdminPhotoInput,
   ReviewAdminReportInput,
@@ -259,6 +261,60 @@ export class AdminService {
       ip,
       userAgent,
       metadata: { targetUserId: userId },
+    });
+  }
+
+  async deleteUser(
+    adminId: string,
+    userId: string,
+    input: DeleteAdminUserInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    if (adminId === userId) {
+      throw new BadRequestException("Vous ne pouvez pas supprimer votre propre compte depuis cette page.");
+    }
+
+    const [admin, target] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: adminId },
+        select: { id: true, passwordHash: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, role: true, email: true, displayName: true },
+      }),
+    ]);
+
+    if (!admin) {
+      throw new NotFoundException("Administrateur introuvable");
+    }
+    if (!target) {
+      throw new NotFoundException("Utilisateur introuvable");
+    }
+    if (target.role === "ADMIN") {
+      throw new BadRequestException("La suppression d'un autre administrateur est interdite.");
+    }
+
+    const passwordOk = await argon2.verify(admin.passwordHash, input.currentPassword);
+    if (!passwordOk) {
+      throw new BadRequestException("Mot de passe administrateur incorrect.");
+    }
+
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "USER_DELETE",
+        targetUserId: target.id,
+        targetEmail: target.email,
+        targetDisplayName: target.displayName,
+        reason: input.reason?.trim() || null,
+      },
     });
   }
 

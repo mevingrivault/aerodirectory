@@ -36,6 +36,11 @@ export const BanUserSchema = z.object({
   reason: optionalText,
 });
 
+export const DeleteAdminUserSchema = z.object({
+  currentPassword: z.string().min(8).max(200),
+  reason: optionalText,
+});
+
 export const DeleteAdminCommentSchema = z.object({
   reason: optionalText,
 });
@@ -68,6 +73,7 @@ export type AdminPhotosQueryInput = z.infer<typeof AdminPhotosQuerySchema>;
 export type AdminReportsQueryInput = z.infer<typeof AdminReportsQuerySchema>;
 export type AdminMailEventsQueryInput = z.infer<typeof AdminMailEventsQuerySchema>;
 export type BanUserInput = z.infer<typeof BanUserSchema>;
+export type DeleteAdminUserInput = z.infer<typeof DeleteAdminUserSchema>;
 export type DeleteAdminCommentInput = z.infer<typeof DeleteAdminCommentSchema>;
 export type RestoreAdminCommentInput = z.infer<typeof RestoreAdminCommentSchema>;
 export type ApproveAdminPhotoInput = z.infer<typeof ApproveAdminPhotoSchema>;

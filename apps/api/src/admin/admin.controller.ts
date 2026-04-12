@@ -20,6 +20,7 @@ import {
   AdminImportOpenAirSchema,
   ApproveAdminPhotoSchema,
   BanUserSchema,
+  DeleteAdminUserSchema,
   DeleteAdminCommentSchema,
   RejectAdminPhotoSchema,
   ReviewAdminReportSchema,
@@ -32,6 +33,7 @@ import {
   type AdminImportOpenAirInput,
   type ApproveAdminPhotoInput,
   type BanUserInput,
+  type DeleteAdminUserInput,
   type DeleteAdminCommentInput,
   type RejectAdminPhotoInput,
   type ReviewAdminReportInput,
@@ -91,6 +93,24 @@ export class AdminController {
   ) {
     await this.admin.unbanUser(user.sub, userId, req.ip, req.headers["user-agent"]);
     return ok({ unbanned: true });
+  }
+
+  @Post("users/:userId/delete")
+  @HttpCode(HttpStatus.OK)
+  async deleteUser(
+    @CurrentUser() user: { sub: string },
+    @Param("userId") userId: string,
+    @Body(new ZodValidationPipe(DeleteAdminUserSchema)) body: DeleteAdminUserInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.deleteUser(
+      user.sub,
+      userId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ deleted: true });
   }
 
   @Get("comments")
