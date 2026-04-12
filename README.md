@@ -78,11 +78,12 @@ The frontend and API **never** call openAIP directly at runtime. All user-facing
 ### Quick Setup (automatic)
 
 ```bash
-# Start PostgreSQL
-docker compose up -d postgres
+# Start local services used in development
+pnpm infra:up
 
 # Run the automated setup (installs deps, creates .env files, migrates, seeds)
-pnpm install && pnpm setup
+pnpm install
+pnpm setup
 
 # Start development servers
 pnpm dev
@@ -92,7 +93,7 @@ pnpm dev
 
 ```bash
 # Start infrastructure
-docker compose up -d
+pnpm infra:up
 
 # Install dependencies
 pnpm install
@@ -115,6 +116,73 @@ pnpm db:seed
 # Start development servers
 pnpm dev
 ```
+
+### Local Development Workflow
+
+Use this when you want to iterate locally without redeploying:
+
+```bash
+# one-time install if pnpm is not available yet
+npm install -g pnpm
+
+# in the repo
+pnpm infra:up
+pnpm setup
+pnpm dev
+```
+
+Then open:
+
+- Web: http://localhost:3000
+- API: http://localhost:4000
+- Mailpit: http://localhost:8025
+
+Useful day-to-day commands:
+
+```bash
+# stop local services
+pnpm infra:down
+
+# restart only the app servers after a code change
+pnpm dev
+```
+
+Notes:
+
+- `.env.development` now matches Docker PostgreSQL on port `5432`.
+- `CLAMSCAN_ENABLED=false` by default in development to avoid requiring a host-level `clamscan` binary while debugging locally.
+- Redis, SeaweedFS, and Mailpit are started by `pnpm infra:up`; they are useful for features beyond the happy path.
+
+### Local App + Remote Database
+
+If you want to debug the app locally while reusing the online database:
+
+```bash
+# one-time install if pnpm is not available yet
+npm install -g pnpm
+
+# create your private remote env file
+cp .env.remote.example .env.remote.local
+
+# edit .env.remote.local and set DATABASE_URL to the online database
+
+# optional: start Mailpit only if you want to inspect local emails
+docker compose up -d mailpit
+
+# install deps, copy env files, generate Prisma client
+pnpm install
+pnpm setup:remote
+
+# run the app locally
+pnpm dev
+```
+
+Important:
+
+- `pnpm setup:remote` does **not** run migrations and does **not** seed the database.
+- Prefer a dedicated read-only database user for this mode when possible.
+- Leave `REDIS_URL` empty in `.env.remote.local` if you do not want the local API to share production cache state.
+- Leave S3 variables empty unless you explicitly want to test uploads against a real bucket.
 
 - API: http://localhost:4000
 - Web: http://localhost:3000
