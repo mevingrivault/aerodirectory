@@ -49,6 +49,17 @@ jobs:
           severity: 'CRITICAL,HIGH'
           trivyignores: .trivyignore
 
+      - name: Scan API image with Trivy (MEDIUM/LOW, non-blocking)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'MEDIUM,LOW'
+          trivyignores: .trivyignore
+
       - name: Push API image
         uses: docker/build-push-action@v6
         with:
@@ -99,6 +110,17 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
+          trivyignores: .trivyignore
+
+      - name: Scan Web image with Trivy (MEDIUM/LOW, non-blocking)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'MEDIUM,LOW'
           trivyignores: .trivyignore
 
       - name: Push Web image
