@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { NotificationService } from "../notification/notification.service";
 import type {
   CommentCreateInput,
   CorrectionCreateInput,
@@ -17,6 +18,7 @@ export class CommentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async createComment(
@@ -31,6 +33,7 @@ export class CommentService {
         select: {
           id: true,
           aerodromeId: true,
+          userId: true,
           parentId: true,
           deletedAt: true,
           contentStatus: true,
@@ -77,6 +80,31 @@ export class CommentService {
         parentId: input.parentId ?? null,
       },
     });
+
+    if (input.parentId) {
+      const parent = await this.prisma.comment.findUnique({
+        where: { id: input.parentId },
+        select: { userId: true },
+      });
+      const aerodrome = await this.prisma.aerodrome.findUnique({
+        where: { id: aerodromeId },
+        select: { name: true },
+      });
+      if (parent?.userId && parent.userId !== userId) {
+        await this.notifications.notifyUser({
+          userId: parent.userId,
+          type: "COMMENT_REPLY",
+          title: "Nouvelle réponse à votre commentaire",
+          message: `Un membre a répondu sur ${aerodrome?.name ?? "un aérodrome"}.`,
+          linkUrl: `/aerodrome/${aerodromeId}`,
+          metadata: {
+            aerodromeId,
+            commentId: comment.id,
+            parentId: input.parentId,
+          },
+        });
+      }
+    }
 
     return comment;
   }

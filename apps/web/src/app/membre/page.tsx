@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Map,
   Search,
+  Bell,
 } from "lucide-react";
 import type { AerodexStats } from "@aerodirectory/shared";
 
@@ -138,6 +139,8 @@ export default function MemberPage() {
             { href: "/planner", icon: Navigation, label: "Planificateur", desc: "Calculer mes routes" },
             { href: "/map", icon: Map, label: "Carte", desc: "Explorer la carte" },
             { href: "/search", icon: Search, label: "Recherche", desc: "Trouver un aérodrome" },
+            { href: "/membre/listes", icon: Heart, label: "Mes listes", desc: "Favoris et listes perso" },
+            { href: "/membre/notifications", icon: Bell, label: "Notifications", desc: "Modération et réponses" },
             { href: "/profile", icon: User, label: "Profil", desc: "Paramètres du compte" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link

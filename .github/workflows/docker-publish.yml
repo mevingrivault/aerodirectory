@@ -3,7 +3,10 @@ name: Build & Push Docker images
 on:
   push:
     branches:
-      - main   # déclenche un build de prod à chaque merge sur main
+      - main
+  pull_request:
+    branches:
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -11,9 +14,53 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  ci:
+    name: CI checks (Prisma + build)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @aerodirectory/database prisma:generate
+
+      - name: Build shared package
+        run: pnpm --filter @aerodirectory/shared build
+
+      - name: Typecheck API
+        run: pnpm --filter @aerodirectory/api lint
+
+      - name: Build API
+        run: pnpm --filter @aerodirectory/api build
+
+      - name: Build Web
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+          NEXT_PUBLIC_VAC_URL_PATTERN: https://example.com/{OACI-CODE}
+          NEXT_PUBLIC_CDN_URL: https://cdn.example.com
+        run: pnpm --filter @aerodirectory/web build
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
@@ -73,6 +120,8 @@ jobs:
   build-web:
     name: Build Web
     runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write

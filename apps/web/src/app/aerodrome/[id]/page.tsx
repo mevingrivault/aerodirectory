@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -127,6 +127,13 @@ interface Comment {
   parentId?: string | null;
   user: { id: string; displayName: string | null };
   replies?: Comment[];
+}
+
+interface UserAerodromeList {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  items: { id: string; aerodromeId: string }[];
 }
 
 interface NearbyRestaurant {
@@ -415,7 +422,38 @@ export default function AerodromeDetailPage() {
     enabled: !!user,
   });
 
+  const { data: listsRes } = useQuery({
+    queryKey: ["user-lists"],
+    queryFn: () => apiClient.get<UserAerodromeList[]>("/lists"),
+    enabled: !!user,
+  });
+
+  const addToListMutation = useMutation({
+    mutationFn: (listId: string) =>
+      apiClient.post(`/lists/${listId}/items`, { aerodromeId: id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-lists"] });
+    },
+  });
+
+  const removeFromListMutation = useMutation({
+    mutationFn: (listId: string) =>
+      apiClient.delete(`/lists/${listId}/items/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-lists"] });
+    },
+  });
+
+  const createListMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiClient.post("/lists", { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-lists"] });
+    },
+  });
+
   const currentVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+  const userLists = listsRes?.data ?? [];
 
   // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
   useEffect(() => {
@@ -453,6 +491,9 @@ export default function AerodromeDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
     ]);
   };
+
+  const isInList = (list: UserAerodromeList) =>
+    list.items.some((item) => item.aerodromeId === id);
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -754,6 +795,44 @@ export default function AerodromeDetailPage() {
             );
           })()}
         </div>
+
+        {user && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Listes perso :</span>
+            {userLists.map((list) => {
+              const active = isInList(list);
+              return (
+                <Button
+                  key={list.id}
+                  size="sm"
+                  variant="outline"
+                  className={active ? "border-primary bg-primary/10 text-primary" : ""}
+                  onClick={() => {
+                    if (active) {
+                      removeFromListMutation.mutate(list.id);
+                    } else {
+                      addToListMutation.mutate(list.id);
+                    }
+                  }}
+                  disabled={addToListMutation.isPending || removeFromListMutation.isPending}
+                >
+                  {list.name}
+                </Button>
+              );
+            })}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const name = window.prompt("Nom de la nouvelle liste");
+                if (!name || !name.trim()) return;
+                createListMutation.mutate(name.trim());
+              }}
+            >
+              + Nouvelle liste
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Weather */}

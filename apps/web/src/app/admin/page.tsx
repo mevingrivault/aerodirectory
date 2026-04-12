@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Ban,
   Clock3,
   ImagePlus,
@@ -16,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import type {
+  AdminMailEventItem,
   AdminDashboardStats,
   AdminSyncRunItem,
   AdminSyncStatusResponse,
@@ -63,6 +65,19 @@ export default function AdminPage() {
 
   const stats = statsData?.data;
   const syncStatus = syncStatusData?.data;
+  const { data: mailEventsData } = useQuery({
+    queryKey: ["admin-mail-events-preview"],
+    queryFn: () =>
+      apiClient.get<AdminMailEventItem[]>("/admin/mail-events", {
+        page: "1",
+        limit: "8",
+        status: "all",
+        template: "all",
+      }),
+    enabled: user?.role === "ADMIN",
+    refetchInterval: 30_000,
+  });
+  const mailEvents = mailEventsData?.data ?? [];
 
   const recentRuns = useMemo(
     () => syncStatus?.recentRuns.slice(0, 8) ?? [],
@@ -137,10 +152,37 @@ export default function AdminPage() {
               <div className="text-3xl font-bold text-primary">{stats.pendingPhotos}</div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-2 text-sm text-muted-foreground">Signalements en attente</div>
+              <div className="text-3xl font-bold text-amber-600">{stats.pendingReports}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-2 text-sm text-muted-foreground">Échecs captcha (24h)</div>
+              <div className="text-3xl font-bold">{stats.altchaFailures24h}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-2 text-sm text-muted-foreground">Échecs login (24h)</div>
+              <div className="text-3xl font-bold">{stats.failedLogins24h}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-2 text-sm text-muted-foreground">E-mails KO (24h)</div>
+              <div className="text-3xl font-bold text-destructive">{stats.mailFailed24h}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {stats.mailSent24h} envoyés
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Link href="/admin/users">
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
@@ -179,6 +221,20 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               Valider ou rejeter les photos avant leur publication publique.
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/reports">
+          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <AlertTriangle className="h-5 w-5" />
+                Signalements
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Traiter les signalements utilisateur (commentaires et corrections).
             </CardContent>
           </Card>
         </Link>
@@ -301,10 +357,38 @@ export default function AdminPage() {
                 Récapitulatif e-mail
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Un mail de synthèse est envoyé chaque nuit aux admins actifs et vérifiés, ou à
-              l’adresse de surcouche configurée si tu définis{" "}
-              <code>SYNC_REPORT_EMAIL_OVERRIDE</code>.
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Un mail de synthèse est envoyé chaque nuit aux admins actifs et vérifiés, ou à
+                l’adresse de surcouche configurée si tu définis{" "}
+                <code>SYNC_REPORT_EMAIL_OVERRIDE</code>.
+              </p>
+              <div className="space-y-2">
+                {mailEvents.map((event) => (
+                  <div key={event.id} className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{event.template}</span>
+                      <span
+                        className={`text-xs ${
+                          event.status === "failed" ? "text-destructive" : "text-emerald-700"
+                        }`}
+                      >
+                        {event.status === "failed" ? "échec" : "envoyé"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(event.createdAt).toLocaleString("fr-FR")}
+                      {event.recipientMasked ? ` · ${event.recipientMasked}` : ""}
+                    </div>
+                    {event.errorMessage && (
+                      <div className="mt-1 text-xs text-destructive">{event.errorMessage}</div>
+                    )}
+                  </div>
+                ))}
+                {mailEvents.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Aucun événement e-mail récent.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

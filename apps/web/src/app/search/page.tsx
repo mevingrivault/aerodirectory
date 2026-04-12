@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus } from "lucide-react";
+import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus, Save, Bookmark } from "lucide-react";
 import { AerodromeTypeIcon } from "@/components/ui/aerodrome-type-icon";
+import type { SavedSearchItem } from "@aerodirectory/shared";
 
 interface AerodromeResult {
   id: string;
@@ -67,12 +69,15 @@ const SURFACE_LABELS: Record<string, string> = {
 };
 
 export default function SearchPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [useLocation, setUseLocation] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  const [selectedSavedSearchId, setSelectedSavedSearchId] = useState("");
 
   const searchParams: Record<string, string> = {
     page: page.toString(),
@@ -93,8 +98,38 @@ export default function SearchPage() {
       apiClient.get<AerodromeResult[]>("/search", searchParams),
   });
 
+  const { data: savedSearchesRes } = useQuery({
+    queryKey: ["saved-searches"],
+    queryFn: () =>
+      apiClient.get<SavedSearchItem[]>("/search/saved", {
+        scope: "search",
+      }),
+    enabled: !!user,
+  });
+
+  const saveSearchMutation = useMutation({
+    mutationFn: (payload: { name: string; params: Record<string, string> }) =>
+      apiClient.post("/search/saved", {
+        name: payload.name,
+        scope: "search",
+        params: payload.params,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches"] });
+    },
+  });
+
+  const deleteSavedSearchMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/search/saved/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches"] });
+      setSelectedSavedSearchId("");
+    },
+  });
+
   const results = data?.data ?? [];
   const meta = data?.meta;
+  const savedSearches = savedSearchesRes?.data ?? [];
 
   const handleNearby = () => {
     if (useLocation) {
@@ -126,6 +161,42 @@ export default function SearchPage() {
     setPage(1);
   };
 
+  const applySavedSearch = (saved: SavedSearchItem) => {
+    const params = saved.params ?? {};
+    setQuery(params["q"] ?? "");
+
+    const nextFilters: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (["q", "page", "limit", "lat", "lng", "radiusKm", "sortBy"].includes(k)) continue;
+      nextFilters[k] = v;
+    }
+    setFilters(nextFilters);
+
+    if (params["lat"] && params["lng"]) {
+      setUserLat(Number(params["lat"]));
+      setUserLng(Number(params["lng"]));
+      setUseLocation(true);
+    } else {
+      setUseLocation(false);
+      setUserLat(null);
+      setUserLng(null);
+    }
+
+    setPage(1);
+  };
+
+  const handleSaveCurrentSearch = () => {
+    const name = window.prompt("Nom de la recherche sauvegardée");
+    if (!name || !name.trim()) return;
+
+    const params: Record<string, string> = {
+      ...searchParams,
+    };
+    if (!query) delete params["q"];
+
+    saveSearchMutation.mutate({ name: name.trim(), params });
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Recherche</h1>
@@ -144,7 +215,56 @@ export default function SearchPage() {
             }}
           />
         </div>
+        {user && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSaveCurrentSearch}
+            disabled={saveSearchMutation.isPending}
+            title="Sauvegarder la recherche actuelle"
+          >
+            <Save className="h-4 w-4" />
+          </Button>
+        )}
       </div>
+
+      {user && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Bookmark className="h-4 w-4" />
+            Recherches sauvegardées
+          </div>
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={selectedSavedSearchId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setSelectedSavedSearchId(id);
+              const saved = savedSearches.find((item) => item.id === id);
+              if (saved) applySavedSearch(saved);
+            }}
+          >
+            <option value="">Choisir…</option>
+            {savedSearches.map((saved) => (
+              <option key={saved.id} value={saved.id}>
+                {saved.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!selectedSavedSearchId) return;
+              deleteSavedSearchMutation.mutate(selectedSavedSearchId);
+            }}
+            disabled={!selectedSavedSearchId || deleteSavedSearchMutation.isPending}
+          >
+            Supprimer
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4">

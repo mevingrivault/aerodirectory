@@ -18,6 +18,8 @@ import { HealthModule } from "./health/health.module";
 import { RestaurantModule } from "./restaurant/restaurant.module";
 import { AdminModule } from "./admin/admin.module";
 import { PhotoModule } from "./photo/photo.module";
+import { NotificationModule } from "./notification/notification.module";
+import { ListModule } from "./list/list.module";
 import { ThrottlerGuard } from "@nestjs/throttler";
 
 @Module({
@@ -58,6 +60,8 @@ import { ThrottlerGuard } from "@nestjs/throttler";
     RestaurantModule,
     AdminModule,
     PhotoModule,
+    NotificationModule,
+    ListModule,
     SyncModule,
   ],
   providers: [

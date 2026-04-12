@@ -46,6 +46,18 @@ export const NearbySchema = z.object({
   hasFuel: z.coerce.boolean().optional(),
 });
 
+export const SavedSearchCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  scope: z.enum(["search", "planner"]).default("search"),
+  params: z.record(z.string(), z.string()).default({}),
+});
+
+export const SavedSearchListQuerySchema = z.object({
+  scope: z.enum(["search", "planner"]).default("search"),
+});
+
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type AerodromeSearchInput = z.infer<typeof AerodromeSearchSchema>;
 export type NearbyInput = z.infer<typeof NearbySchema>;
+export type SavedSearchCreateInput = z.infer<typeof SavedSearchCreateSchema>;
+export type SavedSearchListQueryInput = z.infer<typeof SavedSearchListQuerySchema>;

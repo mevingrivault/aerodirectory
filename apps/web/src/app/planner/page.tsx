@@ -25,6 +25,7 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 import type { PlannerResult } from "@aerodirectory/shared";
@@ -103,6 +104,19 @@ const DESTINATION_FILTERS: { key: keyof PlannerFilters; label: string; icon: str
 ];
 
 const DEFAULT_SURFACES = ["ASPHALT", "CONCRETE", "GRASS"];
+
+function safeCsv(value: string): string {
+  return `"${value.replaceAll("\"", "\"\"")}"`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 // ─── PlannerMap ─────────────────────────────────────────────────────────────
 
@@ -619,6 +633,99 @@ export default function PlannerPage() {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
+
+  const downloadFile = (filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    if (!sortedResults || sortedResults.length === 0) return;
+
+    const lines = [
+      [
+        "Nom",
+        "ICAO",
+        "Ville",
+        "Region",
+        "DistanceNM",
+        "TempsH",
+        "TempsTrajetH",
+        "CarburantL",
+        "CarburantTrajetL",
+        "CoutEUR",
+      ].join(","),
+      ...sortedResults.map((r) =>
+        [
+          safeCsv(r.aerodrome.name),
+          safeCsv(r.aerodrome.icaoCode ?? ""),
+          safeCsv(r.aerodrome.city ?? ""),
+          safeCsv(r.aerodrome.region ?? ""),
+          r.distanceNm.toString(),
+          r.timeHours.toString(),
+          r.tripTimeHours.toString(),
+          r.fuelUsedLiters.toString(),
+          r.tripFuelLiters.toString(),
+          r.estimatedCost.toString(),
+        ].join(","),
+      ),
+    ];
+
+    downloadFile(
+      `planner-${new Date().toISOString().slice(0, 10)}.csv`,
+      lines.join("\n"),
+      "text/csv;charset=utf-8",
+    );
+  };
+
+  const handleExportBriefing = () => {
+    if (!sortedResults || sortedResults.length === 0) return;
+
+    const briefing = [
+      "BRIEFING PLANIFICATEUR NAVVENTURA",
+      `Date: ${new Date().toLocaleString("fr-FR")}`,
+      `Depart: ${departureAerodrome?.name ?? "-"}`,
+      `Profile: ${selectedProfile?.name ?? "-"}`,
+      `Mode: ${searchMode}`,
+      `Scope: ${tripScope}`,
+      `Resultats: ${sortedResults.length}`,
+      "",
+      ...sortedResults.slice(0, 30).map(
+        (r, i) =>
+          `${i + 1}. ${r.aerodrome.name} (${r.aerodrome.icaoCode ?? "N/A"}) - ${formatNm(r.distanceNm)} - ${formatFlightTime(r.tripTimeHours)} - ${formatEuros(r.estimatedCost)}`,
+      ),
+      "",
+      "Rappel: verifier AIP/NOTAM/METEO avant le vol.",
+    ].join("\n");
+
+    downloadFile(
+      `briefing-${new Date().toISOString().slice(0, 10)}.txt`,
+      briefing,
+      "text/plain;charset=utf-8",
+    );
+  };
+
+  const handleExportPdf = () => {
+    if (!sortedResults || sortedResults.length === 0) return;
+
+    const rows = sortedResults
+      .slice(0, 50)
+      .map(
+        (r) =>
+          `<tr><td>${escapeHtml(r.aerodrome.name)}</td><td>${escapeHtml(r.aerodrome.icaoCode ?? "")}</td><td>${r.distanceNm} NM</td><td>${r.tripTimeHours} h</td><td>${r.estimatedCost} EUR</td></tr>`,
+      )
+      .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Briefing PDF</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:20px;margin:0 0 8px}p{margin:0 0 12px;color:#555}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f7f7f7}</style></head><body><h1>Briefing vol</h1><p>${escapeHtml(departureAerodrome?.name ?? "-")} - ${escapeHtml(selectedProfile?.name ?? "-")} - ${new Date().toLocaleString("fr-FR")}</p><table><thead><tr><th>Destination</th><th>ICAO</th><th>Distance</th><th>Temps</th><th>Cout</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  };
 
   // ── Unauthenticated guard ──
   if (!user) {
@@ -1259,6 +1366,30 @@ export default function PlannerPage() {
 
               {/* View toggle */}
               <div className="ml-auto flex gap-1">
+                <button
+                  onClick={handleExportCsv}
+                  className="flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-colors border-border hover:bg-accent/50"
+                  title="Exporter CSV"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </button>
+                <button
+                  onClick={handleExportBriefing}
+                  className="flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-colors border-border hover:bg-accent/50"
+                  title="Exporter briefing"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Briefing
+                </button>
+                <button
+                  onClick={handleExportPdf}
+                  className="flex items-center gap-1.5 text-xs rounded-md border px-2.5 py-1.5 transition-colors border-border hover:bg-accent/50"
+                  title="Imprimer en PDF"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  PDF
+                </button>
                 {(["list", "map"] as const).map((mode) => (
                   <button
                     key={mode}

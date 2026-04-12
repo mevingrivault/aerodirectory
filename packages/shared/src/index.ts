@@ -5,5 +5,7 @@ export * from "./schemas/planner.schema";
 export * from "./schemas/comment.schema";
 export * from "./schemas/visit.schema";
 export * from "./schemas/admin.schema";
+export * from "./schemas/list.schema";
+export * from "./schemas/notification.schema";
 export * from "./types/api";
 export * from "./constants";

@@ -5,14 +5,22 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { NotificationService } from "../notification/notification.service";
+import { parseOpenAirFile } from "../services/airspace/openair-parser";
 import type {
+  AdminImportOpenAirInput,
   AdminCommentsQueryInput,
+  AdminMailEventsQueryInput,
+  AdminMailEventItem,
   AdminPhotosQueryInput,
+  AdminReportListItem,
+  AdminReportsQueryInput,
   AdminUsersQueryInput,
   ApproveAdminPhotoInput,
   BanUserInput,
   DeleteAdminCommentInput,
   RejectAdminPhotoInput,
+  ReviewAdminReportInput,
   RestoreAdminCommentInput,
   AdminDashboardStats,
   AdminUserDetail,
@@ -26,10 +34,12 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
-    const [totalUsers, bannedUsers, activeComments, pendingPhotos] =
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [totalUsers, bannedUsers, activeComments, pendingPhotos, pendingReports, failedLogins24h, altchaFailures24h, mailSent24h, mailFailed24h] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: "BANNED" } }),
@@ -40,6 +50,36 @@ export class AdminService {
           },
         }),
         this.prisma.photo.count({ where: { status: "PENDING" } }),
+        this.prisma.report.count({ where: { contentStatus: "PENDING" } }),
+        this.prisma.auditLog.count({
+          where: {
+            action: "LOGIN_FAILED",
+            createdAt: { gte: since24h },
+          },
+        }),
+        this.prisma.auditLog.count({
+          where: {
+            action: "ADMIN_ACTION",
+            createdAt: { gte: since24h },
+            metadata: { path: ["type"], equals: "ALTCHA_FAILED" },
+          },
+        }),
+        this.prisma.auditLog.count({
+          where: {
+            action: "ADMIN_ACTION",
+            createdAt: { gte: since24h },
+            metadata: { path: ["type"], equals: "MAIL_DELIVERY" },
+            AND: [{ metadata: { path: ["status"], equals: "sent" } }],
+          },
+        }),
+        this.prisma.auditLog.count({
+          where: {
+            action: "ADMIN_ACTION",
+            createdAt: { gte: since24h },
+            metadata: { path: ["type"], equals: "MAIL_DELIVERY" },
+            AND: [{ metadata: { path: ["status"], equals: "failed" } }],
+          },
+        }),
       ]);
 
     return {
@@ -48,6 +88,11 @@ export class AdminService {
       activeComments,
       deletedComments: 0,
       pendingPhotos,
+      pendingReports,
+      failedLogins24h,
+      altchaFailures24h,
+      mailSent24h,
+      mailFailed24h,
     };
   }
 
@@ -604,6 +649,489 @@ export class AdminService {
     });
   }
 
+  async listReports(query: AdminReportsQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const search = query.search?.trim();
+    const state = query.state ?? "pending";
+    const targetType = query.targetType ?? "all";
+
+    const where = {
+      ...(state === "pending"
+        ? { contentStatus: "PENDING" as const }
+        : state === "approved"
+          ? { contentStatus: "APPROVED" as const }
+          : state === "rejected"
+            ? { contentStatus: "REJECTED" as const }
+            : {}),
+      ...(targetType !== "all" ? { targetType } : {}),
+      ...(search
+        ? {
+            OR: [
+              { reason: { contains: search, mode: "insensitive" as const } },
+              {
+                user: {
+                  email: { contains: search, mode: "insensitive" as const },
+                },
+              },
+              {
+                user: {
+                  displayName: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+              {
+                aerodrome: {
+                  name: { contains: search, mode: "insensitive" as const },
+                },
+              },
+              {
+                aerodrome: {
+                  icaoCode: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+              {
+                targetId: {
+                  contains: search,
+                  mode: "insensitive" as const,
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [reports, total] = await Promise.all([
+      this.prisma.report.findMany({
+        where,
+        include: {
+          user: {
+            select: { id: true, displayName: true, email: true },
+          },
+          aerodrome: {
+            select: { id: true, name: true, icaoCode: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.report.count({ where }),
+    ]);
+
+    const commentIds = reports
+      .filter((report) => report.targetType === "comment")
+      .map((report) => report.targetId);
+    const correctionIds = reports
+      .filter((report) => report.targetType === "correction")
+      .map((report) => report.targetId);
+    const reviewerIds = Array.from(
+      new Set(reports.map((report) => report.reviewedBy).filter((id): id is string => !!id)),
+    );
+
+    const [comments, corrections, reviewers] = await Promise.all([
+      commentIds.length
+        ? this.prisma.comment.findMany({
+            where: { id: { in: commentIds } },
+            select: { id: true, content: true, contentStatus: true },
+          })
+        : [],
+      correctionIds.length
+        ? this.prisma.correction.findMany({
+            where: { id: { in: correctionIds } },
+            select: {
+              id: true,
+              field: true,
+              proposedValue: true,
+              contentStatus: true,
+            },
+          })
+        : [],
+      reviewerIds.length
+        ? this.prisma.user.findMany({
+            where: { id: { in: reviewerIds } },
+            select: { id: true, displayName: true, email: true },
+          })
+        : [],
+    ]);
+
+    const commentsById = new Map(comments.map((c) => [c.id, c]));
+    const correctionsById = new Map(corrections.map((c) => [c.id, c]));
+    const reviewersById = new Map(reviewers.map((u) => [u.id, u]));
+
+    return {
+      data: reports.map((report) =>
+        this.toAdminReportListItem(report, commentsById, correctionsById, reviewersById),
+      ),
+      total,
+    };
+  }
+
+  async approveReport(
+    adminId: string,
+    reportId: string,
+    input: ReviewAdminReportInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+      select: {
+        id: true,
+        userId: true,
+        targetType: true,
+        targetId: true,
+        contentStatus: true,
+        aerodromeId: true,
+      },
+    });
+
+    if (!report) {
+      throw new NotFoundException("Signalement introuvable");
+    }
+
+    if (report.contentStatus !== "PENDING") {
+      throw new BadRequestException("Ce signalement a déjà été traité.");
+    }
+
+    const [pendingReporters, targetOwner, aerodrome] = await Promise.all([
+      this.prisma.report.findMany({
+        where: {
+          targetType: report.targetType,
+          targetId: report.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { userId: true },
+      }),
+      report.targetType === "comment"
+        ? this.prisma.comment.findUnique({
+            where: { id: report.targetId },
+            select: { userId: true },
+          })
+        : this.prisma.correction.findUnique({
+            where: { id: report.targetId },
+            select: { userId: true },
+          }),
+      this.prisma.aerodrome.findUnique({
+        where: { id: report.aerodromeId },
+        select: { name: true },
+      }),
+    ]);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.report.updateMany({
+        where: {
+          targetType: report.targetType,
+          targetId: report.targetId,
+          contentStatus: "PENDING",
+        },
+        data: {
+          contentStatus: "APPROVED",
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      if (report.targetType === "comment") {
+        await tx.comment.updateMany({
+          where: { id: report.targetId },
+          data: { contentStatus: "FLAGGED" },
+        });
+      } else {
+        await tx.correction.updateMany({
+          where: { id: report.targetId },
+          data: { contentStatus: "FLAGGED" },
+        });
+      }
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "REPORT_APPROVE",
+        reportId,
+        targetType: report.targetType,
+        targetId: report.targetId,
+        aerodromeId: report.aerodromeId,
+        note: input.note?.trim() || null,
+      },
+    });
+
+    const reporterIds = [...new Set(pendingReporters.map((r) => r.userId))];
+    await this.notifications.notifyUsers(
+      reporterIds.map((userId) => ({
+        userId,
+        type: "REPORT_APPROVED",
+        title: "Signalement validé",
+        message: `Votre signalement sur ${aerodrome?.name ?? "un aérodrome"} a été validé.`,
+        linkUrl: `/aerodrome/${report.aerodromeId}`,
+        metadata: { reportId, targetType: report.targetType, targetId: report.targetId },
+      })),
+    );
+
+    if (targetOwner?.userId && !reporterIds.includes(targetOwner.userId)) {
+      await this.notifications.notifyUser({
+        userId: targetOwner.userId,
+        type: "CONTENT_FLAGGED",
+        title: "Contenu signalé",
+        message:
+          report.targetType === "comment"
+            ? `Un commentaire a été marqué comme signalé sur ${aerodrome?.name ?? "un aérodrome"}.`
+            : `Une correction proposée a été marquée comme signalée sur ${aerodrome?.name ?? "un aérodrome"}.`,
+        linkUrl: `/aerodrome/${report.aerodromeId}`,
+        metadata: { targetType: report.targetType, targetId: report.targetId },
+      });
+    }
+  }
+
+  async rejectReport(
+    adminId: string,
+    reportId: string,
+    input: ReviewAdminReportInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+      select: {
+        id: true,
+        userId: true,
+        targetType: true,
+        targetId: true,
+        contentStatus: true,
+        aerodromeId: true,
+      },
+    });
+
+    if (!report) {
+      throw new NotFoundException("Signalement introuvable");
+    }
+
+    if (report.contentStatus !== "PENDING") {
+      throw new BadRequestException("Ce signalement a déjà été traité.");
+    }
+
+    const [pendingReporters, targetOwner, aerodrome] = await Promise.all([
+      this.prisma.report.findMany({
+        where: {
+          targetType: report.targetType,
+          targetId: report.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { userId: true },
+      }),
+      report.targetType === "comment"
+        ? this.prisma.comment.findUnique({
+            where: { id: report.targetId },
+            select: { userId: true },
+          })
+        : this.prisma.correction.findUnique({
+            where: { id: report.targetId },
+            select: { userId: true },
+          }),
+      this.prisma.aerodrome.findUnique({
+        where: { id: report.aerodromeId },
+        select: { name: true },
+      }),
+    ]);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.report.updateMany({
+        where: {
+          targetType: report.targetType,
+          targetId: report.targetId,
+          contentStatus: "PENDING",
+        },
+        data: {
+          contentStatus: "REJECTED",
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      if (report.targetType === "comment") {
+        await tx.comment.updateMany({
+          where: { id: report.targetId, contentStatus: "FLAGGED" },
+          data: { contentStatus: "APPROVED" },
+        });
+      } else {
+        await tx.correction.updateMany({
+          where: { id: report.targetId, contentStatus: "FLAGGED" },
+          data: { contentStatus: "PENDING" },
+        });
+      }
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "REPORT_REJECT",
+        reportId,
+        targetType: report.targetType,
+        targetId: report.targetId,
+        aerodromeId: report.aerodromeId,
+        note: input.note?.trim() || null,
+      },
+    });
+
+    const reporterIds = [...new Set(pendingReporters.map((r) => r.userId))];
+    await this.notifications.notifyUsers(
+      reporterIds.map((userId) => ({
+        userId,
+        type: "REPORT_REJECTED",
+        title: "Signalement refusé",
+        message: `Votre signalement sur ${aerodrome?.name ?? "un aérodrome"} a été refusé.`,
+        linkUrl: `/aerodrome/${report.aerodromeId}`,
+        metadata: { reportId, targetType: report.targetType, targetId: report.targetId },
+      })),
+    );
+
+    if (targetOwner?.userId && !reporterIds.includes(targetOwner.userId)) {
+      await this.notifications.notifyUser({
+        userId: targetOwner.userId,
+        type: "CONTENT_RESTORED",
+        title: "Contenu rétabli",
+        message:
+          report.targetType === "comment"
+            ? `Votre commentaire a été rétabli sur ${aerodrome?.name ?? "un aérodrome"}.`
+            : `Votre correction proposée a été rétablie sur ${aerodrome?.name ?? "un aérodrome"}.`,
+        linkUrl: `/aerodrome/${report.aerodromeId}`,
+        metadata: { targetType: report.targetType, targetId: report.targetId },
+      });
+    }
+  }
+
+  async importOpenAir(
+    adminId: string,
+    input: AdminImportOpenAirInput,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const source = input.source.trim().toLowerCase();
+    const parsed = parseOpenAirFile(input.content);
+    const replaceSource = input.replaceSource ?? true;
+    let imported = 0;
+
+    if (replaceSource) {
+      await this.prisma.airspace.deleteMany({ where: { source } });
+    }
+
+    for (let i = 0; i < parsed.airspaces.length; i++) {
+      const airspace = parsed.airspaces[i]!;
+      const sourceId = buildOpenAirSourceId(airspace, i);
+
+      await this.prisma.airspace.upsert({
+        where: {
+          source_sourceId: {
+            source,
+            sourceId,
+          },
+        },
+        update: {
+          name: airspace.name,
+          class: airspace.class,
+          lowerLimit: airspace.lowerLimit,
+          upperLimit: airspace.upperLimit,
+          geometry: airspace.geometry,
+        },
+        create: {
+          name: airspace.name,
+          class: airspace.class,
+          lowerLimit: airspace.lowerLimit,
+          upperLimit: airspace.upperLimit,
+          geometry: airspace.geometry,
+          source,
+          sourceId,
+        },
+      });
+
+      imported++;
+    }
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "OPENAIR_IMPORT",
+        source,
+        replaceSource,
+        imported,
+        errors: parsed.errors.length,
+      },
+    });
+
+    return {
+      imported,
+      errors: parsed.errors,
+    };
+  }
+
+  async listMailEvents(query: AdminMailEventsQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const status = query.status ?? "all";
+    const template = query.template ?? "all";
+    const search = query.search?.trim();
+
+    const andFilters: Array<Record<string, unknown>> = [];
+    if (status !== "all") {
+      andFilters.push({ metadata: { path: ["status"], equals: status } });
+    }
+    if (template !== "all") {
+      andFilters.push({ metadata: { path: ["template"], equals: template } });
+    }
+
+    const where = {
+      action: "ADMIN_ACTION" as const,
+      metadata: { path: ["type"], equals: "MAIL_DELIVERY" },
+      ...(andFilters.length ? { AND: andFilters } : {}),
+    };
+
+    const [logs, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          createdAt: true,
+          metadata: true,
+        },
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    const items = logs
+      .map((log) => this.toAdminMailEventItem(log))
+      .filter((item): item is AdminMailEventItem => item !== null)
+      .filter((item) => {
+        if (!search) return true;
+        const needle = search.toLowerCase();
+        return (
+          item.recipientMasked?.toLowerCase().includes(needle) ||
+          item.recipientDomain?.toLowerCase().includes(needle) ||
+          item.errorMessage?.toLowerCase().includes(needle) ||
+          false
+        );
+      });
+
+    return { data: items, total };
+  }
+
   private toAdminUserListItem(user: {
     id: string;
     email: string;
@@ -682,4 +1210,104 @@ export class AdminService {
       reviewedBy: photo.reviewedBy ?? null,
     };
   }
+
+  private toAdminReportListItem(
+    report: {
+      id: string;
+      targetType: string;
+      targetId: string;
+      reason: string;
+      contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+      reviewedBy: string | null;
+      createdAt: Date;
+      reviewedAt: Date | null;
+      user: { id: string; displayName: string | null; email: string };
+      aerodrome: { id: string; name: string; icaoCode: string | null };
+    },
+    commentsById: Map<string, { id: string; content: string; contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" }>,
+    correctionsById: Map<string, { id: string; field: string; proposedValue: string; contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" }>,
+    reviewersById: Map<string, { id: string; displayName: string | null; email: string }>,
+  ): AdminReportListItem {
+    const isComment = report.targetType === "comment";
+    const target = isComment
+      ? commentsById.get(report.targetId)
+      : correctionsById.get(report.targetId);
+
+    const targetPreview = target
+      ? isComment
+        ? target.content.slice(0, 180)
+        : `${(target as { field: string }).field}: ${(target as { proposedValue: string }).proposedValue}`.slice(0, 180)
+      : null;
+    const targetStatus = target?.contentStatus ?? null;
+
+    return {
+      id: report.id,
+      targetType: isComment ? "comment" : "correction",
+      targetId: report.targetId,
+      reason: report.reason,
+      contentStatus: report.contentStatus,
+      createdAt: report.createdAt.toISOString(),
+      reviewedAt: report.reviewedAt?.toISOString() ?? null,
+      reviewedBy: report.reviewedBy ? (reviewersById.get(report.reviewedBy) ?? null) : null,
+      aerodrome: report.aerodrome,
+      user: report.user,
+      targetPreview,
+      targetStatus,
+    };
+  }
+
+  private toAdminMailEventItem(log: {
+    id: string;
+    createdAt: Date;
+    metadata: unknown;
+  }): AdminMailEventItem | null {
+    const metadata = log.metadata as Record<string, unknown> | null;
+    if (!metadata || metadata["type"] !== "MAIL_DELIVERY") return null;
+
+    const template = metadata["template"];
+    const status = metadata["status"];
+    if (
+      (template !== "password_reset" &&
+        template !== "email_verification" &&
+        template !== "sync_summary") ||
+      (status !== "sent" && status !== "failed")
+    ) {
+      return null;
+    }
+
+    return {
+      id: log.id,
+      createdAt: log.createdAt.toISOString(),
+      template,
+      status,
+      recipientMasked:
+        typeof metadata["recipientMasked"] === "string"
+          ? metadata["recipientMasked"]
+          : null,
+      recipientDomain:
+        typeof metadata["recipientDomain"] === "string"
+          ? metadata["recipientDomain"]
+          : null,
+      errorMessage:
+        typeof metadata["errorMessage"] === "string"
+          ? metadata["errorMessage"]
+          : null,
+    };
+  }
+}
+
+function buildOpenAirSourceId(
+  airspace: {
+    name: string;
+    class: string;
+    lowerLimit: string;
+    upperLimit: string;
+    geometry: { type: "Polygon"; coordinates: [number, number][][] };
+  },
+  index: number,
+): string {
+  const firstPoint = airspace.geometry.coordinates[0]?.[0];
+  const pointKey = firstPoint ? `${firstPoint[0].toFixed(6)}:${firstPoint[1].toFixed(6)}` : "nopoint";
+  const seed = `${airspace.class}|${airspace.name}|${airspace.lowerLimit}|${airspace.upperLimit}|${pointKey}|${index}`;
+  return seed.toLowerCase();
 }
