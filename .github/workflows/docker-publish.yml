@@ -105,7 +105,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Scan API image with Trivy (CRITICAL/HIGH, blocking)
-        uses: aquasecurity/trivy-action@0.63.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: '${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}'
           format: 'table'
@@ -116,7 +116,7 @@ jobs:
 
       - name: Scan API image with Trivy (MEDIUM/LOW, non-blocking)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.63.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: '${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}'
           format: 'table'
@@ -165,7 +165,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
       - name: Scan Web image with Trivy (CRITICAL/HIGH, blocking)
-        uses: aquasecurity/trivy-action@0.63.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
           format: 'table'
@@ -176,7 +176,7 @@ jobs:
 
       - name: Scan Web image with Trivy (MEDIUM/LOW, non-blocking)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.63.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
           format: 'table'
