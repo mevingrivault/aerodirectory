@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@aerodirectory/database";
+import { Prisma } from "@aerodirectory/database";
 import { createReadStream } from "node:fs";
 import {
   access,
@@ -209,27 +210,20 @@ function parseGeoJsonSeqLine(rawLine: string): OsmPoiRow | null {
 async function upsertBatch(prisma: PrismaClient, rows: OsmPoiRow[]) {
   if (rows.length === 0) return;
 
-  const values: unknown[] = [];
-  const placeholders: string[] = [];
-  let index = 1;
+  const rowFragments = rows.map(
+    (row) =>
+      Prisma.sql`(${row.osmId}, ${row.lat}, ${row.lon}, ${row.category}, ${JSON.stringify(row.tags)}::jsonb, NOW(), NOW())`,
+  );
 
-  for (const row of rows) {
-    placeholders.push(
-      `($${index++}, $${index++}, $${index++}, $${index++}, $${index++}::jsonb, NOW(), NOW())`,
-    );
-    values.push(row.osmId, row.lat, row.lon, row.category, JSON.stringify(row.tags));
-  }
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO osm.pois ("osmId", "lat", "lon", "category", "tags", "importedAt", "updatedAt")
-     VALUES ${placeholders.join(", ")}
+  await prisma.$executeRaw(
+    Prisma.sql`INSERT INTO osm.pois ("osmId", "lat", "lon", "category", "tags", "importedAt", "updatedAt")
+     VALUES ${Prisma.join(rowFragments)}
      ON CONFLICT ("osmId") DO UPDATE SET
        "lat" = EXCLUDED."lat",
        "lon" = EXCLUDED."lon",
        "category" = EXCLUDED."category",
        "tags" = EXCLUDED."tags",
        "updatedAt" = NOW()`,
-    ...values,
   );
 }
 
