@@ -17,6 +17,18 @@ export class AerodromeService {
         runways: true,
         frequencies: true,
         fuels: true,
+        corrections: {
+          where: { contentStatus: "APPROVED" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
         _count: {
           select: {
             visits: true,
@@ -45,6 +57,18 @@ export class AerodromeService {
         runways: true,
         frequencies: true,
         fuels: true,
+        corrections: {
+          where: { contentStatus: "APPROVED" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
         _count: {
           select: {
             visits: true,

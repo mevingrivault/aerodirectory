@@ -199,11 +199,32 @@ export class CommentService {
     input: CorrectionCreateInput,
     ip?: string,
   ) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id: aerodromeId },
+      include: {
+        runways: {
+          orderBy: [{ mainRunway: "desc" }, { length: "desc" }],
+        },
+        frequencies: {
+          orderBy: [{ isPrimary: "desc" }, { mhz: "asc" }],
+        },
+        fuels: {
+          where: { available: true },
+          orderBy: { type: "asc" },
+        },
+      },
+    });
+
+    if (!aerodrome) {
+      throw new NotFoundException("Aérodrome introuvable.");
+    }
+
     const correction = await this.prisma.correction.create({
       data: {
         userId,
         aerodromeId,
         field: input.field,
+        currentValue: this.resolveAerodromeCurrentValue(aerodrome, input.field),
         proposedValue: input.proposedValue,
         reason: input.reason,
       },
@@ -258,6 +279,43 @@ export class CommentService {
       if (existingPendingReport) {
         throw new BadRequestException("Vous avez déjà signalé ce commentaire.");
       }
+    } else {
+      const correction = await this.prisma.correction.findUnique({
+        where: { id: input.targetId },
+        select: {
+          id: true,
+          userId: true,
+          aerodromeId: true,
+          contentStatus: true,
+        },
+      });
+
+      if (!correction || correction.aerodromeId !== aerodromeId) {
+        throw new NotFoundException("Contribution introuvable.");
+      }
+
+      if (correction.userId === userId) {
+        throw new BadRequestException("Vous ne pouvez pas signaler votre propre contribution.");
+      }
+
+      if (correction.contentStatus !== "APPROVED") {
+        throw new BadRequestException("Cette contribution n'est pas visible publiquement.");
+      }
+
+      const existingPendingReport = await this.prisma.report.findFirst({
+        where: {
+          userId,
+          aerodromeId,
+          targetType: "correction",
+          targetId: input.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      if (existingPendingReport) {
+        throw new BadRequestException("Vous avez déjà signalé cette contribution.");
+      }
     }
 
     const report = await this.prisma.report.create({
@@ -285,5 +343,109 @@ export class CommentService {
     });
 
     return report;
+  }
+
+  private resolveAerodromeCurrentValue(
+    aerodrome: {
+      name: string;
+      city: string | null;
+      region: string | null;
+      department: string | null;
+      description: string | null;
+      websiteUrl: string | null;
+      aipLink: string | null;
+      vacLink: string | null;
+      ppr: boolean;
+      privateUse: boolean;
+      nightOperations: boolean;
+      hasRestaurant: boolean;
+      hasTransport: boolean;
+      hasAccommodation: boolean;
+      hasMaintenance: boolean;
+      hasHangars: boolean;
+      runways: { identifier: string; length: number; surface: string }[];
+      frequencies: { type: string; mhz: number; callsign: string | null }[];
+      fuels: { type: string }[];
+    },
+    field: string,
+  ): string | null {
+    const normalizedField = field.trim().toLowerCase();
+
+    switch (normalizedField) {
+      case "name":
+      case "nom":
+        return aerodrome.name;
+      case "city":
+      case "ville":
+        return aerodrome.city;
+      case "region":
+      case "région":
+      case "region/zone":
+        return aerodrome.region;
+      case "department":
+      case "département":
+        return aerodrome.department;
+      case "description":
+        return aerodrome.description;
+      case "website":
+      case "site":
+      case "site web":
+      case "websiteurl":
+        return aerodrome.websiteUrl;
+      case "aip":
+      case "aiplink":
+        return aerodrome.aipLink;
+      case "vac":
+      case "vaclink":
+        return aerodrome.vacLink;
+      case "ppr":
+        return aerodrome.ppr ? "Oui" : "Non";
+      case "private":
+      case "usage privé":
+      case "privateuse":
+        return aerodrome.privateUse ? "Oui" : "Non";
+      case "vols de nuit":
+      case "nightoperations":
+        return aerodrome.nightOperations ? "Oui" : "Non";
+      case "restaurant":
+        return aerodrome.hasRestaurant ? "Oui" : "Non";
+      case "transport":
+        return aerodrome.hasTransport ? "Oui" : "Non";
+      case "hébergement":
+      case "hebergement":
+      case "accommodation":
+        return aerodrome.hasAccommodation ? "Oui" : "Non";
+      case "maintenance":
+        return aerodrome.hasMaintenance ? "Oui" : "Non";
+      case "hangars":
+        return aerodrome.hasHangars ? "Oui" : "Non";
+      case "runway":
+      case "runways":
+      case "piste":
+      case "pistes":
+        return aerodrome.runways.length
+          ? aerodrome.runways
+              .map((runway) => `${runway.identifier} - ${runway.length} m - ${runway.surface}`)
+              .join(" | ")
+          : null;
+      case "frequency":
+      case "frequencies":
+      case "fréquence":
+      case "fréquences":
+        return aerodrome.frequencies.length
+          ? aerodrome.frequencies
+              .map((frequency) =>
+                `${frequency.type} ${frequency.mhz}${frequency.callsign ? ` (${frequency.callsign})` : ""}`,
+              )
+              .join(" | ")
+          : null;
+      case "fuel":
+      case "fuels":
+      case "carburant":
+      case "carburants":
+        return aerodrome.fuels.length ? aerodrome.fuels.map((fuel) => fuel.type).join(", ") : null;
+      default:
+        return null;
+    }
   }
 }

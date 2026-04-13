@@ -121,6 +121,16 @@ interface AerodromeDetail {
     availabilityHours: string | null;
     paymentType: string;
   }[];
+  corrections: {
+    id: string;
+    field: string;
+    currentValue: string | null;
+    proposedValue: string;
+    reason: string | null;
+    createdAt: string;
+    reviewedAt: string | null;
+    user: { id: string; displayName: string | null };
+  }[];
   _count: { visits: number; comments: number };
 }
 
@@ -353,6 +363,26 @@ const PASSENGER_LABELS: Record<number, string> = {
   7: "Santé",
 };
 
+const COMMUNITY_FIELD_OPTIONS = [
+  { value: "name", label: "Nom" },
+  { value: "city", label: "Ville" },
+  { value: "region", label: "Région" },
+  { value: "description", label: "Description" },
+  { value: "website", label: "Site web" },
+  { value: "aip", label: "Lien AIP" },
+  { value: "vac", label: "Lien VAC" },
+  { value: "restaurant", label: "Restauration" },
+  { value: "transport", label: "Transport" },
+  { value: "hébergement", label: "Hébergement" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "hangars", label: "Hangars" },
+  { value: "runways", label: "Pistes" },
+  { value: "frequencies", label: "Fréquences" },
+  { value: "fuels", label: "Carburants" },
+  { value: "local", label: "Info locale / conseil pilote" },
+  { value: "other", label: "Autre" },
+] as const;
+
 function formatDeclination(value: number | null) {
   if (value == null) return null;
   if (value === 0) return "0°";
@@ -363,6 +393,10 @@ function formatOpenAipCode(code: number) {
   return `Code ${code}`;
 }
 
+function formatCommunityFieldLabel(field: string) {
+  return COMMUNITY_FIELD_OPTIONS.find((option) => option.value === field)?.label ?? field;
+}
+
 export default function AerodromeDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -370,9 +404,17 @@ export default function AerodromeDetailPage() {
   const queryClient = useQueryClient();
   const solveAltcha = useAltchaAuto();
   const [commentText, setCommentText] = useState("");
+  const [correctionField, setCorrectionField] = useState<(typeof COMMUNITY_FIELD_OPTIONS)[number]["value"]>("description");
+  const [customCorrectionField, setCustomCorrectionField] = useState("");
+  const [correctionValue, setCorrectionValue] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [commentActionAlert, setCommentActionAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [correctionActionAlert, setCorrectionActionAlert] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
@@ -547,6 +589,7 @@ export default function AerodromeDetailPage() {
   }, [photosRes]);
 
   const comments = commentsRes?.data ?? [];
+  const communityCorrections = ad?.corrections ?? [];
   const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
   const nearbyAerodromes = allNearby.filter((n) => n.aerodromeType !== "ULTRALIGHT_FIELD").slice(0, 6);
   const nearbyUlm = allNearby.filter((n) => n.aerodromeType === "ULTRALIGHT_FIELD").slice(0, 6);
@@ -571,6 +614,41 @@ export default function AerodromeDetailPage() {
       throw error;
     } finally {
       setIsVisitUpdating(false);
+    }
+  };
+
+  const handleSubmitCorrection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const field = correctionField === "other" ? customCorrectionField.trim() : correctionField;
+    if (!field || !correctionValue.trim()) return;
+
+    setCorrectionActionAlert(null);
+
+    try {
+      await apiClient.post(`/aerodromes/${id}/corrections`, {
+        field,
+        proposedValue: correctionValue.trim(),
+        reason: correctionReason.trim() || undefined,
+      });
+
+      setCorrectionValue("");
+      setCorrectionReason("");
+      setCustomCorrectionField("");
+      setCorrectionField("description");
+      setCorrectionActionAlert({
+        type: "success",
+        message:
+          "Votre contribution a bien été enregistrée. Elle sera visible publiquement après validation par un admin.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["aerodrome", id] });
+    } catch (error) {
+      setCorrectionActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible d'envoyer cette contribution pour le moment.",
+      });
     }
   };
 
@@ -652,6 +730,33 @@ export default function AerodromeDetailPage() {
           error instanceof Error
             ? error.message
             : "Impossible de supprimer ce commentaire.",
+      });
+    }
+  };
+
+  const handleReportCorrection = async (correctionId: string) => {
+    const reason = window.prompt("Pourquoi signalez-vous cette contribution ?");
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await apiClient.post(`/aerodromes/${id}/reports`, {
+        targetType: "correction",
+        targetId: correctionId,
+        reason: reason.trim(),
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["aerodrome", id] });
+      setCorrectionActionAlert({
+        type: "success",
+        message: "La contribution a été signalée et masquée en attendant modération.",
+      });
+    } catch (error) {
+      setCorrectionActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible de signaler cette contribution.",
       });
     }
   };
@@ -983,6 +1088,162 @@ export default function AerodromeDetailPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
+              Elles complètent la fiche sans modifier la donnée importée.
+            </div>
+
+            {correctionActionAlert && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  correctionActionAlert.type === "success"
+                    ? "border-green-300 bg-green-50 text-green-800"
+                    : "border-red-300 bg-red-50 text-red-800"
+                }`}
+              >
+                {correctionActionAlert.message}
+              </div>
+            )}
+
+            {user ? (
+              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
+                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Type de contribution</label>
+                    <select
+                      value={correctionField}
+                      onChange={(event) =>
+                        setCorrectionField(
+                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
+                        )
+                      }
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Proposition</label>
+                    <textarea
+                      value={correctionValue}
+                      onChange={(event) => setCorrectionValue(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
+                    />
+                  </div>
+                </div>
+
+                {correctionField === "other" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Champ concerné</label>
+                    <Input
+                      value={customCorrectionField}
+                      onChange={(event) => setCustomCorrectionField(event.target.value)}
+                      maxLength={100}
+                      placeholder="Ex. procédures locales, accès, horaires..."
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Contexte ou justification</label>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Optionnel : source, précision locale, explication..."
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Votre proposition sera relue avant publication.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !correctionValue.trim() ||
+                      (correctionField === "other" && !customCorrectionField.trim())
+                    }
+                  >
+                    Proposer une contribution
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline">
+                  Connectez-vous
+                </Link>{" "}
+                pour proposer une correction ou un enrichissement.
+              </p>
+            )}
+
+            {communityCorrections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucune contribution communautaire publiée pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {communityCorrections.map((correction) => (
+                  <div key={correction.id} className="rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {formatCommunityFieldLabel(correction.field)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            par {correction.user.displayName || "Membre"} le{" "}
+                            {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        </div>
+                        {correction.currentValue && (
+                          <p className="text-xs text-muted-foreground">
+                            Référence officielle : {correction.currentValue}
+                          </p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
+                        {correction.reason && (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            Contexte : {correction.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      {user && user.id !== correction.user.id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReportCorrection(correction.id)}
+                        >
+                          Signaler
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

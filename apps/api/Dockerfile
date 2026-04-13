@@ -44,6 +44,7 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/apps/api/docker/entrypoint.sh /entrypoint.sh
+COPY --from=builder /app/apps/api/docker/migrate.mjs /app/apps/api/docker/migrate.mjs
 
 RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid 1001 --no-create-home apiuser && \

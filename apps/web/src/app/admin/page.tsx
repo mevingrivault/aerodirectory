@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Ban,
   Clock3,
+  FileText,
   ImagePlus,
   Mail,
   MessageSquare,
@@ -245,7 +246,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Link href="/admin/users">
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
@@ -298,6 +299,20 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               Traiter les signalements utilisateur (commentaires et corrections).
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/corrections">
+          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <FileText className="h-5 w-5" />
+                Contributions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Publier ou rejeter les enrichissements communautaires sans toucher aux données importées.
             </CardContent>
           </Card>
         </Link>

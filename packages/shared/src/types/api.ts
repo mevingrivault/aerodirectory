@@ -216,6 +216,46 @@ export interface AdminCommentListItem {
   };
 }
 
+export interface CommunityCorrectionItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
+}
+
+export interface AdminCorrectionListItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+}
+
 export interface AdminPhotoListItem {
   id: string;
   status: "PENDING" | "SCANNING" | "REJECTED" | "READY";
