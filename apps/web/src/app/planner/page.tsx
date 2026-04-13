@@ -121,6 +121,61 @@ function escapeHtml(value: string): string {
 
 // ─── PlannerMap ─────────────────────────────────────────────────────────────
 
+type PlannerMapStyle = "osm" | "satellite" | "hybrid";
+
+const PLANNER_MAP_STYLES: Record<PlannerMapStyle, object> = {
+  osm: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "&copy; OpenStreetMap contributors",
+      },
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  },
+  satellite: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  },
+  hybrid: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+      labels: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+      },
+    },
+    layers: [
+      { id: "base", type: "raster", source: "base" },
+      { id: "labels", type: "raster", source: "labels" },
+    ],
+  },
+};
+
 function PlannerMap({
   departure,
   results,
@@ -134,6 +189,7 @@ function PlannerMap({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<any[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapStyle, setMapStyle] = useState<PlannerMapStyle>("osm");
 
   // Init map once
   useEffect(() => {
@@ -147,18 +203,7 @@ function PlannerMap({
 
       const map = new ml.default.Map({
         container: containerRef.current,
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: "&copy; OpenStreetMap contributors",
-            },
-          },
-          layers: [{ id: "osm", type: "raster", source: "osm" }],
-        },
+        style: PLANNER_MAP_STYLES.osm as any,
         center: [2.3, 46.6],
         zoom: 6,
       });
@@ -256,12 +301,29 @@ function PlannerMap({
     });
   }, [mapLoaded, departure, results]);
 
+  // Switch base map style
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    map.setStyle(PLANNER_MAP_STYLES[mapStyle]);
+  }, [mapStyle, mapLoaded]);
+
   return (
-    <div
-      ref={containerRef}
-      className="w-full rounded-lg overflow-hidden border"
-      style={{ height: 580 }}
-    />
+    <div className="relative w-full rounded-lg overflow-hidden border" style={{ height: 580 }}>
+      <div ref={containerRef} className="h-full w-full" />
+      {/* Style switcher */}
+      <div className="absolute left-3 bottom-8 z-10 flex rounded-md shadow-md overflow-hidden border bg-background/95 backdrop-blur text-xs font-medium">
+        {(["osm", "satellite", "hybrid"] as const).map((s, i) => (
+          <button
+            key={s}
+            onClick={() => setMapStyle(s)}
+            className={`px-3 py-1.5 transition-colors ${i > 0 ? "border-l border-border" : ""} ${mapStyle === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {s === "osm" ? "Plan" : s === "satellite" ? "Satellite" : "Hybride"}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

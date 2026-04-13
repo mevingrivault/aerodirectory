@@ -104,7 +104,9 @@ function geometryOverlapsBbox(
   let gMinLng = Infinity, gMaxLng = -Infinity;
   let gMinLat = Infinity, gMaxLat = -Infinity;
 
-  for (const [lng, lat] of allCoords) {
+  for (const coord of allCoords) {
+    const lng = coord[0] as number;
+    const lat = coord[1] as number;
     if (lng < gMinLng) gMinLng = lng;
     if (lng > gMaxLng) gMaxLng = lng;
     if (lat < gMinLat) gMinLat = lat;

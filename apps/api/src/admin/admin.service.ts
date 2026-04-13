@@ -1232,7 +1232,7 @@ export class AdminService {
     let imported = 0;
 
     if (replaceSource) {
-      await this.prisma.airspace.deleteMany({ where: { source } });
+      await this.prisma.airspace.deleteMany({ where: { sourceId: { startsWith: `${source}:` } } });
     }
 
     for (let i = 0; i < parsed.airspaces.length; i++) {
@@ -1241,25 +1241,22 @@ export class AdminService {
 
       await this.prisma.airspace.upsert({
         where: {
-          source_sourceId: {
-            source,
-            sourceId,
-          },
+          sourceId,
         },
         update: {
           name: airspace.name,
-          class: airspace.class,
+          icaoClass: airspace.class,
           lowerLimit: airspace.lowerLimit,
           upperLimit: airspace.upperLimit,
           geometry: airspace.geometry,
         },
         create: {
           name: airspace.name,
-          class: airspace.class,
+          icaoClass: airspace.class,
+          type: 0,
           lowerLimit: airspace.lowerLimit,
           upperLimit: airspace.upperLimit,
           geometry: airspace.geometry,
-          source,
           sourceId,
         },
       });
