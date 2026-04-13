@@ -1,0 +1,18 @@
+ALTER TABLE "public"."aerodromes"
+ADD COLUMN "iataCode" TEXT,
+ADD COLUMN "magneticDeclination" DOUBLE PRECISION,
+ADD COLUMN "ppr" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "privateUse" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "skydiveActivity" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "winchOnly" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "handlingFacilities" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[],
+ADD COLUMN "passengerFacilities" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[];
+
+ALTER TABLE "public"."runways"
+ADD COLUMN "trueHeading" INTEGER,
+ADD COLUMN "mainRunway" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "operations" INTEGER,
+ADD COLUMN "surfaceComposition" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[];
+
+ALTER TABLE "public"."frequencies"
+ADD COLUMN "isPrimary" BOOLEAN NOT NULL DEFAULT false;

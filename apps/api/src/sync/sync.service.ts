@@ -549,7 +549,7 @@ export class SyncService implements OnModuleInit {
       await this.completeStep(run.id, "import", {
         artifactPath: artifacts.geojsonSeq,
         metrics: importStats as unknown as Record<string, unknown>,
-        logSummary: `${importStats.upserted} POI importés, ${importStats.errors} erreurs.`,
+        logSummary: `${importStats.upserted} POI importés, ${importStats.skipped} ignorés, ${importStats.duplicatesCollapsed} doublons consolidés, ${importStats.errors} erreurs.`,
       });
 
       await this.startStep(run.id, "sync_flags", 5);
@@ -571,7 +571,10 @@ export class SyncService implements OnModuleInit {
             geojsonSeq: artifacts.geojsonSeq,
           },
         }),
-        errorMessage: importStats.errors > 0 ? `${importStats.errors} erreur(s) pendant l'import OSM.` : null,
+        errorMessage:
+          importStats.errors > 0
+            ? `${importStats.errors} erreur(s) pendant l'import OSM.${importStats.firstError ? ` Première erreur: ${importStats.firstError}` : ""}`
+            : null,
       };
     } catch (error) {
       const lastRunningStep = await this.prisma.syncRunStep.findFirst({

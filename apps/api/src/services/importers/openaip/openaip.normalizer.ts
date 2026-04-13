@@ -22,13 +22,21 @@ import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType, FuelTy
 export interface NormalizedAerodrome {
   name: string;
   icaoCode: string | null;
+  iataCode: string | null;
   altIdentifier: string | null;
   latitude: number;
   longitude: number;
   elevation: number | null; // feet
+  magneticDeclination: number | null;
   countryCode: string;
   aerodromeType: AerodromeType;
   status: AerodromeStatus;
+  ppr: boolean;
+  privateUse: boolean;
+  skydiveActivity: boolean;
+  winchOnly: boolean;
+  handlingFacilities: number[];
+  passengerFacilities: number[];
   source: string;
   sourceId: string;
   sourceRawHash: string;
@@ -42,13 +50,18 @@ export interface NormalizedRunway {
   identifier: string;
   length: number; // meters
   width: number | null; // meters
+  trueHeading: number | null;
+  mainRunway: boolean;
+  operations: number | null;
   surface: SurfaceType;
+  surfaceComposition: number[];
   lighting: boolean;
 }
 
 export interface NormalizedFrequency {
   type: FrequencyType;
   mhz: number;
+  isPrimary: boolean;
   callsign: string | null;
   notes: string | null;
 }
@@ -145,6 +158,8 @@ export function normalizeOpenAipAirport(
 
   const icao = raw.icaoCode?.trim().toUpperCase() || null;
   const validIcao = icao && /^[A-Z]{4}$/.test(icao) ? icao : null;
+  const iata = raw.iataCode?.trim().toUpperCase() || null;
+  const validIata = iata && /^[A-Z0-9]{3}$/.test(iata) ? iata : null;
 
   const [lng, lat] = raw.geometry?.coordinates ?? [0, 0];
   const elevation = normalizeElevationToFeet(raw.elevation);
@@ -160,13 +175,22 @@ export function normalizeOpenAipAirport(
   return {
     name,
     icaoCode: validIcao,
+    iataCode: validIata,
     altIdentifier: raw.altIdentifier?.trim() || null,
     latitude: lat,
     longitude: lng,
     elevation,
+    magneticDeclination:
+      typeof raw.magneticDeclination === "number" ? Math.round(raw.magneticDeclination * 10) / 10 : null,
     countryCode: (raw.country || "FR").toUpperCase(),
     aerodromeType,
     status: (raw.type === 8 ? "CLOSED" : "OPEN") as AerodromeStatus,
+    ppr: raw.ppr ?? false,
+    privateUse: raw.private ?? false,
+    skydiveActivity: raw.skydiveActivity ?? false,
+    winchOnly: raw.winchOnly ?? false,
+    handlingFacilities: normalizeNumericCodes(raw.services?.handlingFacilities ?? []),
+    passengerFacilities: normalizeNumericCodes(raw.services?.passengerFacilities ?? []),
     source: "openaip",
     sourceId: raw._id,
     sourceRawHash: simpleHash(JSON.stringify(raw)),
@@ -192,7 +216,11 @@ function normalizeRunway(raw: OpenAipRunway): NormalizedRunway | null {
     identifier: (raw.designator || "Unknown").trim(),
     length: Math.round(lengthM),
     width: widthM ? Math.round(widthM) : null,
+    trueHeading: typeof raw.trueHeading === "number" ? Math.round(raw.trueHeading) : null,
+    mainRunway: raw.mainRunway ?? false,
+    operations: typeof raw.operations === "number" ? raw.operations : null,
     surface: SURFACE_TYPE_MAP[surfaceCode] ?? "OTHER",
+    surfaceComposition: normalizeNumericCodes(raw.surface?.composition ?? []),
     lighting: raw.pilotCtrlLighting ?? false,
   };
 }
@@ -227,9 +255,16 @@ function normalizeFrequency(raw: OpenAipFrequency): NormalizedFrequency | null {
   return {
     type: FREQUENCY_TYPE_MAP[raw.type] ?? "OTHER",
     mhz: Math.round(mhz * 1000) / 1000, // 3 decimal precision
+    isPrimary: raw.primary ?? false,
     callsign: raw.name?.trim() || null,
     notes: raw.primary ? "Primary" : null,
   };
+}
+
+function normalizeNumericCodes(values: number[]): number[] {
+  return [...new Set(values.filter((value) => Number.isInteger(value)).map((value) => Number(value)))].sort(
+    (a, b) => a - b,
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────

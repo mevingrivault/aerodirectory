@@ -61,20 +61,28 @@ interface AerodromeDetail {
   id: string;
   name: string;
   icaoCode: string | null;
+  iataCode: string | null;
   latitude: number;
   longitude: number;
   elevation: number | null;
+  magneticDeclination: number | null;
   city: string | null;
   region: string | null;
   department: string | null;
   countryCode: string;
   aerodromeType: string;
   status: string;
+  ppr: boolean;
+  privateUse: boolean;
+  skydiveActivity: boolean;
+  winchOnly: boolean;
   description: string | null;
   altIdentifier: string | null;
   aipLink: string | null;
   vacLink: string | null;
   websiteUrl: string | null;
+  handlingFacilities: number[];
+  passengerFacilities: number[];
   hasRestaurant: boolean;
   hasBikes: boolean;
   hasTransport: boolean;
@@ -89,7 +97,11 @@ interface AerodromeDetail {
     identifier: string;
     length: number;
     width: number | null;
+    trueHeading: number | null;
+    mainRunway: boolean;
+    operations: number | null;
     surface: string;
+    surfaceComposition: number[];
     lighting: boolean;
     remarks: string | null;
   }[];
@@ -97,6 +109,7 @@ interface AerodromeDetail {
     id: string;
     type: string;
     mhz: number;
+    isPrimary: boolean;
     callsign: string | null;
     notes: string | null;
   }[];
@@ -301,6 +314,25 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: "FERMÉ",
 };
 
+const SURFACE_LABELS: Record<number, string> = {
+  0: "Asphalte",
+  1: "Béton",
+  2: "Herbe",
+  3: "Terre",
+  4: "Gravier",
+  5: "Eau",
+};
+
+function formatDeclination(value: number | null) {
+  if (value == null) return null;
+  if (value === 0) return "0°";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}°`;
+}
+
+function formatOpenAipCode(code: number) {
+  return `Code ${code}`;
+}
+
 export default function AerodromeDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -428,6 +460,10 @@ export default function AerodromeDetailPage() {
     enabled: !!user,
   });
 
+  const [optimisticVisitStatus, setOptimisticVisitStatus] = useState<string | null>(null);
+  const [visitActionStarted, setVisitActionStarted] = useState(false);
+  const [isVisitUpdating, setIsVisitUpdating] = useState(false);
+
   const addToListMutation = useMutation({
     mutationFn: (listId: string) =>
       apiClient.post(`/lists/${listId}/items`, { aerodromeId: id }),
@@ -452,12 +488,17 @@ export default function AerodromeDetailPage() {
     },
   });
 
-  const currentVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+  const serverVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+  const currentVisitStatus = optimisticVisitStatus ?? serverVisitStatus;
   const userLists = listsRes?.data ?? [];
+
+  useEffect(() => {
+    setOptimisticVisitStatus(null);
+  }, [serverVisitStatus, id]);
 
   // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
   useEffect(() => {
-    if (user && currentVisitStatus === null) {
+    if (user && !visitActionStarted && serverVisitStatus === null) {
       apiClient
         .put(`/visits/${id}`, { status: "SEEN" })
         .then(async () => {
@@ -469,7 +510,7 @@ export default function AerodromeDetailPage() {
         })
         .catch(() => {});
     }
-  }, [user, id, currentVisitStatus, refetchVisit, queryClient]);
+  }, [user, id, serverVisitStatus, visitActionStarted, refetchVisit, queryClient]);
 
   useEffect(() => {
     if (photosRes?.data) setPhotos(photosRes.data);
@@ -481,15 +522,26 @@ export default function AerodromeDetailPage() {
   const nearbyUlm = allNearby.filter((n) => n.aerodromeType === "ULTRALIGHT_FIELD").slice(0, 6);
 
   const handleVisit = async (status: string) => {
+    setVisitActionStarted(true);
+    setIsVisitUpdating(true);
     let nextStatus = status;
     if (status === "FAVORITE" && currentVisitStatus === "FAVORITE") nextStatus = "VISITED";
     else if (status === "VISITED" && currentVisitStatus === "VISITED") nextStatus = "SEEN";
-    await apiClient.put(`/visits/${id}`, { status: nextStatus });
-    await Promise.all([
-      refetchVisit(),
-      queryClient.invalidateQueries({ queryKey: ["visits"] }),
-      queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
-    ]);
+    setOptimisticVisitStatus(nextStatus);
+
+    try {
+      await apiClient.put(`/visits/${id}`, { status: nextStatus });
+      await Promise.all([
+        refetchVisit(),
+        queryClient.invalidateQueries({ queryKey: ["visits"] }),
+        queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
+      ]);
+    } catch (error) {
+      setOptimisticVisitStatus(serverVisitStatus);
+      throw error;
+    } finally {
+      setIsVisitUpdating(false);
+    }
   };
 
   const isInList = (list: UserAerodromeList) =>
@@ -778,6 +830,7 @@ export default function AerodromeDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={isVisitUpdating}
                   className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
                   onClick={() => handleVisit("VISITED")}
                 >
@@ -786,6 +839,7 @@ export default function AerodromeDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={isVisitUpdating}
                   className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
                   onClick={() => handleVisit("FAVORITE")}
                 >
@@ -853,6 +907,57 @@ export default function AerodromeDetailPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5" /> Informations aéronautiques
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {ad.icaoCode && <Badge variant="outline">ICAO {ad.icaoCode}</Badge>}
+              {ad.iataCode && <Badge variant="outline">IATA {ad.iataCode}</Badge>}
+              {ad.altIdentifier && <Badge variant="outline">Alt. {ad.altIdentifier}</Badge>}
+              {ad.ppr && <Badge variant="secondary">PPR requis</Badge>}
+              {ad.privateUse && <Badge variant="secondary">Usage privé</Badge>}
+              {ad.skydiveActivity && <Badge variant="secondary">Activité parachutage</Badge>}
+              {ad.winchOnly && <Badge variant="secondary">Treuil uniquement</Badge>}
+              {ad.magneticDeclination != null && (
+                <Badge variant="outline">Déclinaison {formatDeclination(ad.magneticDeclination)}</Badge>
+              )}
+            </div>
+
+            {(ad.handlingFacilities.length > 0 || ad.passengerFacilities.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {ad.handlingFacilities.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Handling openAIP</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ad.handlingFacilities.map((code) => (
+                        <Badge key={`handling-${code}`} variant="outline">
+                          {formatOpenAipCode(code)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {ad.passengerFacilities.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Services passagers openAIP</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ad.passengerFacilities.map((code) => (
+                        <Badge key={`passenger-${code}`} variant="outline">
+                          {formatOpenAipCode(code)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Runways */}
         <Card>
           <CardHeader>
@@ -866,17 +971,32 @@ export default function AerodromeDetailPage() {
             ) : (
               <div className="space-y-3">
                 {ad.runways.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between rounded-md border p-3">
-                    <div>
-                      <span className="font-mono font-bold">{r.identifier}</span>
-                      <span className="ml-2 text-muted-foreground">
+                  <div key={r.id} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="font-mono font-bold">{r.identifier}</span>
+                        <span className="ml-2 text-muted-foreground">
                         {r.length}m × {r.width ?? "?"}m
-                      </span>
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">{r.surface}</Badge>
+                      {r.mainRunway && <Badge variant="secondary">Principale</Badge>}
                       {r.lighting && <Badge variant="secondary">Balisée</Badge>}
                     </div>
+                    {(r.trueHeading != null || r.operations != null || r.surfaceComposition.length > 0 || r.remarks) && (
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+                        {r.trueHeading != null && <span>QFU vrai {r.trueHeading}°</span>}
+                        {r.operations != null && <span>Opérations openAIP {formatOpenAipCode(r.operations)}</span>}
+                        {r.surfaceComposition.length > 0 && (
+                          <span>
+                            Composition {r.surfaceComposition.map((code) => SURFACE_LABELS[code] ?? formatOpenAipCode(code)).join(", ")}
+                          </span>
+                        )}
+                        {r.remarks && <span>{r.remarks}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -897,11 +1017,13 @@ export default function AerodromeDetailPage() {
             ) : (
               <div className="space-y-2">
                 {ad.frequencies.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between">
-                    <span>
-                      <Badge variant="outline" className="mr-2">{f.type}</Badge>
-                      {f.callsign}
-                    </span>
+                  <div key={f.id} className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{f.type}</Badge>
+                      <span>{f.callsign}</span>
+                      {f.isPrimary && <Badge variant="secondary">Principale</Badge>}
+                      {f.notes && <span className="text-sm text-muted-foreground">{f.notes}</span>}
+                    </div>
                     <span className="font-mono">{f.mhz.toFixed(3)} MHz</span>
                   </div>
                 ))}

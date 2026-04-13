@@ -60,6 +60,7 @@ interface PlannerFilters {
   hasAccommodation: boolean;
   fuel100LL: boolean;
   fuelSP98: boolean;
+  excludeVisited: boolean;
 }
 
 type SearchMode = "time" | "cost" | "unlimited";
@@ -409,6 +410,7 @@ export default function PlannerPage() {
   const [fuelPricePerLiter, setFuelPricePerLiter] = useState("");
   const [departureGroundMinutes, setDepartureGroundMinutes] = useState("0");
   const [arrivalGroundMinutes, setArrivalGroundMinutes] = useState("0");
+  const [minDistanceKm, setMinDistanceKm] = useState("0");
 
   // ── Filters ──
   const [filters, setFilters] = useState<PlannerFilters>({
@@ -418,6 +420,7 @@ export default function PlannerPage() {
     hasAccommodation: false,
     fuel100LL: false,
     fuelSP98: false,
+    excludeVisited: false,
   });
 
   // ── Sort + view ──
@@ -576,11 +579,20 @@ export default function PlannerPage() {
     const fuelPrice = parseFloat(fuelPricePerLiter);
     if (fuelPrice > 0) payload.fuelPricePerLiter = fuelPrice;
 
+    const parsedMinDistanceKm = parseFloat(minDistanceKm);
+    if (parsedMinDistanceKm > 0) {
+      payload.minDistanceNm = parsedMinDistanceKm * 0.539957;
+    }
+
     const activeFilters: Partial<PlannerFilters> = {};
     for (const [k, v] of Object.entries(filters)) {
       if (v) (activeFilters as Record<string, boolean>)[k] = true;
     }
-    if (Object.keys(activeFilters).length > 0) payload.filters = activeFilters;
+    if (Object.keys(activeFilters).length > 0) {
+      const { excludeVisited, ...destinationFilters } = activeFilters as PlannerFilters;
+      if (excludeVisited) payload.excludeVisited = true;
+      if (Object.keys(destinationFilters).length > 0) payload.filters = destinationFilters;
+    }
 
     try {
       const res = await apiClient.post<PlannerResult[]>("/planner/calculate", payload);
@@ -1208,6 +1220,21 @@ export default function PlannerPage() {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">
+                      Distance mini (km)
+                    </label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-min-distance-km"
+                      min={0}
+                      max={1000}
+                      step="1"
+                      value={minDistanceKm}
+                      onChange={(e) => setMinDistanceKm(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
                       Prix carbu. (€/L)
                     </label>
                     <Input
@@ -1292,6 +1319,17 @@ export default function PlannerPage() {
                     {icon} {label}
                   </button>
                 ))}
+                <button
+                  onClick={() => toggleFilter("excludeVisited")}
+                  className={cn(
+                    "text-xs rounded-full border px-3 py-1 transition-colors",
+                    filters.excludeVisited
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                  )}
+                >
+                  ✓ Retirer déjà visités
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -1360,6 +1398,8 @@ export default function PlannerPage() {
                     {tripScope === "round_trip" ? "Aller-Retour" : "Aller simple"}
                     {searchMode === "time" && ` · ≤ ${formatFlightTime(maxTimeMinutes / 60)}`}
                     {searchMode === "cost" && ` · ≤ ${maxCost} €`}
+                    {parseFloat(minDistanceKm) > 0 && ` · ≥ ${parseFloat(minDistanceKm).toFixed(0)} km`}
+                    {filters.excludeVisited && " · déjà visités exclus"}
                   </span>
                 )}
               </div>

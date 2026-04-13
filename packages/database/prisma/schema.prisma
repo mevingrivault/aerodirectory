@@ -252,20 +252,28 @@ model Aerodrome {
   id               String          @id @default(cuid())
   name             String
   icaoCode         String?         @unique
+  iataCode         String?
   altIdentifier    String?
   latitude         Float
   longitude        Float
   elevation        Int? // feet
+  magneticDeclination Float?
   city             String?
   region           String?
   department       String?
   countryCode      String          @default("FR")
   aerodromeType    AerodromeType   @default(SMALL_AIRPORT)
   status           AerodromeStatus @default(OPEN)
+  ppr              Boolean         @default(false)
+  privateUse       Boolean         @default(false)
+  skydiveActivity  Boolean         @default(false)
+  winchOnly        Boolean         @default(false)
   aipLink          String?
   vacLink          String?
   websiteUrl       String?
   description      String?
+  handlingFacilities  Int[]        @default([])
+  passengerFacilities Int[]        @default([])
   hasRestaurant    Boolean         @default(false)
   hasBikes         Boolean         @default(false)
   hasTransport     Boolean         @default(false)
@@ -311,7 +319,11 @@ model Runway {
   identifier  String // e.g. "09/27"
   length      Int // meters
   width       Int? // meters
+  trueHeading Int?
+  mainRunway  Boolean     @default(false)
+  operations  Int?
   surface     SurfaceType
+  surfaceComposition Int[] @default([])
   lighting    Boolean     @default(false)
   remarks     String?
   createdAt   DateTime    @default(now())
@@ -328,6 +340,7 @@ model Frequency {
   aerodromeId String
   type        FrequencyType
   mhz         Float
+  isPrimary   Boolean       @default(false)
   callsign    String?
   notes       String?
   createdAt   DateTime      @default(now())

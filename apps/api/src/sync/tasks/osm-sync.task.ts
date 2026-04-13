@@ -32,6 +32,15 @@ interface OsmPoiRow {
   tags: Record<string, string>;
 }
 
+interface OsmImportStats {
+  lines: number;
+  upserted: number;
+  skipped: number;
+  errors: number;
+  duplicatesCollapsed: number;
+  firstError: string | null;
+}
+
 const GEOFABRIK_URL = "https://download.geofabrik.de/europe/france-latest.osm.pbf";
 const OSMIUM_FILTER_TAGS = [
   "n/amenity=restaurant,cafe,bar,bicycle_rental",
@@ -224,6 +233,52 @@ async function upsertBatch(prisma: PrismaClient, rows: OsmPoiRow[]) {
   );
 }
 
+function normalizeErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function dedupeBatch(rows: OsmPoiRow[]) {
+  const byOsmId = new Map<string, OsmPoiRow>();
+  for (const row of rows) {
+    byOsmId.set(row.osmId, row);
+  }
+
+  return {
+    rows: Array.from(byOsmId.values()),
+    collapsed: rows.length - byOsmId.size,
+  };
+}
+
+async function flushBatch(
+  prisma: PrismaClient,
+  rows: OsmPoiRow[],
+  stats: OsmImportStats,
+) {
+  if (rows.length === 0) return;
+
+  const deduped = dedupeBatch(rows);
+  stats.duplicatesCollapsed += deduped.collapsed;
+
+  try {
+    await upsertBatch(prisma, deduped.rows);
+    stats.upserted += deduped.rows.length;
+    return;
+  } catch (error) {
+    stats.firstError ??= normalizeErrorMessage(error);
+  }
+
+  for (const row of deduped.rows) {
+    try {
+      await upsertBatch(prisma, [row]);
+      stats.upserted += 1;
+    } catch (error) {
+      stats.firstError ??= normalizeErrorMessage(error);
+      stats.errors += 1;
+    }
+  }
+}
+
 export async function ensureOsmArtifacts(dataDir: string): Promise<OsmArtifacts> {
   const resolvedDir = resolve(dataDir);
   await mkdir(resolvedDir, { recursive: true });
@@ -287,11 +342,13 @@ export async function importOsmGeoJsonSeq(
 ) {
   await ensureFile(geojsonPath);
 
-  const stats = {
+  const stats: OsmImportStats = {
     lines: 0,
     upserted: 0,
     skipped: 0,
     errors: 0,
+    duplicatesCollapsed: 0,
+    firstError: null,
   };
   let batch: OsmPoiRow[] = [];
 
@@ -310,23 +367,13 @@ export async function importOsmGeoJsonSeq(
 
     batch.push(row);
     if (batch.length >= BATCH_SIZE) {
-      try {
-        await upsertBatch(prisma, batch);
-        stats.upserted += batch.length;
-      } catch {
-        stats.errors += batch.length;
-      }
+      await flushBatch(prisma, batch, stats);
       batch = [];
     }
   }
 
   if (batch.length > 0) {
-    try {
-      await upsertBatch(prisma, batch);
-      stats.upserted += batch.length;
-    } catch {
-      stats.errors += batch.length;
-    }
+    await flushBatch(prisma, batch, stats);
   }
 
   return stats;
