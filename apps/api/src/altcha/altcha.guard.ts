@@ -8,6 +8,8 @@ import {
 import { Reflector } from "@nestjs/core";
 import { FastifyRequest } from "fastify";
 import { AltchaService } from "./altcha.service";
+import { AuditService } from "../audit/audit.service";
+import { PrismaService } from "../prisma/prisma.service";
 
 /** Routes decorated with @SkipAltcha() bypass the guard */
 export const SKIP_ALTCHA_KEY = "skipAltcha";
@@ -22,6 +24,8 @@ export class AltchaGuard implements CanActivate {
   constructor(
     private readonly altcha: AltchaService,
     private readonly reflector: Reflector,
+    private readonly audit: AuditService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -38,12 +42,14 @@ export class AltchaGuard implements CanActivate {
 
     if (!payload) {
       this.logger.warn(`ALTCHA missing — ${req.method} ${req.url} from ${req.ip}`);
+      await this.logAltchaFailure(req, "missing");
       throw new ForbiddenException("Captcha requis.");
     }
 
     const valid = await this.altcha.verify(payload);
     if (!valid) {
       this.logger.warn(`ALTCHA invalid — ${req.method} ${req.url} from ${req.ip}`);
+      await this.logAltchaFailure(req, "invalid");
       throw new ForbiddenException("Captcha invalide ou expiré.");
     }
 
@@ -60,5 +66,39 @@ export class AltchaGuard implements CanActivate {
     if (body && typeof body["altcha"] === "string") return body["altcha"];
 
     return null;
+  }
+
+  private async logAltchaFailure(
+    req: FastifyRequest,
+    reason: "missing" | "invalid",
+  ): Promise<void> {
+    await this.audit.log({
+      action: "ADMIN_ACTION",
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+      metadata: {
+        type: "ALTCHA_FAILED",
+        reason,
+        method: req.method,
+        path: req.url,
+      },
+    });
+
+    const recentFailures = await this.prisma.auditLog.count({
+      where: {
+        action: "ADMIN_ACTION",
+        createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+        metadata: {
+          path: ["type"],
+          equals: "ALTCHA_FAILED",
+        },
+      },
+    });
+
+    if ([25, 50, 100].includes(recentFailures)) {
+      this.logger.error(
+        `[ALERT] Pic d'échecs CAPTCHA: ${recentFailures} événements sur 10 minutes`,
+      );
+    }
   }
 }

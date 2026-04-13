@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { apiClient } from "@/lib/api-client";
+import { ApiError, apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -36,8 +36,15 @@ export default function ForgotPasswordPage() {
         { "x-altcha": altcha },
       );
       setSubmitted(true);
-    } catch {
-      // Message générique même en cas d'erreur réseau
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 403) {
+        setError("Vérification anti-robot invalide ou expirée. Merci de réessayer.");
+        altchaRef.current?.reset();
+        setAltchaPayload(null);
+        return;
+      }
+
+      // Réponse générique pour éviter l'énumération d'emails
       setSubmitted(true);
     } finally {
       setLoading(false);

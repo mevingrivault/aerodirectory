@@ -3,16 +3,18 @@
 /**
  * AeroDirectory — Automated Development Setup
  *
- * Usage: pnpm bootstrap   (or: node scripts/setup.mjs)
+ * Usage: pnpm bootstrap
+ *        pnpm setup
+ *        pnpm setup:remote
+ *        node scripts/setup.mjs [--remote]
  *
  * This script:
- * 1. Copies .env.development → .env, packages/database/.env, apps/api/.env
+ * 1. Copies .env.development (or .env.remote.local) → .env, packages/database/.env, apps/api/.env
  * 2. Extracts NEXT_PUBLIC_ vars → apps/web/.env.local
  * 3. Ensures all .env files are valid UTF-8 (fixes Windows UTF-16 issues)
  * 4. Runs pnpm install
  * 5. Runs prisma generate
- * 6. Runs prisma migrate dev
- * 7. Runs prisma seed
+ * 6. Runs prisma migrate dev + seed (local mode only)
  */
 
 import { existsSync, readFileSync, writeFileSync } from "fs";
@@ -22,6 +24,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
+const isRemoteMode = process.argv.includes("--remote");
+const envSource = resolve(
+  ROOT,
+  isRemoteMode ? ".env.remote.local" : ".env.development",
+);
 
 function log(msg) {
   console.log(`\n→ ${msg}`);
@@ -95,18 +102,28 @@ function copyEnvUtf8(source, dest, label) {
 // ── Main ──────────────────────────────────────────────────
 
 console.log("╔══════════════════════════════════════╗");
-console.log("║   AeroDirectory — Development Setup  ║");
+console.log(
+  isRemoteMode
+    ? "║ AeroDirectory — Remote DB Setup      ║"
+    : "║   AeroDirectory — Development Setup  ║",
+);
 console.log("╚══════════════════════════════════════╝");
 
-const envSource = resolve(ROOT, ".env.development");
-
 if (!existsSync(envSource)) {
-  console.error("✗ .env.development not found at project root");
+  console.error(
+    isRemoteMode
+      ? "✗ .env.remote.local not found at project root"
+      : "✗ .env.development not found at project root",
+  );
   process.exit(1);
 }
 
 // Step 1: Distribute .env files (always overwrite to fix encoding)
-log("Setting up environment files (UTF-8)...");
+log(
+  isRemoteMode
+    ? "Setting up remote environment files (UTF-8)..."
+    : "Setting up environment files (UTF-8)...",
+);
 
 // First, sanitize .env.development itself in case it was edited on Windows
 const envDevContent = readFileAsUtf8(envSource);
@@ -140,45 +157,56 @@ run("pnpm install");
 log("Generating Prisma client...");
 run("pnpm db:generate");
 
-// Step 4: Check if Docker postgres is running
-log("Checking PostgreSQL...");
-try {
-  execSync("docker compose ps postgres --format json", {
-    cwd: ROOT,
-    stdio: "pipe",
-  });
-  const output = execSync("docker compose ps postgres", {
-    cwd: ROOT,
-    encoding: "utf-8",
-  });
-  if (!output.includes("running") && !output.includes("Running")) {
-    console.log("  PostgreSQL not running — starting it...");
-    run("docker compose up -d postgres");
-    console.log("  Waiting for PostgreSQL to be ready...");
-    run("docker compose exec postgres pg_isready -U postgres --timeout=30");
-  } else {
-    console.log("  ✓ PostgreSQL is running");
+if (!isRemoteMode) {
+  // Step 4: Check if Docker postgres is running
+  log("Checking PostgreSQL...");
+  try {
+    execSync("docker compose ps postgres --format json", {
+      cwd: ROOT,
+      stdio: "pipe",
+    });
+    const output = execSync("docker compose ps postgres", {
+      cwd: ROOT,
+      encoding: "utf-8",
+    });
+    if (!output.includes("running") && !output.includes("Running")) {
+      console.log("  PostgreSQL not running — starting it...");
+      run("docker compose up -d postgres");
+      console.log("  Waiting for PostgreSQL to be ready...");
+      run("docker compose exec postgres pg_isready -U postgres --timeout=30");
+    } else {
+      console.log("  ✓ PostgreSQL is running");
+    }
+  } catch {
+    console.log("  Docker not available or compose failed — skipping auto-start.");
+    console.log("  Make sure PostgreSQL is running on localhost:5432 before migrating.");
   }
-} catch {
-  console.log("  Docker not available or compose failed — skipping auto-start.");
-  console.log("  Make sure PostgreSQL is running on localhost:5432 before migrating.");
+
+  // Step 5: Run migrations
+  log("Running database migrations...");
+  run("pnpm db:migrate");
+
+  // Step 6: Seed database
+  log("Seeding database...");
+  run("pnpm db:seed");
 }
 
-// Step 5: Run migrations
-log("Running database migrations...");
-run("pnpm db:migrate");
-
-// Step 6: Seed database
-log("Seeding database...");
-run("pnpm db:seed");
-
 console.log("\n╔══════════════════════════════════════╗");
-console.log("║        ✓ Setup complete!              ║");
+console.log(
+  isRemoteMode
+    ? "║     ✓ Remote setup complete!          ║"
+    : "║        ✓ Setup complete!              ║",
+);
 console.log("╠══════════════════════════════════════╣");
 console.log("║  Start dev servers:  pnpm dev         ║");
 console.log("║  API:  http://localhost:4000           ║");
 console.log("║  Web:  http://localhost:3000           ║");
 console.log("║                                        ║");
-console.log("║  Import openAIP data:                  ║");
-console.log("║    pnpm import:openaip                 ║");
+if (isRemoteMode) {
+  console.log("║  Using remote database credentials     ║");
+  console.log("║  from .env.remote.local                ║");
+} else {
+  console.log("║  Import openAIP data:                  ║");
+  console.log("║    pnpm import:openaip                 ║");
+}
 console.log("╚══════════════════════════════════════╝\n");

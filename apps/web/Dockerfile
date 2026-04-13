@@ -36,7 +36,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs && \
+# Keep runtime Alpine packages patched (incl. OpenSSL CVEs flagged by Trivy).
+RUN apk upgrade --no-cache --available && \
+    apk add --no-cache \
+      'libcrypto3>=3.5.6-r0' \
+      'libssl3>=3.5.6-r0' && \
+    addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./

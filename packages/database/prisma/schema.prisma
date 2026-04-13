@@ -213,6 +213,9 @@ model User {
   corrections      Correction[]
   reports          Report[]
   aircraftProfiles AircraftProfile[]
+  savedSearches    SavedSearch[]
+  aerodromeLists   AerodromeList[]
+  notifications    Notification[]
   auditLogs        AuditLog[]
   emailTokens      EmailToken[]
   bannedBy         User?             @relation("UserBans", fields: [bannedById], references: [id], onDelete: SetNull)
@@ -287,6 +290,7 @@ model Aerodrome {
   comments    Comment[]
   corrections Correction[]
   reports     Report[]
+  listItems   AerodromeListItem[]
   homeUsers   User[]       @relation("UserHomeAerodrome")
   photos      Photo[]
 
@@ -459,6 +463,74 @@ model AircraftProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("aircraft_profiles")
+  @@schema("public")
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  scope     String   @default("search") // "search" | "planner"
+  params    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope])
+  @@map("saved_searches")
+  @@schema("public")
+}
+
+model AerodromeList {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items AerodromeListItem[]
+
+  @@unique([userId, name])
+  @@index([userId, createdAt])
+  @@map("aerodrome_lists")
+  @@schema("public")
+}
+
+model AerodromeListItem {
+  id          String   @id @default(cuid())
+  listId      String
+  aerodromeId String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  list      AerodromeList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome     @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, aerodromeId])
+  @@index([aerodromeId])
+  @@map("aerodrome_list_items")
+  @@schema("public")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  linkUrl   String?
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
   @@schema("public")
 }
 

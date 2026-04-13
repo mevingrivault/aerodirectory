@@ -13,20 +13,30 @@ import {
 import { FastifyReply, FastifyRequest } from "fastify";
 import {
   AdminPhotosQuerySchema,
+  AdminReportsQuerySchema,
+  AdminMailEventsQuerySchema,
   AdminCommentsQuerySchema,
   AdminUsersQuerySchema,
+  AdminImportOpenAirSchema,
   ApproveAdminPhotoSchema,
   BanUserSchema,
+  DeleteAdminUserSchema,
   DeleteAdminCommentSchema,
   RejectAdminPhotoSchema,
+  ReviewAdminReportSchema,
   RestoreAdminCommentSchema,
   type AdminPhotosQueryInput,
+  type AdminReportsQueryInput,
+  type AdminMailEventsQueryInput,
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
+  type AdminImportOpenAirInput,
   type ApproveAdminPhotoInput,
   type BanUserInput,
+  type DeleteAdminUserInput,
   type DeleteAdminCommentInput,
   type RejectAdminPhotoInput,
+  type ReviewAdminReportInput,
   type RestoreAdminCommentInput,
 } from "@aerodirectory/shared";
 import { Roles, CurrentUser } from "../common/decorators";
@@ -85,6 +95,24 @@ export class AdminController {
     return ok({ unbanned: true });
   }
 
+  @Post("users/:userId/delete")
+  @HttpCode(HttpStatus.OK)
+  async deleteUser(
+    @CurrentUser() user: { sub: string },
+    @Param("userId") userId: string,
+    @Body(new ZodValidationPipe(DeleteAdminUserSchema)) body: DeleteAdminUserInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.deleteUser(
+      user.sub,
+      userId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ deleted: true });
+  }
+
   @Get("comments")
   async comments(
     @Query(new ZodValidationPipe(AdminCommentsQuerySchema))
@@ -101,6 +129,80 @@ export class AdminController {
   ) {
     const { data, total } = await this.admin.listPhotos(query);
     return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get("reports")
+  async reports(
+    @Query(new ZodValidationPipe(AdminReportsQuerySchema))
+    query: AdminReportsQueryInput,
+  ) {
+    const { data, total } = await this.admin.listReports(query);
+    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Post("reports/:reportId/approve")
+  @HttpCode(HttpStatus.OK)
+  async approveReport(
+    @CurrentUser() user: { sub: string },
+    @Param("reportId") reportId: string,
+    @Body(new ZodValidationPipe(ReviewAdminReportSchema))
+    body: ReviewAdminReportInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.approveReport(
+      user.sub,
+      reportId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ approved: true });
+  }
+
+  @Post("reports/:reportId/reject")
+  @HttpCode(HttpStatus.OK)
+  async rejectReport(
+    @CurrentUser() user: { sub: string },
+    @Param("reportId") reportId: string,
+    @Body(new ZodValidationPipe(ReviewAdminReportSchema))
+    body: ReviewAdminReportInput,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.admin.rejectReport(
+      user.sub,
+      reportId,
+      body,
+      req.ip,
+      req.headers["user-agent"],
+    );
+    return ok({ rejected: true });
+  }
+
+  @Get("mail-events")
+  async mailEvents(
+    @Query(new ZodValidationPipe(AdminMailEventsQuerySchema))
+    query: AdminMailEventsQueryInput,
+  ) {
+    const { data, total } = await this.admin.listMailEvents(query);
+    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Post("airspaces/import-openair")
+  @HttpCode(HttpStatus.OK)
+  async importOpenAir(
+    @CurrentUser() user: { sub: string },
+    @Body(new ZodValidationPipe(AdminImportOpenAirSchema))
+    body: AdminImportOpenAirInput,
+    @Req() req: FastifyRequest,
+  ) {
+    return ok(
+      await this.admin.importOpenAir(
+        user.sub,
+        body,
+        req.ip,
+        req.headers["user-agent"],
+      ),
+    );
   }
 
   @Get("photos/:photoId/file")

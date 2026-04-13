@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Ban, ShieldCheck, UserSearch } from "lucide-react";
+import { ArrowLeft, Ban, ShieldCheck, Trash2, UserSearch } from "lucide-react";
 import type { AdminUserDetail, AdminUserListItem } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -109,6 +109,41 @@ export default function AdminUsersPage() {
           err instanceof Error
             ? err.message
             : "Impossible de debannir cet utilisateur.",
+      });
+    }
+  };
+
+  const handleDeleteUser = async (target: AdminUserListItem | AdminUserDetail) => {
+    if (!window.confirm(`Supprimer definitivement ${target.displayName || target.email} ?`)) {
+      return;
+    }
+
+    const currentPassword = window.prompt(
+      "Pour confirmer, retapez votre mot de passe administrateur :",
+    );
+    if (!currentPassword || !currentPassword.trim()) {
+      return;
+    }
+
+    const reason = window.prompt("Raison de suppression (optionnel) :") ?? "";
+
+    try {
+      await apiClient.post(`/admin/users/${target.id}/delete`, {
+        currentPassword: currentPassword.trim(),
+        reason: reason.trim() || undefined,
+      });
+      setFeedback({ type: "success", message: "Compte utilisateur supprime avec succes." });
+      if (selectedUserId === target.id) {
+        setSelectedUserId(null);
+      }
+      await refreshAll();
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Impossible de supprimer ce compte.",
       });
     }
   };
@@ -292,6 +327,14 @@ export default function AdminUsersPage() {
                       Bannir
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => handleDeleteUser(selectedUser)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer le compte
+                  </Button>
                 </div>
               </>
             )}

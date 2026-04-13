@@ -1,11 +1,78 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import type { AerodromeSearchInput } from "@aerodirectory/shared";
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
+import type {
+  AerodromeSearchInput,
+  SavedSearchCreateInput,
+} from "@aerodirectory/shared";
 import { Prisma } from "@aerodirectory/database";
 
 @Injectable()
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listSavedSearches(userId: string, scope: "search" | "planner") {
+    const saved = await this.prisma.savedSearch.findMany({
+      where: { userId, scope },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return saved.map((item) => ({
+      id: item.id,
+      name: item.name,
+      scope: item.scope as "search" | "planner",
+      params: (item.params as Record<string, string>) ?? {},
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    }));
+  }
+
+  async createSavedSearch(userId: string, input: SavedSearchCreateInput) {
+    const currentCount = await this.prisma.savedSearch.count({
+      where: { userId, scope: input.scope },
+    });
+    if (currentCount >= 50) {
+      throw new BadRequestException("Vous avez atteint la limite de 50 recherches sauvegardées.");
+    }
+
+    const created = await this.prisma.savedSearch.create({
+      data: {
+        userId,
+        name: input.name.trim(),
+        scope: input.scope,
+        params: input.params,
+      },
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      scope: created.scope as "search" | "planner",
+      params: (created.params as Record<string, string>) ?? {},
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
+    };
+  }
+
+  async deleteSavedSearch(userId: string, id: string) {
+    const existing = await this.prisma.savedSearch.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Recherche sauvegardée introuvable");
+    }
+    if (existing.userId !== userId) {
+      throw new ForbiddenException("Accès refusé");
+    }
+
+    await this.prisma.savedSearch.delete({ where: { id } });
+  }
 
   async search(input: AerodromeSearchInput) {
     const { q, page, limit, sortBy, lat, lng, radiusKm, ...filters } = input;

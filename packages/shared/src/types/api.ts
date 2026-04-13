@@ -106,6 +106,11 @@ export interface AdminDashboardStats {
   activeComments: number;
   deletedComments: number;
   pendingPhotos: number;
+  pendingReports: number;
+  failedLogins24h: number;
+  altchaFailures24h: number;
+  mailSent24h: number;
+  mailFailed24h: number;
 }
 
 export interface AdminSyncRunItem {
@@ -235,4 +240,85 @@ export interface AdminPhotoListItem {
     displayName: string | null;
     email: string;
   } | null;
+}
+
+export interface AdminReportListItem {
+  id: string;
+  targetType: "comment" | "correction";
+  targetId: string;
+  reason: string;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+  targetPreview: string | null;
+  targetStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" | null;
+}
+
+export interface AdminMailEventItem {
+  id: string;
+  createdAt: string;
+  template: "password_reset" | "email_verification" | "sync_summary";
+  status: "sent" | "failed";
+  recipientMasked: string | null;
+  recipientDomain: string | null;
+  errorMessage: string | null;
+}
+
+export interface SavedSearchItem {
+  id: string;
+  name: string;
+  scope: "search" | "planner";
+  params: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AerodromeListItem {
+  id: string;
+  aerodromeId: string;
+  note: string | null;
+  createdAt: string;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+    city: string | null;
+  };
+}
+
+export interface AerodromeListSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items: AerodromeListItem[];
+  _count: { items: number };
+}
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
 }

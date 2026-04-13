@@ -39,14 +39,6 @@ export default function HomePage() {
     <div>
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background py-16 md:py-32">
         <div className="container mx-auto px-4 text-center">
-          <div className="mx-auto mb-6 flex max-w-2xl flex-col gap-3 text-left sm:text-center">
-            <div className="rounded-full border border-primary/20 bg-background/80 px-4 py-2 text-sm font-medium text-primary shadow-sm">
-              Bienvenue sur Navventura
-            </div>
-            <div className="rounded-3xl border border-border/60 bg-background/80 px-5 py-4 text-base text-foreground shadow-sm">
-              Tu es prêt à devenir Aéroventurier ?
-            </div>
-          </div>
           <div className="mx-auto mb-6 flex items-center justify-center gap-2">
             <Plane className="h-10 w-10 text-primary" />
           </div>

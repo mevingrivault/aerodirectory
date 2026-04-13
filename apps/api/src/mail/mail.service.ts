@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
+import { AuditService } from "../audit/audit.service";
 
 interface SyncSummaryMailRun {
   source: string;
@@ -80,7 +81,10 @@ export class MailService implements OnModuleInit {
   private readonly smtpSecure: boolean;
   private readonly smtpUser?: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly audit: AuditService,
+  ) {
     this.from =
       this.config.get<string>("MAIL_FROM") ||
       this.config.get<string>("SMTP_FROM") ||
@@ -222,10 +226,13 @@ export class MailService implements OnModuleInit {
         `,
         text: `Bienvenue sur Navventura.\n\nConfirmez votre adresse e-mail en cliquant sur ce lien :\n${verifyUrl}\n\nSi vous n'êtes pas à l'origine de cette inscription, ignorez cet e-mail.`,
       });
+      await this.trackMailDelivery("email_verification", "sent", { email });
     } catch (err) {
-      this.logger.error(
-        `Failed to send verification email to ${email} | ${getErrorDetails(err)}`,
-      );
+      this.logger.error(`Failed to send verification email to ${email} | ${getErrorDetails(err)}`);
+      await this.trackMailDelivery("email_verification", "failed", {
+        email,
+        error: err,
+      });
     }
   }
 
@@ -261,10 +268,13 @@ export class MailService implements OnModuleInit {
         `,
         text: `Réinitialisation du mot de passe Navventura\n\nCliquez sur ce lien pour réinitialiser votre mot de passe (valable 1 heure) :\n${resetUrl}\n\nSi vous n'avez pas fait cette demande, ignorez cet e-mail.`,
       });
+      await this.trackMailDelivery("password_reset", "sent", { email });
     } catch (err) {
-      this.logger.error(
-        `Failed to send password reset email to ${email} | ${getErrorDetails(err)}`,
-      );
+      this.logger.error(`Failed to send password reset email to ${email} | ${getErrorDetails(err)}`);
+      await this.trackMailDelivery("password_reset", "failed", {
+        email,
+        error: err,
+      });
     }
   }
 
@@ -342,10 +352,49 @@ export class MailService implements OnModuleInit {
         `,
         text: `Récapitulatif des synchronisations du ${payload.dateLabel}\n\n${rowsText}`,
       });
+      await this.trackMailDelivery("sync_summary", "sent", {
+        email: recipients[0] ?? null,
+      });
     } catch (error) {
-      this.logger.error(
-        `Failed to send sync summary email | ${getErrorDetails(error)}`,
-      );
+      this.logger.error(`Failed to send sync summary email | ${getErrorDetails(error)}`);
+      await this.trackMailDelivery("sync_summary", "failed", {
+        email: recipients[0] ?? null,
+        error,
+      });
     }
+  }
+
+  private async trackMailDelivery(
+    template: "email_verification" | "password_reset" | "sync_summary",
+    status: "sent" | "failed",
+    context: {
+      email?: string | null;
+      error?: unknown;
+    },
+  ): Promise<void> {
+    const email = context.email?.trim() || null;
+    const recipientDomain = email?.includes("@") ? email.split("@")[1] : null;
+    const recipientMasked = email ? this.maskEmail(email) : null;
+    const errorMessage =
+      context.error instanceof Error ? context.error.message : context.error ? String(context.error) : null;
+
+    await this.audit.log({
+      action: "ADMIN_ACTION",
+      metadata: {
+        type: "MAIL_DELIVERY",
+        template,
+        status,
+        recipientMasked,
+        recipientDomain,
+        errorMessage,
+      },
+    });
+  }
+
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split("@");
+    if (!local || !domain) return "***";
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - 2, 1))}@${domain}`;
   }
 }
