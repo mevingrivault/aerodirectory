@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus, Save, Bookmark } from "lucide-react";
+import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus, Save, Bookmark, Lock, Wind, Moon } from "lucide-react";
 import { AerodromeTypeIcon } from "@/components/ui/aerodrome-type-icon";
 import type { SavedSearchItem } from "@aerodirectory/shared";
 
@@ -277,6 +277,9 @@ export default function SearchPage() {
             { key: "fuelSP98",        label: "SP98",          icon: Fuel,      active: filters["fuel"] === "SP98",      onClick: () => toggleFilter("fuel", "SP98") },
             { key: "hasBikes",        label: "Vélo",          icon: Bike,      active: !!filters["hasBikes"],           onClick: () => toggleFilter("hasBikes", "true") },
             { key: "hasTransport",    label: "Transport",     icon: Bus,       active: !!filters["hasTransport"],       onClick: () => toggleFilter("hasTransport", "true") },
+            { key: "nightOperations", label: "Vol de nuit",   icon: Moon,      active: !!filters["nightOperations"],   onClick: () => toggleFilter("nightOperations", "true") },
+            { key: "ppr",             label: "PPR",            icon: Lock,      active: filters["ppr"] === "true",      onClick: () => toggleFilter("ppr", "true") },
+            { key: "skydiveActivity", label: "Parachutage",   icon: Wind,      active: !!filters["skydiveActivity"],   onClick: () => toggleFilter("skydiveActivity", "true") },
           ] as const
         ).map(({ key, label, icon: Icon, active, onClick }) => (
           <button

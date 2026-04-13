@@ -12,6 +12,7 @@ interface AerodromeMarker {
   id: string;
   name: string;
   icaoCode: string | null;
+  iataCode: string | null;
   latitude: number;
   longitude: number;
   status: string;
@@ -268,6 +269,7 @@ function MapPageInner() {
           id: ad.id,
           name: ad.name,
           icaoCode: ad.icaoCode || "",
+          iataCode: ad.iataCode || "",
           status: ad.status,
           aerodromeType: ad.aerodromeType || "OTHER",
           visitStatus: visitsByAerodrome.get(ad.id) ?? "",
@@ -370,7 +372,7 @@ function MapPageInner() {
       if (feature && popupRef.current) {
         const props = feature.properties ?? {};
         const coords = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-        const icao = props["icaoCode"] ? ` (${props["icaoCode"]})` : "";
+        const icao = props["icaoCode"] ? ` (${props["icaoCode"]}${props["iataCode"] ? ` / ${props["iataCode"]}` : ""})` : "";
         const elevation = props["elevation"] ? ` — ${props["elevation"]} ft` : "";
         const rwy = props["runways"] ? `<div style="font-size:11px;color:#888;margin-top:2px">${props["runways"]}</div>` : "";
         popupRef.current

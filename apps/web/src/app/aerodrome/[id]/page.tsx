@@ -323,6 +323,36 @@ const SURFACE_LABELS: Record<number, string> = {
   5: "Eau",
 };
 
+// openAIP runway operations codes
+const RUNWAY_OPERATIONS_LABELS: Record<number, string> = {
+  0: "VFR de jour",
+  1: "VFR de nuit",
+  2: "IFR",
+  3: "VFR & IFR",
+};
+
+// openAIP handling facilities codes
+const HANDLING_LABELS: Record<number, string> = {
+  0: "Avitaillement",
+  1: "Hangarage",
+  2: "Dégivrage",
+  3: "Remorquage",
+  4: "Assistance technique",
+  5: "Service météo",
+};
+
+// openAIP passenger facilities codes
+const PASSENGER_LABELS: Record<number, string> = {
+  0: "Terminal passagers",
+  1: "Hôtel",
+  2: "Transport",
+  3: "Taxi",
+  4: "Location voiture",
+  5: "Banque / Distributeur",
+  6: "Douanes",
+  7: "Santé",
+};
+
 function formatDeclination(value: number | null) {
   if (value == null) return null;
   if (value === 0) return "0°";
@@ -931,11 +961,11 @@ export default function AerodromeDetailPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 {ad.handlingFacilities.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Handling openAIP</p>
+                    <p className="text-sm font-medium">Handling</p>
                     <div className="flex flex-wrap gap-2">
                       {ad.handlingFacilities.map((code) => (
                         <Badge key={`handling-${code}`} variant="outline">
-                          {formatOpenAipCode(code)}
+                          {HANDLING_LABELS[code] ?? `Code ${code}`}
                         </Badge>
                       ))}
                     </div>
@@ -943,11 +973,11 @@ export default function AerodromeDetailPage() {
                 )}
                 {ad.passengerFacilities.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Services passagers openAIP</p>
+                    <p className="text-sm font-medium">Services passagers</p>
                     <div className="flex flex-wrap gap-2">
                       {ad.passengerFacilities.map((code) => (
                         <Badge key={`passenger-${code}`} variant="outline">
-                          {formatOpenAipCode(code)}
+                          {PASSENGER_LABELS[code] ?? `Code ${code}`}
                         </Badge>
                       ))}
                     </div>
@@ -988,7 +1018,7 @@ export default function AerodromeDetailPage() {
                     {(r.trueHeading != null || r.operations != null || r.surfaceComposition.length > 0 || r.remarks) && (
                       <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
                         {r.trueHeading != null && <span>QFU vrai {r.trueHeading}°</span>}
-                        {r.operations != null && <span>Opérations openAIP {formatOpenAipCode(r.operations)}</span>}
+                        {r.operations != null && <span>{RUNWAY_OPERATIONS_LABELS[r.operations] ?? `Opérations code ${r.operations}`}</span>}
                         {r.surfaceComposition.length > 0 && (
                           <span>
                             Composition {r.surfaceComposition.map((code) => SURFACE_LABELS[code] ?? formatOpenAipCode(code)).join(", ")}

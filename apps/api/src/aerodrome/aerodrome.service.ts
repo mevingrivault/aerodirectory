@@ -178,6 +178,7 @@ export class AerodromeService {
         id: true,
         name: true,
         icaoCode: true,
+        iataCode: true,
         latitude: true,
         longitude: true,
         aerodromeType: true,
