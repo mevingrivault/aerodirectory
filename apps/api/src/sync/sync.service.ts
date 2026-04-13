@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { Cron } from "@nestjs/schedule/dist";
+import { Cron } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, type SyncRun, type SyncRunStatus, type SyncSource } from "@aerodirectory/database";
 import Redis from "ioredis";
@@ -85,7 +85,19 @@ export class SyncService implements OnModuleInit {
 
   async onModuleInit() {
     if (!this.workerEnabled) {
+      this.logger.log("Worker désactivé (SYNC_ENABLED != true)");
       return;
+    }
+
+    this.logger.log(`Worker démarré (id=${this.workerId}, redis=${this.redis ? "oui" : "non"})`);
+
+    if (this.redis) {
+      try {
+        await this.redis.ping();
+        this.logger.log("Connexion Redis OK");
+      } catch (error) {
+        this.logger.error(`Connexion Redis échouée : ${asErrorMessage(error)}`);
+      }
     }
 
     await this.updateWorkerHeartbeat();
@@ -207,7 +219,7 @@ export class SyncService implements OnModuleInit {
     );
 
     return {
-      workerEnabled: heartbeat?.alive ?? this.workerEnabled,
+      workerEnabled: heartbeat ? heartbeat.alive : this.workerEnabled,
       workerId: heartbeat?.workerId ?? this.workerId,
       running: activeRuns.some((run) => run.status === "IN_PROGRESS"),
       sources: sourceStatuses,
@@ -918,7 +930,9 @@ export class SyncService implements OnModuleInit {
     try {
       const raw = await this.redis.get(WORKER_HEARTBEAT_KEY);
       if (!raw) {
-        return { alive: false, workerId: null };
+        // Clé absente : pas encore écrite ou expirée — on ne peut pas conclure
+        // que le worker est mort, on laisse le fallback sur this.workerEnabled
+        return null;
       }
 
       const parsed = JSON.parse(raw) as { workerId?: string; heartbeatAt?: string };

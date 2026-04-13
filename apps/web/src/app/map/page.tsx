@@ -185,6 +185,7 @@ function MapPageInner() {
   const [requiredFuels, setRequiredFuels] = useState<Set<string>>(new Set());
   const [visitFilter, setVisitFilter] = useState<"" | "FAVORITE" | "VISITED">("");
   const [showAirspaces, setShowAirspaces] = useState(false);
+  const [hiddenAirspaceClasses, setHiddenAirspaceClasses] = useState<Set<string>>(new Set());
 
   const { data } = useQuery({
     queryKey: ["map-aerodromes", query],
@@ -414,6 +415,23 @@ function MapPageInner() {
     map.on("mouseleave", "airspace-fill", () => { map.getCanvas().style.cursor = ""; popupRef.current?.remove(); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [airspaces, showAirspaces, mapLoaded]);
+
+  // Apply airspace class visibility filter
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    if (!map.getLayer("airspace-fill")) return;
+
+    const visibleClasses = Object.keys(AIRSPACE_CLASS_COLORS).filter(
+      (cls) => !hiddenAirspaceClasses.has(cls),
+    );
+    const filterExpr = visibleClasses.length === 0
+      ? ["==", "1", "0"] // hide all
+      : ["in", ["get", "icaoClass"], ["literal", visibleClasses]];
+
+    map.setFilter("airspace-fill", filterExpr as any);
+    map.setFilter("airspace-stroke", filterExpr as any);
+  }, [hiddenAirspaceClasses, mapLoaded]);
 
   // Update markers whenever filtered data changes
   useEffect(() => {
@@ -777,29 +795,55 @@ function MapPageInner() {
           <>
             <div className="my-2 border-t border-border/70" />
             <div className="font-semibold mb-1.5">Espaces aériens</div>
-            {Object.entries(AIRSPACE_CLASS_STROKE).map(([cls, color]) => (
-              <div key={cls} className="flex items-center gap-1.5 mb-0.5">
-                <span
-                  className="inline-block h-2.5 w-5 shrink-0 rounded-sm border"
-                  style={{ backgroundColor: AIRSPACE_CLASS_COLORS[cls], borderColor: color }}
-                />
-                <span>Classe {cls}</span>
-              </div>
-            ))}
+            {Object.entries(AIRSPACE_CLASS_STROKE).map(([cls, color]) => {
+              const hidden = hiddenAirspaceClasses.has(cls);
+              return (
+                <div
+                  key={cls}
+                  className="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
+                  style={{ opacity: hidden ? 0.35 : 1 }}
+                  onClick={() =>
+                    setHiddenAirspaceClasses((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(cls)) next.delete(cls);
+                      else next.add(cls);
+                      return next;
+                    })
+                  }
+                >
+                  <span
+                    className="inline-block h-2.5 w-5 shrink-0 rounded-sm border"
+                    style={{
+                      backgroundColor: hidden ? "transparent" : AIRSPACE_CLASS_COLORS[cls],
+                      borderColor: hidden ? "#d1d5db" : color,
+                    }}
+                  />
+                  <span>Classe {cls}</span>
+                </div>
+              );
+            })}
           </>
         )}
         {user && (
           <>
             <div className="my-2 border-t border-border/70" />
             <div className="font-semibold mb-1.5">Mes repères</div>
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div
+              className="flex items-center gap-1.5 mb-0.5 cursor-pointer select-none"
+              style={{ opacity: visitFilter === "FAVORITE" ? 0.35 : 1 }}
+              onClick={() => setVisitFilter((v) => (v === "VISITED" ? "" : "VISITED"))}
+            >
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full border-2 shrink-0"
                 style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#2563eb" }}
               />
               <span>Visité</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div
+              className="flex items-center gap-1.5 cursor-pointer select-none"
+              style={{ opacity: visitFilter === "VISITED" ? 0.35 : 1 }}
+              onClick={() => setVisitFilter((v) => (v === "FAVORITE" ? "" : "FAVORITE"))}
+            >
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full border-[3px] shrink-0"
                 style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#f59e0b" }}
