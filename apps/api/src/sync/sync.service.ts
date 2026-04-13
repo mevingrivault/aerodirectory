@@ -219,7 +219,7 @@ export class SyncService implements OnModuleInit {
     );
 
     return {
-      workerEnabled: heartbeat ? heartbeat.alive : this.workerEnabled,
+      workerEnabled: heartbeat !== null ? heartbeat.alive : this.workerEnabled,
       workerId: heartbeat?.workerId ?? this.workerId,
       running: activeRuns.some((run) => run.status === "IN_PROGRESS"),
       sources: sourceStatuses,
@@ -930,9 +930,8 @@ export class SyncService implements OnModuleInit {
     try {
       const raw = await this.redis.get(WORKER_HEARTBEAT_KEY);
       if (!raw) {
-        // Clé absente : pas encore écrite ou expirée — on ne peut pas conclure
-        // que le worker est mort, on laisse le fallback sur this.workerEnabled
-        return null;
+        // Clé absente : heartbeat jamais écrit ou TTL expiré → worker inactif
+        return { alive: false, workerId: null };
       }
 
       const parsed = JSON.parse(raw) as { workerId?: string; heartbeatAt?: string };
