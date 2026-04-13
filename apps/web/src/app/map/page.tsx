@@ -366,9 +366,20 @@ function MapPageInner() {
         id: "airspace-fill",
         type: "fill",
         source: "airspaces",
+        minzoom: 7,
         paint: {
           "fill-color": fillColorExpression,
-          "fill-opacity": 1,
+          "fill-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            0.03,
+            8,
+            0.06,
+            10,
+            0.12,
+          ],
         },
       },
       insertBefore,
@@ -382,6 +393,21 @@ function MapPageInner() {
         paint: {
           "line-color": strokeColorExpression,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 10, 1.5],
+          "line-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            5,
+            0.15,
+            6,
+            0.22,
+            7,
+            0.35,
+            8,
+            0.55,
+            10,
+            0.8,
+          ],
           "line-dasharray": [3, 2],
         },
       },
@@ -439,15 +465,24 @@ function MapPageInner() {
     const map = mapRef.current;
 
     if (map.getSource("aerodromes")) {
+      if (map.getLayer("aerodrome-cluster-count")) map.removeLayer("aerodrome-cluster-count");
+      if (map.getLayer("aerodrome-clusters")) map.removeLayer("aerodrome-clusters");
       if (map.getLayer("aerodrome-highlight")) map.removeLayer("aerodrome-highlight");
       if (map.getLayer("aerodrome-visited-halo")) map.removeLayer("aerodrome-visited-halo");
       if (map.getLayer("aerodrome-points")) map.removeLayer("aerodrome-points");
       map.removeSource("aerodromes");
     }
 
+    if (map.getSource("aerodrome-highlight-source")) {
+      if (map.getLayer("aerodrome-highlight")) map.removeLayer("aerodrome-highlight");
+      map.removeSource("aerodrome-highlight-source");
+    }
+
     const geojson: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
-      features: filtered.map((ad) => ({
+      features: filtered
+        .filter((ad) => ad.id !== highlightedAerodromeId)
+        .map((ad) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [ad.longitude, ad.latitude] },
         properties: {
@@ -464,21 +499,60 @@ function MapPageInner() {
       })),
     };
 
-    map.addSource("aerodromes", { type: "geojson", data: geojson });
+    map.addSource("aerodromes", {
+      type: "geojson",
+      data: geojson,
+      cluster: true,
+      clusterRadius: 40,
+      clusterMaxZoom: 9,
+    });
 
     map.addLayer({
-      id: "aerodrome-highlight",
+      id: "aerodrome-clusters",
       type: "circle",
       source: "aerodromes",
-      filter: highlightedAerodromeId
-        ? ["==", ["get", "id"], highlightedAerodromeId]
-        : ["==", ["get", "id"], ""],
+      filter: ["has", "point_count"],
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 10, 8, 15, 12, 22],
-        "circle-color": "#2563eb",
-        "circle-opacity": 0.14,
+        "circle-color": [
+          "step",
+          ["get", "point_count"],
+          "#dbeafe",
+          20,
+          "#93c5fd",
+          50,
+          "#60a5fa",
+          100,
+          "#2563eb",
+        ],
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          16,
+          20,
+          20,
+          50,
+          24,
+          100,
+          28,
+        ],
+        "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 2,
-        "circle-stroke-color": "#2563eb",
+        "circle-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
+      id: "aerodrome-cluster-count",
+      type: "symbol",
+      source: "aerodromes",
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": ["Open Sans Bold"],
+        "text-size": 11,
+      },
+      paint: {
+        "text-color": "#0f172a",
       },
     });
 
@@ -486,6 +560,7 @@ function MapPageInner() {
       id: "aerodrome-visited-halo",
       type: "circle",
       source: "aerodromes",
+      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-radius": [
           "interpolate",
@@ -515,6 +590,7 @@ function MapPageInner() {
       id: "aerodrome-points",
       type: "circle",
       source: "aerodromes",
+      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 4, 8, 6, 12, 10],
         "circle-color": [
@@ -546,6 +622,54 @@ function MapPageInner() {
       },
     });
 
+    if (highlightedAerodrome) {
+      const highlightedGeojson: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [highlightedAerodrome.longitude, highlightedAerodrome.latitude],
+            },
+            properties: { id: highlightedAerodrome.id },
+          },
+        ],
+      };
+
+      map.addSource("aerodrome-highlight-source", {
+        type: "geojson",
+        data: highlightedGeojson,
+      });
+
+      map.addLayer({
+        id: "aerodrome-highlight",
+        type: "circle",
+        source: "aerodrome-highlight-source",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 10, 8, 15, 12, 22],
+          "circle-color": "#2563eb",
+          "circle-opacity": 0.14,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#2563eb",
+        },
+      });
+    }
+
+    map.on("click", "aerodrome-clusters", (e) => {
+      const feature = e.features?.[0];
+      const clusterId = feature?.properties?.["cluster_id"];
+      if (clusterId == null) return;
+      const source = map.getSource("aerodromes") as maplibregl.GeoJSONSource & {
+        getClusterExpansionZoom?: (clusterId: number, callback: (error: Error | null, zoom: number) => void) => void;
+      };
+      source.getClusterExpansionZoom?.(clusterId, (error, zoom) => {
+        if (error) return;
+        const coordinates = (feature?.geometry as GeoJSON.Point).coordinates as [number, number];
+        map.easeTo({ center: coordinates, zoom });
+      });
+    });
+
     map.on("click", "aerodrome-points", (e) => {
       const feature = e.features?.[0];
       if (feature?.properties?.["id"]) navigateToDetail(feature.properties["id"]);
@@ -571,9 +695,17 @@ function MapPageInner() {
       }
     });
 
+    map.on("mouseenter", "aerodrome-clusters", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+
     map.on("mouseleave", "aerodrome-points", () => {
       map.getCanvas().style.cursor = "";
       popupRef.current?.remove();
+    });
+
+    map.on("mouseleave", "aerodrome-clusters", () => {
+      map.getCanvas().style.cursor = "";
     });
 
     if (highlightedAerodrome) {
