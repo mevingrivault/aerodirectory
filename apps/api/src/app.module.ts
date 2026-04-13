@@ -20,6 +20,7 @@ import { AdminModule } from "./admin/admin.module";
 import { PhotoModule } from "./photo/photo.module";
 import { NotificationModule } from "./notification/notification.module";
 import { ListModule } from "./list/list.module";
+import { AirspaceModule } from "./airspace/airspace.module";
 import { ThrottlerGuard } from "@nestjs/throttler";
 
 @Module({
@@ -62,6 +63,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
     PhotoModule,
     NotificationModule,
     ListModule,
+    AirspaceModule,
     SyncModule,
   ],
   providers: [

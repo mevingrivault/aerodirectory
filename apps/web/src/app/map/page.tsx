@@ -6,7 +6,56 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
+
+interface AirspaceFeature {
+  id: string;
+  name: string;
+  type: number;
+  icaoClass: string;
+  lowerLimit: string;
+  upperLimit: string;
+  lowerLimitFt: number | null;
+  upperLimitFt: number | null;
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  activity: number | null;
+  onDemand: boolean;
+  onRequest: boolean;
+  remarks: string | null;
+}
+
+// ICAO class fill colors (semi-transparent) — convention OACI
+const AIRSPACE_CLASS_COLORS: Record<string, string> = {
+  A: "rgba(255, 50,  50,  0.12)",
+  B: "rgba(255, 120,  0,  0.12)",
+  C: "rgba(255, 200,  0,  0.12)",
+  D: "rgba(80,  160, 255, 0.12)",
+  E: "rgba(100, 200, 100, 0.10)",
+  F: "rgba(180,  80, 255, 0.10)",
+  G: "rgba(160, 160, 160, 0.08)",
+  SPC: "rgba(255,  50, 200, 0.14)",
+};
+
+const AIRSPACE_CLASS_STROKE: Record<string, string> = {
+  A: "rgba(255, 50,  50,  0.75)",
+  B: "rgba(255, 120,  0,  0.75)",
+  C: "rgba(200, 150,  0,  0.75)",
+  D: "rgba(30,  100, 220, 0.75)",
+  E: "rgba(40,  140,  40, 0.70)",
+  F: "rgba(140,  50, 220, 0.70)",
+  G: "rgba(100, 100, 100, 0.50)",
+  SPC: "rgba(220,  30, 160, 0.80)",
+};
+
+// openAIP airspace type labels (types most relevant for VFR)
+const AIRSPACE_TYPE_LABELS: Record<number, string> = {
+  0: "Autre", 1: "Restricted", 2: "Danger", 3: "Prohibited",
+  4: "CTR", 5: "TMA", 6: "RMZ", 7: "TMZ", 8: "FIR", 9: "UIR",
+  10: "ADIZ", 11: "ATZ", 12: "MATZ", 13: "Airway", 14: "MTR",
+  15: "Alert", 16: "Warning", 17: "Protected", 18: "HTZ",
+  19: "Glider", 20: "TRP", 21: "TIZ", 22: "TIA",
+  23: "MBZ", 24: "GP", 25: "WTSZ", 26: "NOTAM",
+};
 
 interface AerodromeMarker {
   id: string;
@@ -135,11 +184,19 @@ function MapPageInner() {
   const [requireMaintenance, setRequireMaintenance] = useState(false);
   const [requiredFuels, setRequiredFuels] = useState<Set<string>>(new Set());
   const [visitFilter, setVisitFilter] = useState<"" | "FAVORITE" | "VISITED">("");
+  const [showAirspaces, setShowAirspaces] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["map-aerodromes", query],
     queryFn: () =>
       apiClient.get<AerodromeMarker[]>("/aerodromes/map", query ? { q: query } : undefined),
+  });
+
+  const { data: airspacesRes } = useQuery({
+    queryKey: ["airspaces"],
+    queryFn: () => apiClient.get<AirspaceFeature[]>("/airspaces"),
+    staleTime: 10 * 60 * 1000,
+    enabled: showAirspaces,
   });
 
   const { data: visitsRes } = useQuery({
@@ -149,6 +206,7 @@ function MapPageInner() {
   });
 
   const aerodromes = data?.data ?? [];
+  const airspaces = airspacesRes?.data ?? [];
   const visits = visitsRes?.data ?? [];
   const highlightedAerodromeId = searchParams.get("highlight");
   const visitsByAerodrome = new Map(
@@ -247,6 +305,115 @@ function MapPageInner() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStyle]);
+
+  // Airspaces layer
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return;
+    const map = mapRef.current;
+
+    // Remove existing airspace layers/source
+    if (map.getLayer("airspace-fill")) map.removeLayer("airspace-fill");
+    if (map.getLayer("airspace-stroke")) map.removeLayer("airspace-stroke");
+    if (map.getSource("airspaces")) map.removeSource("airspaces");
+
+    if (!showAirspaces || airspaces.length === 0) return;
+
+    // Build a GeoJSON FeatureCollection from the fetched airspaces
+    const geojson: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: airspaces.map((a) => ({
+        type: "Feature" as const,
+        geometry: a.geometry as GeoJSON.Geometry,
+        properties: {
+          id: a.id,
+          name: a.name,
+          icaoClass: a.icaoClass,
+          type: a.type,
+          lowerLimit: a.lowerLimit,
+          upperLimit: a.upperLimit,
+          onDemand: a.onDemand,
+          onRequest: a.onRequest,
+          remarks: a.remarks ?? "",
+        },
+      })),
+    };
+
+    map.addSource("airspaces", { type: "geojson", data: geojson });
+
+    // Build fill-color expression from ICAO class
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fillColorExpression: any = [
+      "match",
+      ["get", "icaoClass"],
+      ...Object.entries(AIRSPACE_CLASS_COLORS).flatMap(([cls, color]) => [cls, color]),
+      "rgba(160,160,160,0.08)",
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const strokeColorExpression: any = [
+      "match",
+      ["get", "icaoClass"],
+      ...Object.entries(AIRSPACE_CLASS_STROKE).flatMap(([cls, color]) => [cls, color]),
+      "rgba(100,100,100,0.5)",
+    ];
+
+    // Insert airspace layers below marker layers (if they exist) or at the top
+    const insertBefore = map.getLayer("aerodrome-highlight") ? "aerodrome-highlight" : undefined;
+
+    map.addLayer(
+      {
+        id: "airspace-fill",
+        type: "fill",
+        source: "airspaces",
+        paint: {
+          "fill-color": fillColorExpression,
+          "fill-opacity": 1,
+        },
+      },
+      insertBefore,
+    );
+
+    map.addLayer(
+      {
+        id: "airspace-stroke",
+        type: "line",
+        source: "airspaces",
+        paint: {
+          "line-color": strokeColorExpression,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 10, 1.5],
+          "line-dasharray": [3, 2],
+        },
+      },
+      insertBefore,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onAirspaceClick = (e: any) => {
+      const feature = e.features?.[0];
+      if (!feature || !popupRef.current) return;
+      const p = feature.properties ?? {};
+      const typeLabel = AIRSPACE_TYPE_LABELS[p["type"] as number] ?? `Type ${p["type"]}`;
+      const extra = [
+        p["onDemand"] && "Sur demande",
+        p["onRequest"] && "Sur autorisation",
+        p["remarks"] && `<div style="font-size:11px;color:#888;margin-top:3px">${p["remarks"]}</div>`,
+      ].filter(Boolean).join(" · ");
+      popupRef.current
+        .setLngLat(e.lngLat)
+        .setHTML(
+          `<div style="font-weight:600">${p["name"]}</div>` +
+          `<div style="font-size:12px;color:#555">${typeLabel} · Classe ${p["icaoClass"]}</div>` +
+          `<div style="font-size:12px;color:#666">${p["lowerLimit"]} – ${p["upperLimit"]}</div>` +
+          (extra ? `<div style="font-size:11px;color:#888;margin-top:2px">${extra}</div>` : ""),
+        )
+        .addTo(map);
+    };
+
+    map.on("click", "airspace-fill", onAirspaceClick);
+    map.on("mouseenter", "airspace-fill", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "airspace-fill", () => { map.getCanvas().style.cursor = ""; popupRef.current?.remove(); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [airspaces, showAirspaces, mapLoaded]);
 
   // Update markers whenever filtered data changes
   useEffect(() => {
@@ -533,6 +700,22 @@ function MapPageInner() {
               </div>
             )}
 
+            {/* Espaces aériens */}
+            <div>
+              <div className="font-semibold mb-1.5 flex items-center gap-1.5">
+                <Layers className="h-3 w-3" /> Espaces aériens
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAirspaces}
+                  onChange={(e) => setShowAirspaces(e.target.checked)}
+                  className="rounded"
+                />
+                Afficher les espaces aériens
+              </label>
+            </div>
+
             {/* Reset */}
             {activeFilterCount > 0 && (
               <button
@@ -590,6 +773,21 @@ function MapPageInner() {
             </div>
           );
         })}
+        {showAirspaces && (
+          <>
+            <div className="my-2 border-t border-border/70" />
+            <div className="font-semibold mb-1.5">Espaces aériens</div>
+            {Object.entries(AIRSPACE_CLASS_STROKE).map(([cls, color]) => (
+              <div key={cls} className="flex items-center gap-1.5 mb-0.5">
+                <span
+                  className="inline-block h-2.5 w-5 shrink-0 rounded-sm border"
+                  style={{ backgroundColor: AIRSPACE_CLASS_COLORS[cls], borderColor: color }}
+                />
+                <span>Classe {cls}</span>
+              </div>
+            ))}
+          </>
+        )}
         {user && (
           <>
             <div className="my-2 border-t border-border/70" />

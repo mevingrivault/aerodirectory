@@ -9,6 +9,7 @@ import { MailService } from "../mail/mail.service";
 import { SyncLockService } from "./sync-lock.service";
 import { computeNextCronOccurrence, getSourceScheduleDescription } from "./sync.schedule";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
+import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
 import {
   ensureOsmArtifacts,
@@ -21,6 +22,7 @@ import { runSyncAerodromeFlagsTask } from "./tasks/flags-sync.task";
 
 const ACTIVE_RUN_STATUSES: SyncRunStatus[] = ["QUEUED", "RETRY_SCHEDULED", "IN_PROGRESS"];
 const OPENAIP_CRON = process.env["SYNC_OPENAIP_CRON"] ?? "0 2 * * *";
+const AIRSPACES_CRON = process.env["SYNC_AIRSPACES_CRON"] ?? "30 2 * * *";
 const OSM_CRON = process.env["SYNC_OSM_CRON"] ?? "0 3 * * 0";
 const RGPD_CRON = process.env["SYNC_RGPD_CRON"] ?? "30 4 * * *";
 const REPORT_CRON = process.env["SYNC_REPORT_CRON"] ?? "30 7 * * *";
@@ -109,6 +111,15 @@ export class SyncService implements OnModuleInit {
     await this.enqueueRun("OPENAIP", "SCHEDULED");
   }
 
+  @Cron(AIRSPACES_CRON, {
+    name: "sync-enqueue-airspaces",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleAirspaces() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("AIRSPACES", "SCHEDULED");
+  }
+
   @Cron(OSM_CRON, {
     name: "sync-enqueue-osm",
     timeZone: SYNC_TIMEZONE,
@@ -172,7 +183,7 @@ export class SyncService implements OnModuleInit {
       }),
     ]);
 
-    const sources: SyncSource[] = ["OPENAIP", "OSM", "REGIONS", "RGPD"];
+    const sources: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD"];
     const sourceStatuses = await Promise.all(
       sources.map(async (source) => {
         const lastRun = await this.prisma.syncRun.findFirst({
@@ -412,6 +423,8 @@ export class SyncService implements OnModuleInit {
     switch (run.source) {
       case "OPENAIP":
         return this.executeOpenAip(run);
+      case "AIRSPACES":
+        return this.executeAirspaces(run);
       case "OSM":
         return this.executeOsm(run);
       case "REGIONS":
@@ -468,6 +481,42 @@ export class SyncService implements OnModuleInit {
       };
     } catch (error) {
       await this.failStep(run.id, "openaip_import", error);
+      throw error;
+    }
+  }
+
+  private async executeAirspaces(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "airspaces_import", 1);
+
+    try {
+      const apiKey = this.config.getOrThrow<string>("OPENAIP_API_KEY");
+      const result = await runOpenAipAirspacesSyncTask(this.prisma as never, apiKey);
+      await this.completeStep(run.id, "airspaces_import", {
+        metrics: {
+          total: result.total,
+          created: result.created,
+          updated: result.updated,
+          unchanged: result.unchanged,
+          errors: result.errors.length,
+        },
+        logSummary: `Créés: ${result.created}, mis à jour: ${result.updated}, erreurs: ${result.errors.length}`,
+      });
+
+      return {
+        source: "AIRSPACES" as const,
+        status: result.errors.length > 0 ? ("PARTIAL" as const) : ("SUCCESS" as const),
+        summary: toInputJsonValue({
+          total: result.total,
+          created: result.created,
+          updated: result.updated,
+          unchanged: result.unchanged,
+          errors: result.errors,
+        }),
+        errorMessage:
+          result.errors.length > 0 ? `${result.errors.length} erreur(s) lors du sync espaces aériens.` : null,
+      };
+    } catch (error) {
+      await this.failStep(run.id, "airspaces_import", error);
       throw error;
     }
   }
@@ -814,6 +863,8 @@ export class SyncService implements OnModuleInit {
     switch (source) {
       case "OPENAIP":
         return OPENAIP_CRON;
+      case "AIRSPACES":
+        return AIRSPACES_CRON;
       case "OSM":
         return OSM_CRON;
       case "REGIONS":

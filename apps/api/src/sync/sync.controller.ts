@@ -12,7 +12,7 @@ import { CurrentUser, Roles } from "../common/decorators";
 import { ok } from "../common/api-response";
 import { SyncService } from "./sync.service";
 
-const ALLOWED_SOURCES: SyncSource[] = ["OPENAIP", "OSM", "REGIONS", "RGPD"];
+const ALLOWED_SOURCES: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD"];
 
 @Controller("admin/sync")
 @Roles("ADMIN")
