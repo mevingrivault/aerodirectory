@@ -61,7 +61,7 @@ export class PhotoController {
     @Res() res: FastifyReply,
   ) {
     const photo = await this.photos.findById(photoId);
-    if (!photo) {
+    if (!photo || !photo.user.showCommunityPhotos) {
       throw new NotFoundException("Photo introuvable.");
     }
 
@@ -84,4 +84,3 @@ export class PhotoController {
     return ok({ deleted: true });
   }
 }
-

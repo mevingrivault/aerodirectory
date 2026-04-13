@@ -141,7 +141,16 @@ export class PhotoService {
   async findById(photoId: string) {
     return this.prisma.photo.findUnique({
       where: { id: photoId, status: PhotoStatus.READY },
-      select: { id: true, storedKey: true, mimeType: true },
+      select: {
+        id: true,
+        storedKey: true,
+        mimeType: true,
+        user: {
+          select: {
+            showCommunityPhotos: true,
+          },
+        },
+      },
     });
   }
 
@@ -153,7 +162,7 @@ export class PhotoService {
   }
 
   async listForAerodrome(aerodromeId: string) {
-    return this.prisma.photo.findMany({
+    const photos = await this.prisma.photo.findMany({
       where: { aerodromeId, status: PhotoStatus.READY },
       select: {
         id: true,
@@ -162,10 +171,27 @@ export class PhotoService {
         width: true,
         height: true,
         createdAt: true,
-        user: { select: { id: true, displayName: true } },
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            showCommunityProfile: true,
+            showCommunityPhotos: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
+
+    return photos
+      .filter((photo) => photo.user.showCommunityPhotos)
+      .map((photo) => ({
+        ...photo,
+        user: {
+          id: photo.user.id,
+          displayName: photo.user.showCommunityProfile ? photo.user.displayName : null,
+        },
+      }));
   }
 
   async delete(photoId: string, userId: string, role: string) {

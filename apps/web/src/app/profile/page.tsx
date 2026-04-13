@@ -65,6 +65,8 @@ export default function ProfilePage() {
   const [showHomeSuggestions, setShowHomeSuggestions] = useState(false);
   const [homeAlert, setHomeAlert] = useState<{ type: AlertType; msg: string } | null>(null);
   const homeSearchRef = useRef<HTMLDivElement>(null);
+  const [privacyLoading, setPrivacyLoading] = useState<string | null>(null);
+  const [privacyAlert, setPrivacyAlert] = useState<{ type: AlertType; msg: string } | null>(null);
 
   const { data: homeSuggestionsRes } = useQuery({
     queryKey: ["aerodrome-search-home", homeSearch],
@@ -197,6 +199,30 @@ export default function ProfilePage() {
     }
   };
 
+  const handlePrivacyChange = async (
+    field: "showCommunityProfile" | "showCommunityContributions" | "showCommunityPhotos",
+    value: boolean,
+  ) => {
+    setPrivacyLoading(field);
+    setPrivacyAlert(null);
+
+    try {
+      await apiClient.put("/auth/profile", { [field]: value });
+      await refreshProfile();
+      setPrivacyAlert({
+        type: "success",
+        msg: "Préférences de confidentialité mises à jour.",
+      });
+    } catch {
+      setPrivacyAlert({
+        type: "error",
+        msg: "Impossible de mettre à jour les préférences de confidentialité.",
+      });
+    } finally {
+      setPrivacyLoading(null);
+    }
+  };
+
   // ─── TOTP ───────────────────────────────────────────────
 
   const handleSetupTotp = async () => {
@@ -294,6 +320,75 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Membre depuis</span>
             <span>{new Date(user.createdAt).toLocaleDateString("fr-FR")}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Confidentialité communautaire</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {privacyAlert && <Alert type={privacyAlert.type} msg={privacyAlert.msg} />}
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Afficher mon nom sur mon profil communautaire</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Si cette option est désactivée, vos contenus publics restent visibles mais signés comme “Membre”.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityProfile}
+                disabled={privacyLoading === "showCommunityProfile"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityProfile", event.target.checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Rendre mes contributions publiques</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Contrôle la visibilité publique de vos commentaires et enrichissements communautaires.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityContributions}
+                disabled={privacyLoading === "showCommunityContributions"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityContributions", event.target.checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Rendre mes photos publiques</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Par défaut, vos photos validées peuvent être vues sur les fiches terrain. Vous pouvez couper cette visibilité à tout moment.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityPhotos}
+                disabled={privacyLoading === "showCommunityPhotos"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityPhotos", event.target.checked)
+                }
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

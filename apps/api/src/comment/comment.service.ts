@@ -117,16 +117,26 @@ export class CommentService {
           parentId: null,
           deletedAt: null,
           contentStatus: "APPROVED",
+          user: {
+            showCommunityContributions: true,
+          },
         },
         include: {
-          user: { select: { id: true, displayName: true } },
+          user: {
+            select: { id: true, displayName: true, showCommunityProfile: true },
+          },
           replies: {
             where: {
               deletedAt: null,
               contentStatus: "APPROVED",
+              user: {
+                showCommunityContributions: true,
+              },
             },
             include: {
-              user: { select: { id: true, displayName: true } },
+              user: {
+                select: { id: true, displayName: true, showCommunityProfile: true },
+              },
             },
             orderBy: { createdAt: "asc" },
           },
@@ -141,11 +151,24 @@ export class CommentService {
           parentId: null,
           deletedAt: null,
           contentStatus: "APPROVED",
+          user: {
+            showCommunityContributions: true,
+          },
         },
       }),
     ]);
 
-    return { data, total };
+    return {
+      data: data.map((comment) => ({
+        ...comment,
+        user: this.toPublicAuthor(comment.user),
+        replies: comment.replies.map((reply) => ({
+          ...reply,
+          user: this.toPublicAuthor(reply.user),
+        })),
+      })),
+      total,
+    };
   }
 
   async deleteComment(userId: string, commentId: string, role: string) {
@@ -447,5 +470,16 @@ export class CommentService {
       default:
         return null;
     }
+  }
+
+  private toPublicAuthor(user: {
+    id: string;
+    displayName: string | null;
+    showCommunityProfile: boolean;
+  }) {
+    return {
+      id: user.id,
+      displayName: user.showCommunityProfile ? user.displayName : null,
+    };
   }
 }

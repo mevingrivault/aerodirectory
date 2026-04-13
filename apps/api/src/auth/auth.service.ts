@@ -515,6 +515,15 @@ export class AuthService {
       data: {
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.homeAerodromeId !== undefined ? { homeAerodromeId: input.homeAerodromeId } : {}),
+        ...(input.showCommunityProfile !== undefined
+          ? { showCommunityProfile: input.showCommunityProfile }
+          : {}),
+        ...(input.showCommunityContributions !== undefined
+          ? { showCommunityContributions: input.showCommunityContributions }
+          : {}),
+        ...(input.showCommunityPhotos !== undefined
+          ? { showCommunityPhotos: input.showCommunityPhotos }
+          : {}),
       },
       include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
@@ -616,6 +625,9 @@ export class AuthService {
     role: string;
     emailVerified: Date | null;
     totpEnabled: boolean;
+    showCommunityProfile: boolean;
+    showCommunityContributions: boolean;
+    showCommunityPhotos: boolean;
     createdAt: Date;
     homeAerodrome?: { id: string; name: string; icaoCode: string | null } | null;
   }): UserProfile {
@@ -626,6 +638,9 @@ export class AuthService {
       role: user.role,
       emailVerified: user.emailVerified?.toISOString() ?? null,
       totpEnabled: user.totpEnabled,
+      showCommunityProfile: user.showCommunityProfile,
+      showCommunityContributions: user.showCommunityContributions,
+      showCommunityPhotos: user.showCommunityPhotos,
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
     };
@@ -642,6 +657,9 @@ export class AuthService {
         role: true,
         emailVerified: true,
         totpEnabled: true,
+        showCommunityProfile: true,
+        showCommunityContributions: true,
+        showCommunityPhotos: true,
         createdAt: true,
         homeAerodromeId: true,
         visits: {
@@ -685,6 +703,9 @@ export class AuthService {
         role: user.role,
         emailVerified: user.emailVerified?.toISOString() ?? null,
         totpEnabled: user.totpEnabled,
+        showCommunityProfile: user.showCommunityProfile,
+        showCommunityContributions: user.showCommunityContributions,
+        showCommunityPhotos: user.showCommunityPhotos,
         createdAt: user.createdAt.toISOString(),
         homeAerodromeId: user.homeAerodromeId,
       },

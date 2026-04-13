@@ -96,6 +96,9 @@ export interface UserProfile {
   role: string;
   emailVerified: string | null;
   totpEnabled: boolean;
+  showCommunityProfile: boolean;
+  showCommunityContributions: boolean;
+  showCommunityPhotos: boolean;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
 }

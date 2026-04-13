@@ -18,12 +18,16 @@ export class AerodromeService {
         frequencies: true,
         fuels: true,
         corrections: {
-          where: { contentStatus: "APPROVED" },
+          where: {
+            contentStatus: "APPROVED",
+            user: { showCommunityContributions: true },
+          },
           include: {
             user: {
               select: {
                 id: true,
                 displayName: true,
+                showCommunityProfile: true,
               },
             },
           },
@@ -36,6 +40,7 @@ export class AerodromeService {
               where: {
                 deletedAt: null,
                 contentStatus: "APPROVED",
+                user: { showCommunityContributions: true },
               },
             },
           },
@@ -47,7 +52,18 @@ export class AerodromeService {
       throw new NotFoundException("Aerodrome not found");
     }
 
-    return aerodrome;
+    return {
+      ...aerodrome,
+      corrections: aerodrome.corrections.map((correction) => ({
+        ...correction,
+        user: {
+          id: correction.user.id,
+          displayName: correction.user.showCommunityProfile
+            ? correction.user.displayName
+            : null,
+        },
+      })),
+    };
   }
 
   async findByIcao(icaoCode: string) {
@@ -58,12 +74,16 @@ export class AerodromeService {
         frequencies: true,
         fuels: true,
         corrections: {
-          where: { contentStatus: "APPROVED" },
+          where: {
+            contentStatus: "APPROVED",
+            user: { showCommunityContributions: true },
+          },
           include: {
             user: {
               select: {
                 id: true,
                 displayName: true,
+                showCommunityProfile: true,
               },
             },
           },
@@ -76,6 +96,7 @@ export class AerodromeService {
               where: {
                 deletedAt: null,
                 contentStatus: "APPROVED",
+                user: { showCommunityContributions: true },
               },
             },
           },
@@ -87,7 +108,18 @@ export class AerodromeService {
       throw new NotFoundException("Aerodrome not found");
     }
 
-    return aerodrome;
+    return {
+      ...aerodrome,
+      corrections: aerodrome.corrections.map((correction) => ({
+        ...correction,
+        user: {
+          id: correction.user.id,
+          displayName: correction.user.showCommunityProfile
+            ? correction.user.displayName
+            : null,
+        },
+      })),
+    };
   }
 
   async findNearby(lat: number, lng: number, radiusKm: number, limit: number, hasFuel?: boolean) {
