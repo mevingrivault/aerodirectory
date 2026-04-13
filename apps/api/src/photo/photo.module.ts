@@ -18,6 +18,6 @@ import { AltchaModule } from "../altcha/altcha.module";
     ScanService,
     StorageService,
   ],
-  exports: [PhotoService, StorageService],
+  exports: [PhotoService, StorageService, PhotoUploadMiddleware, ImageService],
 })
 export class PhotoModule {}
