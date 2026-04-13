@@ -766,10 +766,19 @@ export default function AerodromeDetailPage() {
       key={comment.id}
       className={`rounded-md border p-3 ${nested ? "bg-muted/30 ml-4 mt-3" : ""}`}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-medium text-sm">
-          {comment.user.displayName || "Anonyme"}
-        </span>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="font-medium text-sm">
+            {comment.user.displayName ? (
+              <Link
+                href={`/community/${comment.user.id}`}
+                className="hover:text-primary hover:underline"
+              >
+                {comment.user.displayName}
+              </Link>
+            ) : (
+              "Membre"
+            )}
+          </span>
         <span className="text-xs text-muted-foreground">
           {new Date(comment.createdAt).toLocaleDateString("fr-FR")}
         </span>
@@ -1212,11 +1221,22 @@ export default function AerodromeDetailPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline">
                             {formatCommunityFieldLabel(correction.field)}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            par {correction.user.displayName || "Membre"} le{" "}
-                            {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
-                          </span>
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                            par{" "}
+                            {correction.user.displayName ? (
+                              <Link
+                                href={`/community/${correction.user.id}`}
+                                className="hover:text-primary hover:underline"
+                              >
+                                {correction.user.displayName}
+                              </Link>
+                            ) : (
+                              "Membre"
+                            )}{" "}
+                            le{" "}
+                              {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
+                            </span>
                         </div>
                         {correction.currentValue && (
                           <p className="text-xs text-muted-foreground">

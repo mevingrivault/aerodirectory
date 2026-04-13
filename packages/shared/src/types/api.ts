@@ -93,6 +93,9 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  communityConsentAt: string | null;
   role: string;
   emailVerified: string | null;
   totpEnabled: boolean;
@@ -101,6 +104,20 @@ export interface UserProfile {
   showCommunityPhotos: boolean;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+}
+
+export interface CommunityPublicProfile {
+  id: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+  contributionStats: {
+    comments: number;
+    corrections: number;
+    photos: number;
+  };
 }
 
 export interface AdminDashboardStats {

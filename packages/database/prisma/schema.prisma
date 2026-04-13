@@ -203,6 +203,10 @@ model User {
   bannedById    String?
   role                Role      @default(MEMBER)
   displayName         String?   @unique
+  bio                 String?
+  avatarKey           String?
+  avatarMimeType      String?
+  communityConsentAt  DateTime?
   showCommunityProfile       Boolean   @default(false)
   showCommunityContributions Boolean   @default(true)
   showCommunityPhotos        Boolean   @default(true)

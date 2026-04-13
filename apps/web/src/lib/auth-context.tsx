@@ -20,7 +20,13 @@ interface AuthContextType {
     rememberMe: boolean,
     altcha?: string,
   ) => Promise<{ requireTotp: boolean }>;
-  register: (email: string, password: string, displayName: string, altcha?: string) => Promise<string>;
+  register: (
+    email: string,
+    password: string,
+    displayName: string,
+    communityProfileConsent: boolean,
+    altcha?: string,
+  ) => Promise<string>;
   logout: () => Promise<void>;
   verifyTotp: (code: string, rememberMe: boolean) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -83,11 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     displayName: string,
+    communityProfileConsent: boolean,
     altcha?: string,
   ) => {
     const res = await apiClient.post<{ message: string }>(
       "/auth/register",
-      { email, password, displayName },
+      { email, password, displayName, communityProfileConsent },
       altcha ? { "x-altcha": altcha } : undefined,
     );
     return res.data.message;

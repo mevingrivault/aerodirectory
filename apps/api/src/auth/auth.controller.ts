@@ -3,8 +3,10 @@ import {
   Post,
   Get,
   Put,
+  Delete,
   Body,
   Query,
+  Param,
   Req,
   Res,
   UsePipes,
@@ -20,6 +22,8 @@ import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok } from "../common/api-response";
 import { Public, CurrentUser } from "../common/decorators";
 import { AltchaGuard } from "../altcha/altcha.guard";
+import { PhotoUploadMiddleware } from "../photo/upload.middleware";
+import { ImageService } from "../photo/image.service";
 import {
   RegisterSchema,
   LoginSchema,
@@ -80,7 +84,11 @@ function clearAuthCookies(res: FastifyReply) {
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly upload: PhotoUploadMiddleware,
+    private readonly image: ImageService,
+  ) {}
 
   @Public()
   @UseGuards(AltchaGuard)
@@ -197,12 +205,51 @@ export class AuthController {
     return ok(profile);
   }
 
+  @Public()
+  @Get("community/:userId")
+  async communityProfile(@Param("userId") userId: string) {
+    const profile = await this.auth.getCommunityProfile(userId);
+    return ok(profile);
+  }
+
   @Put("profile")
   async updateProfile(
     @Body(new ZodValidationPipe(UpdateProfileSchema)) body: UpdateProfileInput,
     @CurrentUser() user: { sub: string },
   ) {
     const profile = await this.auth.updateProfile(user.sub, body);
+    return ok(profile);
+  }
+
+  @Post("profile/avatar")
+  async uploadAvatar(
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    const uploadedFile = await this.upload.parseSingleImage(req);
+
+    try {
+      const source = await this.image.validateSource(
+        uploadedFile.tempFilePath,
+        uploadedFile.originalFilename,
+        uploadedFile.declaredMimeType,
+      );
+      const processed = await this.image.reencode(source);
+      const profile = await this.auth.uploadAvatar(user.sub, {
+        buffer: processed.buffer,
+        ext: processed.ext,
+        mimeType: processed.mimeType,
+      });
+
+      return ok(profile);
+    } finally {
+      await uploadedFile.cleanup();
+    }
+  }
+
+  @Delete("profile/avatar")
+  async deleteAvatar(@CurrentUser() user: { sub: string }) {
+    const profile = await this.auth.deleteAvatar(user.sub);
     return ok(profile);
   }
 

@@ -502,65 +502,13 @@ function MapPageInner() {
     map.addSource("aerodromes", {
       type: "geojson",
       data: geojson,
-      cluster: true,
-      clusterRadius: 40,
-      clusterMaxZoom: 9,
-    });
-
-    map.addLayer({
-      id: "aerodrome-clusters",
-      type: "circle",
-      source: "aerodromes",
-      filter: ["has", "point_count"],
-      paint: {
-        "circle-color": [
-          "step",
-          ["get", "point_count"],
-          "#dbeafe",
-          20,
-          "#93c5fd",
-          50,
-          "#60a5fa",
-          100,
-          "#2563eb",
-        ],
-        "circle-radius": [
-          "step",
-          ["get", "point_count"],
-          16,
-          20,
-          20,
-          50,
-          24,
-          100,
-          28,
-        ],
-        "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 2,
-        "circle-opacity": 0.9,
-      },
-    });
-
-    map.addLayer({
-      id: "aerodrome-cluster-count",
-      type: "symbol",
-      source: "aerodromes",
-      filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": ["Open Sans Bold"],
-        "text-size": 11,
-      },
-      paint: {
-        "text-color": "#0f172a",
-      },
+      cluster: false,
     });
 
     map.addLayer({
       id: "aerodrome-visited-halo",
       type: "circle",
       source: "aerodromes",
-      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-radius": [
           "interpolate",
@@ -590,7 +538,6 @@ function MapPageInner() {
       id: "aerodrome-points",
       type: "circle",
       source: "aerodromes",
-      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 4, 8, 6, 12, 10],
         "circle-color": [

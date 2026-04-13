@@ -97,4 +97,12 @@ export class StorageService implements OnModuleInit {
       this.logger.error(`Failed to delete object ${key}`, err);
     }
   }
+
+  resolvePublicUrl(key: string | null | undefined): string | null {
+    if (!key) {
+      return null;
+    }
+
+    return this.publicUrl ? `${this.publicUrl}/${key}` : key;
+  }
 }

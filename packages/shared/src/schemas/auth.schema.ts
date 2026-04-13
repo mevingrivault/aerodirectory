@@ -21,6 +21,12 @@ export const RegisterSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   displayName: displayNameSchema,
+  communityProfileConsent: z.literal(true, {
+    errorMap: () => ({
+      message:
+        "Vous devez accepter les reglages communautaires pour creer un compte.",
+    }),
+  }),
 });
 
 export const LoginSchema = z.object({
@@ -65,7 +71,14 @@ export const DeleteAccountSchema = z.object({
 
 export const UpdateProfileSchema = z.object({
   displayName: displayNameSchema.optional(),
+  bio: z
+    .string()
+    .trim()
+    .max(280, "Bio must be at most 280 characters")
+    .nullable()
+    .optional(),
   homeAerodromeId: z.string().cuid().nullable().optional(),
+  communityProfileConsentAcknowledged: z.boolean().optional(),
   showCommunityProfile: z.boolean().optional(),
   showCommunityContributions: z.boolean().optional(),
   showCommunityPhotos: z.boolean().optional(),
