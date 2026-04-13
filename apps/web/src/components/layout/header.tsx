@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { apiClient } from "@/lib/api-client";
 import {
   Plane,
   Search,
@@ -15,6 +17,7 @@ import {
   Navigation,
   Menu,
   X,
+  Bell,
 } from "lucide-react";
 
 const navLinks = (isAuthenticated: boolean) => [
@@ -24,6 +27,7 @@ const navLinks = (isAuthenticated: boolean) => [
     ? [
         { href: "/aerodex", icon: BookOpen, label: "Carnet" },
         { href: "/planner", icon: Navigation, label: "Planificateur" },
+        { href: "/membre/notifications", icon: Bell, label: "Notifications" },
       ]
     : []),
 ];
@@ -32,6 +36,19 @@ export function Header() {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const { data: notificationsRes } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () =>
+      apiClient.get<{ id: string; readAt: string | null }[]>("/notifications", {
+        page: "1",
+        limit: "20",
+      }),
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  const unreadCount = (notificationsRes?.data ?? []).filter((item) => !item.readAt).length;
 
   const links = [
     ...navLinks(!!user),
@@ -65,6 +82,11 @@ export function Header() {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {href === "/membre/notifications" && unreadCount > 0 && (
+                <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -125,6 +147,11 @@ export function Header() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {label}
+                {href === "/membre/notifications" && unreadCount > 0 && (
+                  <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
             ))}
 
