@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 
 const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
   OPENAIP: "openAIP",
+  AIRSPACES: "Espaces aériens",
   OSM: "OSM + flags",
   REGIONS: "Régions / villes",
   RGPD: "Nettoyage RGPD",
