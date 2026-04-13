@@ -193,4 +193,32 @@ export class AdminController {
     );
     return ok({ restored: true });
   }
+
+  @Post("mail/test")
+  @HttpCode(HttpStatus.OK)
+  async sendTestMail(
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    return ok(
+      await this.admin.sendTestEmail(
+        user.sub,
+        req.ip,
+        req.headers["user-agent"],
+      ),
+    );
+  }
+
+  @Get("mail/diagnostics")
+  async downloadMailDiagnostics(
+    @CurrentUser() user: { sub: string },
+    @Res() res: FastifyReply,
+  ) {
+    const report = await this.admin.buildMailDiagnosticsReport(user.sub);
+    const fileName = `navventura-mail-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+
+    res.header("Content-Type", "text/plain; charset=utf-8");
+    res.header("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(report);
+  }
 }

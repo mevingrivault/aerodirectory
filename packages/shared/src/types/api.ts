@@ -143,6 +143,24 @@ export interface AdminSyncStatusResponse {
   recentRuns: AdminSyncRunItem[];
 }
 
+export interface MailDiagnosticsSnapshot {
+  checkedAt: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  from: string;
+  appUrl: string;
+  user: string | null;
+  verified: boolean;
+  verifyError: string | null;
+}
+
+export interface AdminMailTestResponse {
+  sentTo: string;
+  messageId: string;
+  diagnostics: MailDiagnosticsSnapshot;
+}
+
 export interface AdminUserListItem {
   id: string;
   email: string;

@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import { MailService } from "../mail/mail.service";
 import type {
   AdminCommentsQueryInput,
   AdminPhotosQueryInput,
@@ -26,6 +27,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
@@ -428,6 +430,149 @@ export class AdminService {
         note: input.note?.trim() || null,
       },
     });
+  }
+
+  async sendTestEmail(
+    adminId: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { id: true, email: true, displayName: true, role: true },
+    });
+
+    if (!admin || admin.role !== "ADMIN") {
+      throw new NotFoundException("Administrateur introuvable");
+    }
+
+    const result = await this.mail.sendAdminTestEmail(admin.email, {
+      requestedBy: admin.displayName || admin.email,
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "MAIL_TEST_SEND",
+        to: admin.email,
+        messageId: result.messageId,
+        smtpVerified: result.diagnostics.verified,
+      },
+    });
+
+    return {
+      sentTo: admin.email,
+      messageId: result.messageId,
+      diagnostics: result.diagnostics,
+    };
+  }
+
+  async buildMailDiagnosticsReport(adminId: string) {
+    const [admin, diagnostics, recentRuns, recentAuditLogs, activeTokens, unusedVerifyTokens, unusedResetTokens] =
+      await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: adminId },
+          select: { email: true, displayName: true },
+        }),
+        this.mail.getDiagnosticsSnapshot(),
+        this.prisma.syncRun.findMany({
+          take: 10,
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            source: true,
+            status: true,
+            runType: true,
+            scheduledFor: true,
+            startedAt: true,
+            finishedAt: true,
+            durationMs: true,
+            errorMessage: true,
+            summary: true,
+          },
+        }),
+        this.prisma.auditLog.findMany({
+          where: {
+            action: "ADMIN_ACTION",
+            metadata: {
+              path: ["type"],
+              equals: "MAIL_TEST_SEND",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: {
+            createdAt: true,
+            metadata: true,
+          },
+        }),
+        this.prisma.emailToken.count({
+          where: { usedAt: null, expiresAt: { gt: new Date() } },
+        }),
+        this.prisma.emailToken.count({
+          where: {
+            type: "verify",
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+        this.prisma.emailToken.count({
+          where: {
+            type: "reset",
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ]);
+
+    const lines: string[] = [
+      "Navventura - Mail diagnostics",
+      `Generated at: ${new Date().toISOString()}`,
+      `Requested by: ${admin?.displayName || admin?.email || adminId}`,
+      "",
+      "[SMTP]",
+      `Host: ${diagnostics.host}`,
+      `Port: ${diagnostics.port}`,
+      `Secure: ${diagnostics.secure ? "true" : "false"}`,
+      `From: ${diagnostics.from}`,
+      `App URL: ${diagnostics.appUrl}`,
+      `User: ${diagnostics.user ?? "none"}`,
+      `Verify checked at: ${diagnostics.checkedAt}`,
+      `Verify result: ${diagnostics.verified ? "OK" : "FAILED"}`,
+      `Verify error: ${diagnostics.verifyError ?? "none"}`,
+      "",
+      "[Email tokens]",
+      `Active tokens: ${activeTokens}`,
+      `Active verify tokens: ${unusedVerifyTokens}`,
+      `Active reset tokens: ${unusedResetTokens}`,
+      "",
+      "[Recent sync runs]",
+    ];
+
+    for (const run of recentRuns) {
+      lines.push(
+        `- ${run.source} | ${run.status} | ${run.runType} | scheduled=${run.scheduledFor.toISOString()} | started=${run.startedAt?.toISOString() ?? "null"} | finished=${run.finishedAt?.toISOString() ?? "null"} | durationMs=${run.durationMs ?? "null"} | error=${run.errorMessage ?? "none"} | summary=${JSON.stringify(run.summary ?? {})}`,
+      );
+    }
+
+    lines.push("", "[Recent admin mail tests]");
+    for (const auditLog of recentAuditLogs) {
+      lines.push(
+        `- ${auditLog.createdAt.toISOString()} | ${JSON.stringify(auditLog.metadata ?? {})}`,
+      );
+    }
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      metadata: {
+        type: "MAIL_DIAGNOSTICS_DOWNLOAD",
+      },
+    });
+
+    return lines.join("\n");
   }
 
   async listPhotos(query: AdminPhotosQueryInput) {
