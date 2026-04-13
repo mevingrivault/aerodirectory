@@ -45,6 +45,59 @@ const TYPE_LABELS: Record<string, string> = {
   OTHER: "Autre",
 };
 
+const MAP_STYLES = {
+  osm: {
+    version: 8 as const,
+    sources: {
+      base: {
+        type: "raster" as const,
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "&copy; OpenStreetMap contributors",
+      },
+    },
+    layers: [{ id: "base", type: "raster" as const, source: "base" }],
+  },
+  satellite: {
+    version: 8 as const,
+    sources: {
+      base: {
+        type: "raster" as const,
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+    },
+    layers: [{ id: "base", type: "raster" as const, source: "base" }],
+  },
+  hybrid: {
+    version: 8 as const,
+    sources: {
+      base: {
+        type: "raster" as const,
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+      labels: {
+        type: "raster" as const,
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+      },
+    },
+    layers: [
+      { id: "base", type: "raster" as const, source: "base" },
+      { id: "labels", type: "raster" as const, source: "labels" },
+    ],
+  },
+};
+
 const DEFAULT_HIDDEN = new Set(["MILITARY", "SEAPLANE_BASE", "OTHER", "HELIPORT"]);
 const RUNWAY_OPTIONS = [
   { label: "Toutes", value: 0 },
@@ -70,6 +123,7 @@ function MapPageInner() {
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [mapLoaded, setMapLoaded] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"osm" | "satellite" | "hybrid">("osm");
 
   // Type visibility
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set(DEFAULT_HIDDEN));
@@ -79,6 +133,7 @@ function MapPageInner() {
   const [requireRestaurant, setRequireRestaurant] = useState(false);
   const [requireMaintenance, setRequireMaintenance] = useState(false);
   const [requiredFuels, setRequiredFuels] = useState<Set<string>>(new Set());
+  const [visitFilter, setVisitFilter] = useState<"" | "FAVORITE" | "VISITED">("");
 
   const { data } = useQuery({
     queryKey: ["map-aerodromes", query],
@@ -113,6 +168,9 @@ function MapPageInner() {
       const hasAny = [...requiredFuels].some((f) => ad.fuels.some((fuel) => fuel.type === f));
       if (!hasAny) return false;
     }
+    if (visitFilter) {
+      if (visitsByAerodrome.get(ad.id) !== visitFilter) return false;
+    }
     return true;
   });
 
@@ -130,7 +188,8 @@ function MapPageInner() {
     (minRunway > 0 ? 1 : 0) +
     (requireRestaurant ? 1 : 0) +
     (requireMaintenance ? 1 : 0) +
-    requiredFuels.size;
+    requiredFuels.size +
+    (visitFilter ? 1 : 0);
 
   const navigateToDetail = useCallback(
     (id: string) => router.push(`/aerodrome/${id}`),
@@ -149,18 +208,7 @@ function MapPageInner() {
 
       const map = new maplibregl.default.Map({
         container: mapContainer.current,
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: "&copy; OpenStreetMap contributors",
-            },
-          },
-          layers: [{ id: "osm", type: "raster", source: "osm" }],
-        },
+        style: MAP_STYLES.osm,
         center: [2.3, 46.6],
         zoom: 6,
       });
@@ -185,6 +233,19 @@ function MapPageInner() {
       mapRef.current = null;
     };
   }, []);
+
+  // Switch base map style when mapStyle changes
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return;
+    const map = mapRef.current;
+    map.setStyle(MAP_STYLES[mapStyle]);
+    // setStyle removes all sources/layers — wait for new style then re-add markers
+    map.once("style.load", () => {
+      setMapLoaded(false);
+      requestAnimationFrame(() => setMapLoaded(true));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapStyle]);
 
   // Update markers whenever filtered data changes
   useEffect(() => {
@@ -448,6 +509,28 @@ function MapPageInner() {
               </div>
             </div>
 
+            {/* Mes repères */}
+            {user && (
+              <div>
+                <div className="font-semibold mb-1.5">Mes repères</div>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "Tous", value: "" as const },
+                    { label: "Favoris", value: "FAVORITE" as const },
+                    { label: "Visités", value: "VISITED" as const },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setVisitFilter(opt.value)}
+                      className={`rounded px-2 py-0.5 border transition-colors ${visitFilter === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Reset */}
             {activeFilterCount > 0 && (
               <button
@@ -456,6 +539,7 @@ function MapPageInner() {
                   setRequireRestaurant(false);
                   setRequireMaintenance(false);
                   setRequiredFuels(new Set());
+                  setVisitFilter("");
                 }}
                 className="flex items-center gap-1 text-destructive hover:underline"
               >
@@ -511,13 +595,6 @@ function MapPageInner() {
             <div className="flex items-center gap-1.5 mb-0.5">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full border-2 shrink-0"
-                style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#94a3b8" }}
-              />
-              <span>Vu</span>
-            </div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full border-2 shrink-0"
                 style={{ backgroundColor: TYPE_COLORS.SMALL_AIRPORT, borderColor: "#2563eb" }}
               />
               <span>Visité</span>
@@ -531,6 +608,19 @@ function MapPageInner() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Map style switcher */}
+      <div className="absolute left-4 bottom-8 z-10 flex rounded-md shadow-md overflow-hidden border bg-background/95 backdrop-blur text-xs font-medium">
+        {(["osm", "satellite", "hybrid"] as const).map((style, i) => (
+          <button
+            key={style}
+            onClick={() => setMapStyle(style)}
+            className={`px-3 py-1.5 transition-colors ${i > 0 ? "border-l border-border" : ""} ${mapStyle === style ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {style === "osm" ? "Plan" : style === "satellite" ? "Satellite" : "Hybride"}
+          </button>
+        ))}
       </div>
 
       {/* Map container */}

@@ -401,7 +401,9 @@ export default function PlannerPage() {
   // ── Search parameters ──
   const [searchMode, setSearchMode] = useState<SearchMode>("time");
   const [maxTimeMinutes, setMaxTimeMinutes] = useState(60);
+  const [minTimeMinutes, setMinTimeMinutes] = useState("");
   const [maxCost, setMaxCost] = useState(100);
+  const [minCost, setMinCost] = useState("");
   const [tripScope, setTripScope] = useState<TripScope>("round_trip");
 
   // ── Options (collapsed) ──
@@ -433,6 +435,7 @@ export default function PlannerPage() {
   const [calcError, setCalcError] = useState("");
   const [isCalculating, setIsCalculating] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
 
   // ── Queries ──
   const { data: profilesRes } = useQuery({
@@ -560,6 +563,7 @@ export default function PlannerPage() {
     setIsCalculating(true);
     setCalcError("");
     setShowAll(false);
+    setCollapsedRegions(new Set());
 
     const payload: Record<string, unknown> = {
       profileId: selectedProfileId,
@@ -573,8 +577,16 @@ export default function PlannerPage() {
       sortBy,
     };
 
-    if (searchMode === "time") payload.maxTimeMinutes = maxTimeMinutes;
-    if (searchMode === "cost") payload.maxCost = maxCost;
+    if (searchMode === "time") {
+      payload.maxTimeMinutes = maxTimeMinutes;
+      const parsedMin = parseInt(minTimeMinutes);
+      if (parsedMin > 0) payload.minTimeMinutes = parsedMin;
+    }
+    if (searchMode === "cost") {
+      payload.maxCost = maxCost;
+      const parsedMinCost = parseFloat(minCost);
+      if (parsedMinCost > 0) payload.minCost = parsedMinCost;
+    }
 
     const fuelPrice = parseFloat(fuelPricePerLiter);
     if (fuelPrice > 0) payload.fuelPricePerLiter = fuelPrice;
@@ -623,19 +635,27 @@ export default function PlannerPage() {
       })
     : null;
 
-  // Group by region (used when sortBy === "region")
-  const regionGroups: [string, PlannerResult[]][] =
-    sortBy === "region" && sortedResults
-      ? (() => {
-          const map: Record<string, PlannerResult[]> = {};
-          for (const r of sortedResults) {
-            const key = r.aerodrome.region ?? "Région inconnue";
-            if (!map[key]) map[key] = [];
-            map[key]!.push(r);
-          }
-          return Object.entries(map);
-        })()
-      : [];
+  // Always group by region
+  const regionGroups: [string, PlannerResult[]][] = sortedResults
+    ? (() => {
+        const map: Record<string, PlannerResult[]> = {};
+        for (const r of sortedResults) {
+          const key = r.aerodrome.region ?? "Région inconnue";
+          if (!map[key]) map[key] = [];
+          map[key]!.push(r);
+        }
+        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b, "fr"));
+      })()
+    : [];
+
+  const toggleRegion = (region: string) => {
+    setCollapsedRegions((prev) => {
+      const next = new Set(prev);
+      if (next.has(region)) next.delete(region);
+      else next.add(region);
+      return next;
+    });
+  };
 
   const visibleResults = sortedResults
     ? showAll
@@ -1131,36 +1151,68 @@ export default function PlannerPage() {
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      autoComplete="off"
-                      name="planner-max-time-minutes"
-                      min={10}
-                      max={480}
-                      value={maxTimeMinutes}
-                      onChange={(e) => setMaxTimeMinutes(parseInt(e.target.value) || 60)}
-                      className="w-20 text-center"
-                    />
-                    <span className="text-sm text-muted-foreground">minutes</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Min (min, optionnel)</label>
+                      <Input
+                        type="number"
+                        autoComplete="off"
+                        name="planner-min-time-minutes"
+                        min={0}
+                        max={480}
+                        placeholder="—"
+                        value={minTimeMinutes}
+                        onChange={(e) => setMinTimeMinutes(e.target.value)}
+                        className="text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Max (min)</label>
+                      <Input
+                        type="number"
+                        autoComplete="off"
+                        name="planner-max-time-minutes"
+                        min={10}
+                        max={480}
+                        value={maxTimeMinutes}
+                        onChange={(e) => setMaxTimeMinutes(parseInt(e.target.value) || 60)}
+                        className="text-center"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Cost input */}
               {searchMode === "cost" && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    autoComplete="off"
-                    name="planner-max-cost"
-                    min={10}
-                    max={10000}
-                    value={maxCost}
-                    onChange={(e) => setMaxCost(parseInt(e.target.value) || 100)}
-                    className="w-28 text-center"
-                  />
-                  <span className="text-sm text-muted-foreground">€ max</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Min € (optionnel)</label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-min-cost"
+                      min={0}
+                      max={10000}
+                      placeholder="—"
+                      value={minCost}
+                      onChange={(e) => setMinCost(e.target.value)}
+                      className="text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Max €</label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-max-cost"
+                      min={10}
+                      max={10000}
+                      value={maxCost}
+                      onChange={(e) => setMaxCost(parseInt(e.target.value) || 100)}
+                      className="text-center"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1498,38 +1550,35 @@ export default function PlannerPage() {
                     </p>
                   </CardContent>
                 </Card>
-              ) : sortBy === "region" ? (
-                <div className="space-y-4">
-                  {regionGroups.map(([region, items]) => (
-                    <div key={region}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {region}
-                        </span>
-                        <span className="text-xs text-muted-foreground">({items.length})</span>
-                        <div className="flex-1 border-t border-border" />
-                      </div>
-                      <div className="space-y-2">
-                        {items.map((r) => (
-                          <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               ) : (
-                <div className="space-y-2">
-                  {visibleResults!.map((r) => (
-                    <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
-                  ))}
-                  {sortedResults.length > 20 && !showAll && (
-                    <button
-                      onClick={() => setShowAll(true)}
-                      className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-2.5 transition-colors"
-                    >
-                      Voir les {sortedResults.length - 20} destinations supplémentaires
-                    </button>
-                  )}
+                <div className="space-y-3">
+                  {regionGroups.map(([region, items]) => {
+                    const isCollapsed = collapsedRegions.has(region);
+                    return (
+                      <div key={region} className="rounded-md border overflow-hidden">
+                        <button
+                          onClick={() => toggleRegion(region)}
+                          className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
+                        >
+                          <span className="text-xs font-semibold uppercase tracking-wide flex-1 text-left">
+                            {region}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{items.length}</span>
+                          {isCollapsed
+                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                        </button>
+                        {!isCollapsed && (
+                          <div className="divide-y">
+                            {items.map((r) => (
+                              <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
