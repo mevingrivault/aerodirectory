@@ -114,7 +114,6 @@ jobs:
           scanners: 'vuln'
           severity: 'CRITICAL,HIGH'
           timeout: '10m'
-          skip-version-check: true
           trivyignores: .trivyignore
 
       - name: Scan API image with Trivy (MEDIUM/LOW, non-blocking)
@@ -128,7 +127,6 @@ jobs:
           scanners: 'vuln'
           severity: 'MEDIUM,LOW'
           timeout: '10m'
-          skip-version-check: true
           trivyignores: .trivyignore
 
   build-web:
@@ -180,7 +178,6 @@ jobs:
           scanners: 'vuln'
           severity: 'CRITICAL,HIGH'
           timeout: '10m'
-          skip-version-check: true
           trivyignores: .trivyignore
 
       - name: Scan Web image with Trivy (MEDIUM/LOW, non-blocking)
@@ -194,5 +191,4 @@ jobs:
           scanners: 'vuln'
           severity: 'MEDIUM,LOW'
           timeout: '10m'
-          skip-version-check: true
           trivyignores: .trivyignore
