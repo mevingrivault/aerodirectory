@@ -183,6 +183,8 @@ enum AuditAction {
   PHOTO_DELETE
   USER_BAN
   USER_UNBAN
+  ACCOUNT_LOCKED
+  CONTENT_MODERATED
 
   @@schema("public")
 }
@@ -203,6 +205,8 @@ model User {
   role                Role      @default(MEMBER)
   displayName         String?   @unique
   homeAerodromeId     String?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

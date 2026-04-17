@@ -13,6 +13,13 @@ import type {
   ReportCreateInput,
 } from "@aerodirectory/shared";
 
+// Comptes de moins de 7 jours : contributions soumises à modération
+const NEW_ACCOUNT_THRESHOLD_DAYS = 7;
+
+function accountAgeDays(createdAt: Date): number {
+  return (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+}
+
 @Injectable()
 export class CommentService {
   constructor(
@@ -57,13 +64,21 @@ export class CommentService {
       }
     }
 
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+
+    const isNewAccount = !author || accountAgeDays(author.createdAt) < NEW_ACCOUNT_THRESHOLD_DAYS;
+    const contentStatus = isNewAccount ? "PENDING" : "APPROVED";
+
     const comment = await this.prisma.comment.create({
       data: {
         userId,
         aerodromeId,
         parentId: input.parentId,
         content: input.content,
-        contentStatus: "APPROVED",
+        contentStatus,
       },
       include: {
         user: { select: { id: true, displayName: true } },
@@ -78,8 +93,23 @@ export class CommentService {
         commentId: comment.id,
         aerodromeId,
         parentId: input.parentId ?? null,
+        autoModerated: isNewAccount,
       },
     });
+
+    if (isNewAccount) {
+      await this.audit.log({
+        userId,
+        action: "CONTENT_MODERATED",
+        ip,
+        metadata: {
+          reason: "new_account",
+          contentType: "comment",
+          contentId: comment.id,
+          aerodromeId,
+        },
+      });
+    }
 
     if (input.parentId) {
       const parent = await this.prisma.comment.findUnique({
@@ -199,6 +229,14 @@ export class CommentService {
     input: CorrectionCreateInput,
     ip?: string,
   ) {
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+
+    const ageDays = author ? Math.floor(accountAgeDays(author.createdAt)) : 0;
+    const isNewAccount = ageDays < NEW_ACCOUNT_THRESHOLD_DAYS;
+
     const correction = await this.prisma.correction.create({
       data: {
         userId,
@@ -213,8 +251,27 @@ export class CommentService {
       userId,
       action: "CORRECTION_PROPOSE",
       ip,
-      metadata: { correctionId: correction.id, aerodromeId },
+      metadata: {
+        correctionId: correction.id,
+        aerodromeId,
+        accountAgeDays: ageDays,
+        newAccount: isNewAccount,
+      },
     });
+
+    if (isNewAccount) {
+      await this.audit.log({
+        userId,
+        action: "CONTENT_MODERATED",
+        ip,
+        metadata: {
+          reason: "new_account",
+          contentType: "correction",
+          contentId: correction.id,
+          aerodromeId,
+        },
+      });
+    }
 
     return correction;
   }

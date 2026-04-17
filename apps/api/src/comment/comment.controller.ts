@@ -72,6 +72,8 @@ export class CommentController {
     return ok({ deleted: true });
   }
 
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 3, ttl: 60000 }, medium: { limit: 10, ttl: 3600000 } })
   @Post("corrections")
   async proposeCorrection(
     @CurrentUser() user: { sub: string },
@@ -89,6 +91,7 @@ export class CommentController {
     return ok(correction);
   }
 
+  @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 15, ttl: 3600000 } })
   @Post("reports")
   async report(
     @CurrentUser() user: { sub: string },
