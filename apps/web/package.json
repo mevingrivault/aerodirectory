@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node -e \"const fs=require('fs');fs.cpSync('node_modules/altcha/dist/altcha.js','public/altcha.js');fs.cpSync('node_modules/altcha/dist_external/worker.js','public/altcha-worker.js')\" && next dev --port 3000",
-    "build": "node -e \"const fs=require('fs');fs.cpSync('node_modules/altcha/dist/altcha.js','public/altcha.js');fs.cpSync('node_modules/altcha/dist_external/worker.js','public/altcha-worker.js')\" && next build",
+    "dev": "node -e \"const fs=require('fs');fs.cpSync('node_modules/altcha/dist/main/altcha.js','public/altcha.js')\" && next dev --port 3000",
+    "build": "node -e \"const fs=require('fs');fs.cpSync('node_modules/altcha/dist/main/altcha.js','public/altcha.js')\" && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "echo 'No tests yet'"
@@ -21,7 +21,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.99.0",
-    "altcha": "^2.3.0",
+    "altcha": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
