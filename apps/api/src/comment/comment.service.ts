@@ -11,6 +11,7 @@ import type {
   CommentCreateInput,
   CorrectionCreateInput,
   ReportCreateInput,
+  EventCreateInput,
 } from "@aerodirectory/shared";
 
 // Comptes de moins de 7 jours : contributions soumises à modération
@@ -178,6 +179,22 @@ export class CommentService {
     return { data, total };
   }
 
+  async getApprovedCorrections(aerodromeId: string) {
+    return this.prisma.correction.findMany({
+      where: { aerodromeId, contentStatus: "APPROVED" },
+      select: {
+        id: true,
+        field: true,
+        currentValue: true,
+        proposedValue: true,
+        reason: true,
+        createdAt: true,
+        user: { select: { id: true, displayName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async deleteComment(userId: string, commentId: string, role: string) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
@@ -274,6 +291,109 @@ export class CommentService {
     }
 
     return correction;
+  }
+
+  async getUpcomingEvents(aerodromeId: string) {
+    return this.prisma.aerodromeEvent.findMany({
+      where: {
+        aerodromeId,
+        contentStatus: "APPROVED",
+        startDate: { gte: new Date() },
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+        createdAt: true,
+        user: { select: { id: true, displayName: true } },
+      },
+      orderBy: { startDate: "asc" },
+    });
+  }
+
+  async createEvent(
+    userId: string,
+    aerodromeId: string,
+    input: EventCreateInput,
+    ip?: string,
+  ) {
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+
+    const isNewAccount = !author || accountAgeDays(author.createdAt) < NEW_ACCOUNT_THRESHOLD_DAYS;
+    const contentStatus = isNewAccount ? "PENDING" : "APPROVED";
+
+    const event = await this.prisma.aerodromeEvent.create({
+      data: {
+        userId,
+        aerodromeId,
+        type: input.type,
+        title: input.title,
+        description: input.description,
+        startDate: new Date(input.startDate),
+        endDate: input.endDate ? new Date(input.endDate) : null,
+        contentStatus,
+      },
+      include: {
+        user: { select: { id: true, displayName: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId,
+      action: "EVENT_CREATE",
+      ip,
+      metadata: {
+        eventId: event.id,
+        aerodromeId,
+        type: input.type,
+        autoModerated: isNewAccount,
+      },
+    });
+
+    if (isNewAccount) {
+      await this.audit.log({
+        userId,
+        action: "CONTENT_MODERATED",
+        ip,
+        metadata: {
+          reason: "new_account",
+          contentType: "event",
+          contentId: event.id,
+          aerodromeId,
+        },
+      });
+    }
+
+    return event;
+  }
+
+  async deleteEvent(userId: string, eventId: string, role: string) {
+    const event = await this.prisma.aerodromeEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, userId: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException("Événement introuvable.");
+    }
+
+    if (event.userId !== userId && role !== "ADMIN" && role !== "MODERATOR") {
+      throw new ForbiddenException("Vous ne pouvez pas supprimer cet événement.");
+    }
+
+    await this.prisma.aerodromeEvent.delete({ where: { id: eventId } });
+
+    await this.audit.log({
+      userId,
+      action: "EVENT_DELETE",
+      metadata: { eventId },
+    });
   }
 
   async createReport(

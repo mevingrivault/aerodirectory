@@ -61,6 +61,15 @@ export const ReviewAdminReportSchema = z.object({
   note: optionalText,
 });
 
+export const AdminCorrectionsQuerySchema = PaginationSchema.extend({
+  search: z.string().trim().max(255).optional(),
+  state: z.enum(["pending", "approved", "rejected", "all"]).optional(),
+});
+
+export const ReviewAdminCorrectionSchema = z.object({
+  note: optionalText,
+});
+
 export const AdminImportOpenAirSchema = z.object({
   content: z.string().min(1),
   source: z.string().trim().min(1).max(80).default("openair"),
@@ -79,4 +88,6 @@ export type RestoreAdminCommentInput = z.infer<typeof RestoreAdminCommentSchema>
 export type ApproveAdminPhotoInput = z.infer<typeof ApproveAdminPhotoSchema>;
 export type RejectAdminPhotoInput = z.infer<typeof RejectAdminPhotoSchema>;
 export type ReviewAdminReportInput = z.infer<typeof ReviewAdminReportSchema>;
+export type AdminCorrectionsQueryInput = z.infer<typeof AdminCorrectionsQuerySchema>;
+export type ReviewAdminCorrectionInput = z.infer<typeof ReviewAdminCorrectionSchema>;
 export type AdminImportOpenAirInput = z.infer<typeof AdminImportOpenAirSchema>;

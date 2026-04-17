@@ -8,6 +8,8 @@ import {
   Query,
   Req,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { FastifyRequest } from "fastify";
@@ -20,16 +22,25 @@ import {
   CommentCreateSchema,
   CorrectionCreateSchema,
   ReportCreateSchema,
+  EventCreateSchema,
   PaginationSchema,
   type CommentCreateInput,
   type CorrectionCreateInput,
   type ReportCreateInput,
+  type EventCreateInput,
   type PaginationInput,
 } from "@aerodirectory/shared";
 
 @Controller("aerodromes/:aerodromeId")
 export class CommentController {
   constructor(private readonly comments: CommentService) {}
+
+  @Public()
+  @Get("corrections")
+  async getCorrections(@Param("aerodromeId") aerodromeId: string) {
+    const data = await this.comments.getApprovedCorrections(aerodromeId);
+    return ok(data);
+  }
 
   @Public()
   @Get("comments")
@@ -89,6 +100,36 @@ export class CommentController {
       req.ip,
     );
     return ok(correction);
+  }
+
+  @Public()
+  @Get("events")
+  async getEvents(@Param("aerodromeId") aerodromeId: string) {
+    const data = await this.comments.getUpcomingEvents(aerodromeId);
+    return ok(data);
+  }
+
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 3, ttl: 60000 }, medium: { limit: 10, ttl: 3600000 } })
+  @Post("events")
+  async createEvent(
+    @CurrentUser() user: { sub: string },
+    @Param("aerodromeId") aerodromeId: string,
+    @Body(new ZodValidationPipe(EventCreateSchema)) body: EventCreateInput,
+    @Req() req: FastifyRequest,
+  ) {
+    const event = await this.comments.createEvent(user.sub, aerodromeId, body, req.ip);
+    return ok(event);
+  }
+
+  @Delete("events/:eventId")
+  @HttpCode(HttpStatus.OK)
+  async deleteEvent(
+    @CurrentUser() user: { sub: string; role: string },
+    @Param("eventId") eventId: string,
+  ) {
+    await this.comments.deleteEvent(user.sub, eventId, user.role);
+    return ok({ deleted: true });
   }
 
   @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 15, ttl: 3600000 } })

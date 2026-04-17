@@ -185,6 +185,17 @@ enum AuditAction {
   USER_UNBAN
   ACCOUNT_LOCKED
   CONTENT_MODERATED
+  EVENT_CREATE
+  EVENT_DELETE
+
+  @@schema("public")
+}
+
+enum EventType {
+  CAFE_CROISSANT
+  OPEN_DAY
+  AIRSHOW
+  OTHER
 
   @@schema("public")
 }
@@ -227,6 +238,7 @@ model User {
   photos           Photo[]
   reviewedPhotos   Photo[]           @relation("PhotoReviewedBy")
   triggeredSyncRuns SyncRun[]        @relation("SyncRunTriggeredBy")
+  events           AerodromeEvent[]
 
   @@index([email])
   @@index([status])
@@ -297,6 +309,7 @@ model Aerodrome {
   listItems   AerodromeListItem[]
   homeUsers   User[]       @relation("UserHomeAerodrome")
   photos      Photo[]
+  events      AerodromeEvent[]
 
   @@unique([source, sourceId])
   @@index([icaoCode])
@@ -446,6 +459,29 @@ model Report {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("reports")
+  @@schema("public")
+}
+
+model AerodromeEvent {
+  id            String        @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  type          EventType
+  title         String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime?
+  contentStatus ContentStatus @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@index([aerodromeId, contentStatus, startDate])
+  @@map("aerodrome_events")
   @@schema("public")
 }
 

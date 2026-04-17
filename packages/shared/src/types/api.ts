@@ -294,6 +294,59 @@ export interface AerodromeListSummary {
   _count: { items: number };
 }
 
+export interface AdminCorrectionListItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+}
+
+export interface CorrectionItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
+}
+
+export interface EventItem {
+  id: string;
+  type: "CAFE_CROISSANT" | "OPEN_DAY" | "AIRSHOW" | "OTHER";
+  title: string;
+  description: string | null;
+  startDate: string;
+  endDate: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
+}
+
 export interface NotificationItem {
   id: string;
   type: string;

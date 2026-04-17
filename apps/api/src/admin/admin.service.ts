@@ -29,6 +29,9 @@ import type {
   AdminUserListItem,
   AdminCommentListItem,
   AdminPhotoListItem,
+  AdminCorrectionListItem,
+  AdminCorrectionsQueryInput,
+  ReviewAdminCorrectionInput,
 } from "@aerodirectory/shared";
 
 @Injectable()
@@ -1066,6 +1069,172 @@ export class AdminService {
         metadata: { targetType: report.targetType, targetId: report.targetId },
       });
     }
+  }
+
+  async listCorrections(query: AdminCorrectionsQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const search = query.search?.trim();
+    const state = query.state ?? "pending";
+
+    const where = {
+      ...(state === "pending"
+        ? { contentStatus: "PENDING" as const }
+        : state === "approved"
+          ? { contentStatus: "APPROVED" as const }
+          : state === "rejected"
+            ? { contentStatus: "REJECTED" as const }
+            : {}),
+      ...(search
+        ? {
+            OR: [
+              { field: { contains: search, mode: "insensitive" as const } },
+              { proposedValue: { contains: search, mode: "insensitive" as const } },
+              { reason: { contains: search, mode: "insensitive" as const } },
+              { user: { email: { contains: search, mode: "insensitive" as const } } },
+              { user: { displayName: { contains: search, mode: "insensitive" as const } } },
+              { aerodrome: { name: { contains: search, mode: "insensitive" as const } } },
+              { aerodrome: { icaoCode: { contains: search, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [corrections, total] = await Promise.all([
+      this.prisma.correction.findMany({
+        where,
+        include: {
+          user: { select: { id: true, displayName: true, email: true } },
+          aerodrome: { select: { id: true, name: true, icaoCode: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.correction.count({ where }),
+    ]);
+
+    const reviewerIds = Array.from(
+      new Set(corrections.map((c) => c.reviewedBy).filter((id): id is string => !!id)),
+    );
+    const reviewers = reviewerIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: reviewerIds } },
+          select: { id: true, displayName: true, email: true },
+        })
+      : [];
+    const reviewersById = new Map(reviewers.map((u) => [u.id, u]));
+
+    return {
+      data: corrections.map((c): AdminCorrectionListItem => ({
+        id: c.id,
+        field: c.field,
+        currentValue: c.currentValue,
+        proposedValue: c.proposedValue,
+        reason: c.reason,
+        contentStatus: c.contentStatus as AdminCorrectionListItem["contentStatus"],
+        createdAt: c.createdAt.toISOString(),
+        reviewedAt: c.reviewedAt?.toISOString() ?? null,
+        reviewedBy: c.reviewedBy ? (reviewersById.get(c.reviewedBy) ?? null) : null,
+        aerodrome: c.aerodrome,
+        user: c.user,
+      })),
+      total,
+    };
+  }
+
+  async approveCorrection(
+    adminId: string,
+    correctionId: string,
+    input: ReviewAdminCorrectionInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const correction = await this.prisma.correction.findUnique({
+      where: { id: correctionId },
+      select: { id: true, userId: true, aerodromeId: true, contentStatus: true, field: true },
+    });
+
+    if (!correction) {
+      throw new NotFoundException("Correction introuvable.");
+    }
+
+    if (correction.contentStatus !== "PENDING") {
+      throw new BadRequestException("Cette correction a déjà été traitée.");
+    }
+
+    await this.prisma.correction.update({
+      where: { id: correctionId },
+      data: { contentStatus: "APPROVED", reviewedBy: adminId, reviewedAt: new Date() },
+    });
+
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id: correction.aerodromeId },
+      select: { name: true },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "CORRECTION_APPROVED",
+        correctionId,
+        aerodromeId: correction.aerodromeId,
+        field: correction.field,
+        note: input.note?.trim() || null,
+      },
+    });
+
+    await this.notifications.notifyUser({
+      userId: correction.userId,
+      type: "CORRECTION_APPROVED",
+      title: "Votre correction a été validée",
+      message: `Votre contribution sur ${aerodrome?.name ?? "un aérodrome"} est maintenant visible.`,
+      linkUrl: `/aerodrome/${correction.aerodromeId}`,
+      metadata: { correctionId, aerodromeId: correction.aerodromeId },
+    });
+  }
+
+  async rejectCorrection(
+    adminId: string,
+    correctionId: string,
+    input: ReviewAdminCorrectionInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const correction = await this.prisma.correction.findUnique({
+      where: { id: correctionId },
+      select: { id: true, userId: true, aerodromeId: true, contentStatus: true, field: true },
+    });
+
+    if (!correction) {
+      throw new NotFoundException("Correction introuvable.");
+    }
+
+    if (correction.contentStatus !== "PENDING") {
+      throw new BadRequestException("Cette correction a déjà été traitée.");
+    }
+
+    await this.prisma.correction.update({
+      where: { id: correctionId },
+      data: { contentStatus: "REJECTED", reviewedBy: adminId, reviewedAt: new Date() },
+    });
+
+    await this.audit.log({
+      userId: adminId,
+      action: "ADMIN_ACTION",
+      ip,
+      userAgent,
+      metadata: {
+        type: "CORRECTION_REJECTED",
+        correctionId,
+        aerodromeId: correction.aerodromeId,
+        field: correction.field,
+        note: input.note?.trim() || null,
+      },
+    });
   }
 
   async importOpenAir(

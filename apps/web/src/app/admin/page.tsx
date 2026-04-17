@@ -238,6 +238,20 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </Link>
+
+        <Link href="/admin/corrections">
+          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Shield className="h-5 w-5" />
+                Corrections
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Valider ou rejeter les propositions de correction et d&apos;enrichissement communautaires.
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">

@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  InternalServerErrorException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -47,6 +49,8 @@ const windowedAuthenticator = new Authenticator({
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -146,6 +150,9 @@ export class AuthService {
     return { available: !existing };
   }
 
+  private static readonly MAX_FAILED_ATTEMPTS = 5;
+  private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
   async login(
     input: LoginInput,
     ip?: string,
@@ -163,15 +170,60 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
+    // Check lockout before password verification
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      throw new UnauthorizedException(
+        `Compte temporairement verrouillé. Réessayez dans ${Math.ceil(retryAfterSeconds / 60)} minute(s).`,
+      );
+    }
+
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
+      const newAttempts = user.failedLoginAttempts + 1;
+      const shouldLock = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS;
+      const lockedUntil = shouldLock
+        ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
+        : null;
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: newAttempts,
+          ...(lockedUntil !== null ? { lockedUntil } : {}),
+        },
+      });
+
       await this.audit.log({
         userId: user.id,
         action: "LOGIN_FAILED",
         ip,
         userAgent,
+        metadata: { attempt: newAttempts },
       });
+
+      if (shouldLock) {
+        await this.audit.log({
+          userId: user.id,
+          action: "ACCOUNT_LOCKED",
+          ip,
+          userAgent,
+          metadata: { lockedUntil: lockedUntil!.toISOString() },
+        });
+        throw new UnauthorizedException(
+          "Compte verrouillé après trop de tentatives échouées. Réessayez dans 15 minutes.",
+        );
+      }
+
       throw new UnauthorizedException("Invalid credentials");
+    }
+
+    // Reset lockout counters on successful password verification
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
     }
 
     if (user.status === "BANNED") {
@@ -574,31 +626,53 @@ export class AuthService {
       throw new UnauthorizedException("Mot de passe actuel incorrect");
     }
 
-    // Log AVANT suppression (userId encore valide)
+    // ── Étape 1 : anonymiser les logs existants AVANT toute suppression ──
+    // (le userId est encore valide ; on supprime l'email des metadata)
+    try {
+      await this.prisma.auditLog.updateMany({
+        where: {
+          userId,
+          metadata: { path: ["email"], equals: user.email },
+        },
+        data: { metadata: { anonymized: true } },
+      });
+    } catch (err) {
+      // Bloquer la suppression si on ne peut pas garantir l'anonymisation
+      this.logger.error(`Anonymisation des audit logs échouée pour userId=${userId}`, err);
+      throw new InternalServerErrorException(
+        "Impossible d'anonymiser les logs d'audit. La suppression du compte a été annulée.",
+      );
+    }
+
+    // ── Étape 2 : supprimer les fichiers S3 (RGPD Art. 17 — droit à l'effacement) ──
+    const failedKeys: string[] = [];
+    await Promise.all(
+      user.photos.map(async (p: { id: string; storedKey: string }) => {
+        try {
+          await this.storage.delete(p.storedKey);
+        } catch (err) {
+          this.logger.error(`Échec suppression S3 key=${p.storedKey} pour userId=${userId}`, err);
+          failedKeys.push(p.storedKey);
+        }
+      }),
+    );
+
+    if (failedKeys.length > 0) {
+      throw new InternalServerErrorException(
+        "Certaines photos n'ont pas pu être supprimées. La suppression du compte a été annulée.",
+      );
+    }
+
+    // ── Étape 3 : log COMPTE_DELETE (sans email en metadata) ──
     await this.audit.log({
       userId,
       action: "ACCOUNT_DELETE",
       ip,
       userAgent,
-      metadata: { email: user.email },
     });
 
-    // Suppression des objets S3 (photos) — best-effort, ne bloque pas la suppression
-    const s3Deletions = user.photos.map((p: { id: string; storedKey: string }) =>
-      this.storage.delete(p.storedKey).catch(() => undefined),
-    );
-    await Promise.all(s3Deletions);
-
-    // Suppression du compte (cascade DB)
+    // ── Étape 4 : suppression du compte (cascade DB) ──
     await this.prisma.user.delete({ where: { id: userId } });
-
-    // Anonymisation des audit logs restants (userId mis à null par SetNull, on retire l'email des metadata)
-    await this.prisma.auditLog
-      .updateMany({
-        where: { metadata: { path: ["email"], equals: user.email } },
-        data: { metadata: { anonymized: true } },
-      })
-      .catch(() => undefined);
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
