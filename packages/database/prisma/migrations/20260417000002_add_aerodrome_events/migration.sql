@@ -1,12 +1,25 @@
--- CreateEnum
-CREATE TYPE "public"."EventType" AS ENUM ('CAFE_CROISSANT', 'OPEN_DAY', 'AIRSHOW', 'OTHER');
+DO $$
+BEGIN
+  CREATE TYPE "public"."EventType" AS ENUM ('CAFE_CROISSANT', 'OPEN_DAY', 'AIRSHOW', 'OTHER');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
--- AlterEnum
-ALTER TYPE "public"."AuditAction" ADD VALUE 'EVENT_CREATE';
-ALTER TYPE "public"."AuditAction" ADD VALUE 'EVENT_DELETE';
+DO $$
+BEGIN
+  ALTER TYPE "public"."AuditAction" ADD VALUE 'EVENT_CREATE';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
--- CreateTable
-CREATE TABLE "public"."aerodrome_events" (
+DO $$
+BEGIN
+  ALTER TYPE "public"."AuditAction" ADD VALUE 'EVENT_DELETE';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "public"."aerodrome_events" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "aerodromeId" TEXT NOT NULL,
@@ -24,11 +37,23 @@ CREATE TABLE "public"."aerodrome_events" (
     CONSTRAINT "aerodrome_events_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "aerodrome_events_aerodromeId_contentStatus_startDate_idx" ON "public"."aerodrome_events"("aerodromeId", "contentStatus", "startDate");
+CREATE INDEX IF NOT EXISTS "aerodrome_events_aerodromeId_contentStatus_startDate_idx"
+ON "public"."aerodrome_events"("aerodromeId", "contentStatus", "startDate");
 
--- AddForeignKey
-ALTER TABLE "public"."aerodrome_events" ADD CONSTRAINT "aerodrome_events_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "public"."aerodrome_events"
+    ADD CONSTRAINT "aerodrome_events_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "public"."aerodrome_events" ADD CONSTRAINT "aerodrome_events_aerodromeId_fkey" FOREIGN KEY ("aerodromeId") REFERENCES "public"."aerodromes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "public"."aerodrome_events"
+    ADD CONSTRAINT "aerodrome_events_aerodromeId_fkey"
+    FOREIGN KEY ("aerodromeId") REFERENCES "public"."aerodromes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

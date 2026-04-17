@@ -149,6 +149,7 @@ services:
       SYNC_RETRY_BACKOFF_MINUTES: ${SYNC_RETRY_BACKOFF_MINUTES:-15,30,60}
       SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
       SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
+      RUN_MIGRATIONS: "true"
     volumes:
       - clamav_db:/var/lib/clamav:ro
     networks:
@@ -216,6 +217,7 @@ services:
       SYNC_RETRY_BACKOFF_MINUTES: ${SYNC_RETRY_BACKOFF_MINUTES:-15,30,60}
       SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
       SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
+      RUN_MIGRATIONS: "false"
     volumes:
       - clamav_db:/var/lib/clamav:ro
       - sync_data:${SYNC_DATA_DIR:-/data/sync}

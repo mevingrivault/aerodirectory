@@ -1,4 +1,5 @@
-import { defineConfig } from "prisma/config";
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({
   earlyAccess: true,
@@ -10,5 +11,8 @@ export default defineConfig({
       const pool = new pg.Pool({ connectionString: process.env["DATABASE_URL"] });
       return new PrismaPg(pool);
     },
+  },
+  datasource: {
+    url: env("DATABASE_URL"),
   },
 });
