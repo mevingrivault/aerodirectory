@@ -6,9 +6,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "bootstrap": "node scripts/setup.mjs",
     "setup": "node scripts/setup.mjs",
@@ -39,7 +39,8 @@
       "picomatch": ">=4.0.4",
       "effect": ">=3.20.0",
       "brace-expansion": ">=1.1.13",
-      "ajv": ">=8.18.0"
+      "ajv": ">=8.18.0",
+      "fastify": "5.8.5"
     }
   }
 }
