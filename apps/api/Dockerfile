@@ -1,7 +1,10 @@
 FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates openssl && \
+    rm -rf /var/lib/apt/lists/* && \
+    corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 FROM base AS fetch
 WORKDIR /app
@@ -19,12 +22,16 @@ RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/api build
 
-FROM node:24-bookworm-slim AS runner
+FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
+RUN set -eux; \
+    groupadd --system clamav || true; \
+    useradd --system --gid clamav --no-create-home --home-dir /var/lib/clamav clamav || true; \
+    apt-get update && \
     apt-get install -y --no-install-recommends clamav gosu osmium-tool tzdata && \
     rm -rf /var/lib/apt/lists/*
 
