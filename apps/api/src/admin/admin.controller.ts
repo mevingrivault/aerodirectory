@@ -19,7 +19,6 @@ import {
   AdminCommentsQuerySchema,
   AdminUsersQuerySchema,
   AdminImportOpenAirSchema,
-  AdminCorrectionsQuerySchema,
   ApproveAdminPhotoSchema,
   BanUserSchema,
   DeleteAdminUserSchema,
@@ -27,7 +26,6 @@ import {
   ReviewAdminCorrectionSchema,
   RejectAdminPhotoSchema,
   ReviewAdminReportSchema,
-  ReviewAdminCorrectionSchema,
   RestoreAdminCommentSchema,
   type AdminPhotosQueryInput,
   type AdminReportsQueryInput,
@@ -36,7 +34,6 @@ import {
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
   type AdminImportOpenAirInput,
-  type AdminCorrectionsQueryInput,
   type ApproveAdminPhotoInput,
   type BanUserInput,
   type DeleteAdminUserInput,
@@ -44,7 +41,6 @@ import {
   type ReviewAdminCorrectionInput,
   type RejectAdminPhotoInput,
   type ReviewAdminReportInput,
-  type ReviewAdminCorrectionInput,
   type RestoreAdminCommentInput,
 } from "@aerodirectory/shared";
 import { Roles, CurrentUser } from "../common/decorators";
@@ -195,53 +191,6 @@ export class AdminController {
     return ok({ rejected: true });
   }
 
-  @Get("corrections")
-  async corrections(
-    @Query(new ZodValidationPipe(AdminCorrectionsQuerySchema))
-    query: AdminCorrectionsQueryInput,
-  ) {
-    const { data, total } = await this.admin.listCorrections(query);
-    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
-  }
-
-  @Post("corrections/:correctionId/approve")
-  @HttpCode(HttpStatus.OK)
-  async approveCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.approveCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ approved: true });
-  }
-
-  @Post("corrections/:correctionId/reject")
-  @HttpCode(HttpStatus.OK)
-  async rejectCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.rejectCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ rejected: true });
-  }
-
   @Get("mail-events")
   async mailEvents(
     @Query(new ZodValidationPipe(AdminMailEventsQuerySchema))
@@ -358,44 +307,6 @@ export class AdminController {
       req.headers["user-agent"],
     );
     return ok({ restored: true });
-  }
-
-  @Post("corrections/:correctionId/approve")
-  @HttpCode(HttpStatus.OK)
-  async approveCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.approveCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ approved: true });
-  }
-
-  @Post("corrections/:correctionId/reject")
-  @HttpCode(HttpStatus.OK)
-  async rejectCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.rejectCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ rejected: true });
   }
 
   @Post("mail/test")
