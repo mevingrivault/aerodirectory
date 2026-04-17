@@ -664,7 +664,7 @@ export default function AerodromeDetailPage() {
     }
   };
 
-  const handleSubmitCorrection = async (e: React.FormEvent) => {
+  const handleSubmitInlineCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     const field = correctionField === "other" ? customCorrectionField.trim() : correctionField;
     if (!field || !correctionValue.trim()) return;
@@ -2434,7 +2434,7 @@ export default function AerodromeDetailPage() {
             )}
 
             {user && correctionForm !== null && (
-              <form onSubmit={handleSubmitCorrection} className="mt-3 space-y-3 rounded-md border p-4">
+              <form onSubmit={handleSubmitInlineCorrection} className="mt-3 space-y-3 rounded-md border p-4">
                 <p className="text-sm font-medium">Nouvelle proposition</p>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-muted-foreground">
