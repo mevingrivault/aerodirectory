@@ -9,6 +9,7 @@ RUN apt-get update && \
 FROM base AS fetch
 WORKDIR /app
 COPY pnpm-lock.yaml ./pnpm-workspace.yaml ./package.json ./
+COPY patches/ ./patches/
 RUN pnpm fetch
 
 FROM fetch AS builder
