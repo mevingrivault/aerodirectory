@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { createChallenge, verifySolution } from "altcha-lib/dist/cjs/v1/index.js";
+import { createChallenge, verifySolution } from "altcha-lib/v1";
 
 @Injectable()
 export class AltchaService {

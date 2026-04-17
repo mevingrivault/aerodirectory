@@ -1,4 +1,4 @@
-declare module "altcha-lib/dist/cjs/v1/index.js" {
+declare module "altcha-lib/v1" {
   interface ChallengeOptions {
     hmacKey: string;
     algorithm?: string;
