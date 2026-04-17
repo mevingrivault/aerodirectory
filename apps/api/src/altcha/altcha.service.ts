@@ -1,14 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type * as AltchaV1 from "altcha-lib/v1";
+import { createChallenge, verifySolution } from "altcha-lib/v1";
 
 @Injectable()
-export class AltchaService implements OnModuleInit {
+export class AltchaService {
   private readonly logger = new Logger(AltchaService.name);
   private readonly hmacKey: string;
   private readonly enabled: boolean;
   private readonly maxNumber: number;
-  private altcha!: typeof AltchaV1;
 
   constructor(private readonly config: ConfigService) {
     this.hmacKey = config.get<string>("ALTCHA_HMAC_KEY", "");
@@ -24,18 +23,12 @@ export class AltchaService implements OnModuleInit {
     }
   }
 
-  async onModuleInit() {
-    // Dynamic import uses the ESM condition in altcha-lib/v1 exports,
-    // avoiding the CJS/ESM conflict caused by "type":"module" in altcha-lib v2.
-    this.altcha = await import("altcha-lib/v1");
-  }
-
   isEnabled(): boolean {
     return this.enabled;
   }
 
   async createChallenge() {
-    return this.altcha.createChallenge({
+    return createChallenge({
       hmacKey: this.hmacKey,
       maxNumber: this.maxNumber,
       expires: new Date(Date.now() + 10 * 60 * 1000),
@@ -46,7 +39,7 @@ export class AltchaService implements OnModuleInit {
     if (!this.enabled) return true;
 
     try {
-      const ok = await this.altcha.verifySolution(payload, this.hmacKey, true);
+      const ok = await verifySolution(payload, this.hmacKey, true);
       if (!ok) {
         this.logger.warn("ALTCHA verification failed — invalid payload");
       }

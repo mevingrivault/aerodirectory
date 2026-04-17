@@ -42,6 +42,9 @@
       "ajv": ">=8.18.0",
       "fastify": "5.8.5",
       "@types/jsonwebtoken": "9.0.9"
+    },
+    "patchedDependencies": {
+      "altcha-lib@2.0.2": "patches/altcha-lib@2.0.2.patch"
     }
   }
 }
