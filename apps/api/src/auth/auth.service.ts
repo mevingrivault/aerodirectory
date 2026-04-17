@@ -10,16 +10,9 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
-import { authenticator } from "otplib";
-import { Authenticator } from "@otplib/core";
-import {
-  createDigest,
-  createRandomBytes,
-} from "@otplib/plugin-crypto";
-import {
-  keyDecoder,
-  keyEncoder,
-} from "@otplib/plugin-thirty-two";
+import { TOTP } from "otplib";
+import { NobleCryptoPlugin } from "@otplib/plugin-crypto-noble";
+import { ScureBase32Plugin } from "@otplib/plugin-base32-scure";
 import * as QRCode from "qrcode";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
@@ -45,11 +38,9 @@ import type {
 } from "@aerodirectory/shared";
 import { BADGES } from "@aerodirectory/shared";
 
-const windowedAuthenticator = new Authenticator({
-  createDigest,
-  createRandomBytes,
-  keyDecoder,
-  keyEncoder,
+const totp = new TOTP({
+  crypto: new NobleCryptoPlugin(),
+  base32: new ScureBase32Plugin(),
 });
 
 @Injectable()
@@ -69,14 +60,15 @@ export class AuthService {
     private readonly crypto: CryptoService,
   ) {}
 
-  private verifyTotpCode(secret: string, code: string): boolean {
+  private async verifyTotpCode(secret: string, code: string): Promise<boolean> {
     const configuredWindow = Number(this.config.get("TOTP_WINDOW"));
     const window =
       Number.isInteger(configuredWindow) && configuredWindow >= 0
         ? configuredWindow
         : 2;
-
-    return windowedAuthenticator.clone({ window }).check(code, secret);
+    const epochTolerance = window * 30;
+    const result = await totp.verify(code, { secret, epochTolerance });
+    return result.valid;
   }
 
   // ─── Registration ───────────────────────────────────────
@@ -280,7 +272,7 @@ export class AuthService {
       throw new BadRequestException("TOTP is already enabled");
     }
 
-    const secret = authenticator.generateSecret();
+    const secret = totp.generateSecret();
 
     // Chiffrement AES-256-GCM avant stockage
     await this.prisma.user.update({
@@ -288,11 +280,7 @@ export class AuthService {
       data: { totpSecret: this.crypto.encrypt(secret) },
     });
 
-    const otpauthUrl = authenticator.keyuri(
-      user.email,
-      "Navventura",
-      secret,
-    );
+    const otpauthUrl = totp.toURI({ label: user.email, issuer: "Navventura", secret });
     const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);
 
     return { secret, qrCodeUrl };
@@ -313,7 +301,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -347,7 +335,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
