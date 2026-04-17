@@ -430,16 +430,6 @@ export default function AerodromeDetailPage() {
     message: string;
   } | null>(null);
 
-  const [correctionForm, setCorrectionForm] = useState<{
-    field: string;
-    proposedValue: string;
-    reason: string;
-  } | null>(null);
-  const [correctionAlert, setCorrectionAlert] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
   const [eventForm, setEventForm] = useState<{
     type: EventItem["type"];
     title: string;
@@ -460,12 +450,6 @@ export default function AerodromeDetailPage() {
   const { data: eventsRes, refetch: refetchEvents } = useQuery({
     queryKey: ["events", id],
     queryFn: () => apiClient.get<EventItem[]>(`/aerodromes/${id}/events`),
-    enabled: !!id,
-  });
-
-  const { data: correctionsRes, refetch: refetchCorrections } = useQuery({
-    queryKey: ["corrections", id],
-    queryFn: () => apiClient.get<CorrectionItem[]>(`/aerodromes/${id}/corrections`),
     enabled: !!id,
   });
 
@@ -634,7 +618,6 @@ export default function AerodromeDetailPage() {
   }, [photosRes]);
 
   const events = eventsRes?.data ?? [];
-  const corrections = correctionsRes?.data ?? [];
   const comments = commentsRes?.data ?? [];
   const communityCorrections = ad?.corrections ?? [];
   const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
@@ -664,7 +647,7 @@ export default function AerodromeDetailPage() {
     }
   };
 
-  const handleSubmitInlineCorrection = async (e: React.FormEvent) => {
+  const handleSubmitCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     const field = correctionField === "other" ? customCorrectionField.trim() : correctionField;
     if (!field || !correctionValue.trim()) return;
@@ -793,32 +776,6 @@ export default function AerodromeDetailPage() {
       await refetchEvents();
     } catch {
       // ignore
-    }
-  };
-
-  const handleSubmitCorrection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correctionForm || !correctionForm.field.trim() || !correctionForm.proposedValue.trim()) return;
-    setCorrectionAlert(null);
-    try {
-      const altcha = await solveAltcha();
-      await apiClient.post(
-        `/aerodromes/${id}/corrections`,
-        {
-          field: correctionForm.field.trim(),
-          proposedValue: correctionForm.proposedValue.trim(),
-          reason: correctionForm.reason.trim() || undefined,
-        },
-        altcha ? { "x-altcha": altcha } : undefined,
-      );
-      setCorrectionForm(null);
-      setCorrectionAlert({ type: "success", message: "Merci ! Votre proposition sera examinée par notre équipe." });
-      await refetchCorrections();
-    } catch (error) {
-      setCorrectionAlert({
-        type: "error",
-        message: error instanceof Error ? error.message : "Impossible de soumettre la correction.",
-      });
     }
   };
 
@@ -1208,173 +1165,6 @@ export default function AerodromeDetailPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
-              Elles complètent la fiche sans modifier la donnée importée.
-            </div>
-
-            {correctionActionAlert && (
-              <div
-                className={`rounded-md border p-3 text-sm ${
-                  correctionActionAlert.type === "success"
-                    ? "border-green-300 bg-green-50 text-green-800"
-                    : "border-red-300 bg-red-50 text-red-800"
-                }`}
-              >
-                {correctionActionAlert.message}
-              </div>
-            )}
-
-            {user ? (
-              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
-                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Type de contribution</label>
-                    <select
-                      value={correctionField}
-                      onChange={(event) =>
-                        setCorrectionField(
-                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
-                        )
-                      }
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Proposition</label>
-                    <textarea
-                      value={correctionValue}
-                      onChange={(event) => setCorrectionValue(event.target.value)}
-                      rows={3}
-                      maxLength={2000}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
-                    />
-                  </div>
-                </div>
-
-                {correctionField === "other" && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Champ concerné</label>
-                    <Input
-                      value={customCorrectionField}
-                      onChange={(event) => setCustomCorrectionField(event.target.value)}
-                      maxLength={100}
-                      placeholder="Ex. procédures locales, accès, horaires..."
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Contexte ou justification</label>
-                  <textarea
-                    value={correctionReason}
-                    onChange={(event) => setCorrectionReason(event.target.value)}
-                    rows={2}
-                    maxLength={1000}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Optionnel : source, précision locale, explication..."
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Votre proposition sera relue avant publication.
-                  </p>
-                  <Button
-                    type="submit"
-                    disabled={
-                      !correctionValue.trim() ||
-                      (correctionField === "other" && !customCorrectionField.trim())
-                    }
-                  >
-                    Proposer une contribution
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                <Link href="/login" className="text-primary hover:underline">
-                  Connectez-vous
-                </Link>{" "}
-                pour proposer une correction ou un enrichissement.
-              </p>
-            )}
-
-            {communityCorrections.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucune contribution communautaire publiée pour le moment.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {communityCorrections.map((correction) => (
-                  <div key={correction.id} className="rounded-lg border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {formatCommunityFieldLabel(correction.field)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                            par{" "}
-                            {correction.user.displayName ? (
-                              <Link
-                                href={`/community/${correction.user.id}`}
-                                className="hover:text-primary hover:underline"
-                              >
-                                {correction.user.displayName}
-                              </Link>
-                            ) : (
-                              "Membre"
-                            )}{" "}
-                            le{" "}
-                              {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
-                            </span>
-                        </div>
-                        {correction.currentValue && (
-                          <p className="text-xs text-muted-foreground">
-                            Référence officielle : {correction.currentValue}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
-                        {correction.reason && (
-                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                            Contexte : {correction.reason}
-                          </p>
-                        )}
-                      </div>
-
-                      {user && user.id !== correction.user.id && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReportCorrection(correction.id)}
-                        >
-                          Signaler
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </CardContent>
@@ -2369,131 +2159,168 @@ export default function AerodromeDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Community contributions */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <PencilLine className="h-5 w-5" /> Contributions communautaires
+              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {correctionAlert && (
+          <CardContent className="space-y-4">
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
+              Elles complètent la fiche sans modifier la donnée importée.
+            </div>
+
+            {correctionActionAlert && (
               <div
-                className={`mb-4 rounded-md border p-3 text-sm ${
-                  correctionAlert.type === "success"
+                className={`rounded-md border p-3 text-sm ${
+                  correctionActionAlert.type === "success"
                     ? "border-green-300 bg-green-50 text-green-800"
                     : "border-red-300 bg-red-50 text-red-800"
                 }`}
               >
-                {correctionAlert.message}
+                {correctionActionAlert.message}
               </div>
             )}
 
-            {corrections.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {corrections.map((c) => (
-                  <div key={c.id} className="rounded-md border bg-muted/20 p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">{c.field}</span>
-                        <p className="mt-0.5">{c.proposedValue}</p>
-                        {c.reason && (
-                          <p className="mt-1 text-xs text-muted-foreground">{c.reason}</p>
+            {user ? (
+              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
+                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Type de contribution</label>
+                    <select
+                      value={correctionField}
+                      onChange={(event) =>
+                        setCorrectionField(
+                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
+                        )
+                      }
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Proposition</label>
+                    <textarea
+                      value={correctionValue}
+                      onChange={(event) => setCorrectionValue(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
+                    />
+                  </div>
+                </div>
+
+                {correctionField === "other" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Champ concerné</label>
+                    <Input
+                      value={customCorrectionField}
+                      onChange={(event) => setCustomCorrectionField(event.target.value)}
+                      maxLength={100}
+                      placeholder="Ex. procédures locales, accès, horaires..."
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Contexte ou justification</label>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Optionnel : source, précision locale, explication..."
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Votre proposition sera relue avant publication.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !correctionValue.trim() ||
+                      (correctionField === "other" && !customCorrectionField.trim())
+                    }
+                  >
+                    Proposer une contribution
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline">
+                  Connectez-vous
+                </Link>{" "}
+                pour proposer une correction ou un enrichissement.
+              </p>
+            )}
+
+            {communityCorrections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucune contribution communautaire publiée pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {communityCorrections.map((correction) => (
+                  <div key={correction.id} className="rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {formatCommunityFieldLabel(correction.field)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            par{" "}
+                            {correction.user.displayName ? (
+                              <Link
+                                href={`/community/${correction.user.id}`}
+                                className="hover:text-primary hover:underline"
+                              >
+                                {correction.user.displayName}
+                              </Link>
+                            ) : (
+                              "Membre"
+                            )}{" "}
+                            le {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        </div>
+                        {correction.currentValue && (
+                          <p className="text-xs text-muted-foreground">
+                            Référence officielle : {correction.currentValue}
+                          </p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
+                        {correction.reason && (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            Contexte : {correction.reason}
+                          </p>
                         )}
                       </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {c.user.displayName ?? "Membre"} · {new Date(c.createdAt).toLocaleDateString("fr-FR")}
-                      </span>
+
+                      {user && user.id !== correction.user.id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReportCorrection(correction.id)}
+                        >
+                          Signaler
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-
-            {corrections.length === 0 && (
-              <p className="mb-4 text-sm text-muted-foreground">
-                Aucune contribution validée pour le moment.
-              </p>
-            )}
-
-            {user && correctionForm === null && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCorrectionForm({ field: "", proposedValue: "", reason: "" })}
-              >
-                <PencilLine className="mr-1.5 h-3.5 w-3.5" />
-                Proposer une correction ou un enrichissement
-              </Button>
-            )}
-
-            {!user && (
-              <p className="text-sm text-muted-foreground">
-                <a href="/login" className="text-primary hover:underline">Connectez-vous</a> pour proposer une correction.
-              </p>
-            )}
-
-            {user && correctionForm !== null && (
-              <form onSubmit={handleSubmitInlineCorrection} className="mt-3 space-y-3 rounded-md border p-4">
-                <p className="text-sm font-medium">Nouvelle proposition</p>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Champ concerné <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="Ex: fréquence, carburant, horaires…"
-                    value={correctionForm.field}
-                    onChange={(e) => setCorrectionForm({ ...correctionForm, field: e.target.value })}
-                    maxLength={100}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Valeur proposée <span className="text-destructive">*</span>
-                  </label>
-                  <textarea
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Indiquez l'information correcte ou complémentaire…"
-                    value={correctionForm.proposedValue}
-                    onChange={(e) => setCorrectionForm({ ...correctionForm, proposedValue: e.target.value })}
-                    maxLength={2000}
-                    rows={3}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Justification (optionnel)
-                  </label>
-                  <Input
-                    placeholder="Source, contexte, date de la vérification…"
-                    value={correctionForm.reason}
-                    onChange={(e) => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
-                    maxLength={1000}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={!correctionForm.field.trim() || !correctionForm.proposedValue.trim()}
-                  >
-                    Soumettre
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setCorrectionForm(null); setCorrectionAlert(null); }}
-                  >
-                    Annuler
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Votre proposition sera examinée avant publication. Elle ne modifie pas directement les données officielles.
-                </p>
-              </form>
             )}
           </CardContent>
         </Card>
