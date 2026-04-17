@@ -45,6 +45,7 @@ export function Header() {
     showCommunityProfile: false,
     showCommunityContributions: true,
     showCommunityPhotos: true,
+    showPublicSearches: false,
   });
 
   const queryClient = useQueryClient();
@@ -89,12 +90,14 @@ export function Header() {
       showCommunityProfile: user.showCommunityProfile,
       showCommunityContributions: user.showCommunityContributions,
       showCommunityPhotos: user.showCommunityPhotos,
+      showPublicSearches: user.showPublicSearches,
     });
   }, [
     user,
     user?.showCommunityContributions,
     user?.showCommunityPhotos,
     user?.showCommunityProfile,
+    user?.showPublicSearches,
   ]);
 
   const links = [
@@ -193,6 +196,26 @@ export function Header() {
                     setCommunityVisibility((current) => ({
                       ...current,
                       showCommunityPhotos: event.target.checked,
+                    }))
+                  }
+                />
+              </label>
+
+              <label className="flex items-start justify-between gap-4 rounded-md border p-3 text-sm">
+                <span>
+                  <span className="font-medium">Afficher mes recherches récentes</span>
+                  <span className="mt-1 block text-muted-foreground">
+                    Permet d'afficher vos recherches sauvegardees recentes sur votre profil public.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={communityVisibility.showPublicSearches}
+                  onChange={(event) =>
+                    setCommunityVisibility((current) => ({
+                      ...current,
+                      showPublicSearches: event.target.checked,
                     }))
                   }
                 />

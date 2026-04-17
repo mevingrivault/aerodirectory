@@ -82,6 +82,7 @@ export const UpdateProfileSchema = z.object({
   showCommunityProfile: z.boolean().optional(),
   showCommunityContributions: z.boolean().optional(),
   showCommunityPhotos: z.boolean().optional(),
+  showPublicSearches: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;

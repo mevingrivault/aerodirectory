@@ -102,8 +102,35 @@ export interface UserProfile {
   showCommunityProfile: boolean;
   showCommunityContributions: boolean;
   showCommunityPhotos: boolean;
+  showPublicSearches: boolean;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+}
+
+export interface CommunityFollowListItem {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+}
+
+export interface CommunityRecentVisitItem {
+  id: string;
+  visitedAt: string;
+  status: "VISITED" | "FAVORITE";
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+    city: string | null;
+  };
+}
+
+export interface CommunityProfileStats {
+  visitedCount: number;
+  favoriteCount: number;
+  seenCount: number;
+  estimatedDistanceNm: number;
 }
 
 export interface CommunityPublicProfile {
@@ -113,11 +140,17 @@ export interface CommunityPublicProfile {
   avatarUrl: string | null;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+  followersCount: number;
+  followingCount: number;
   contributionStats: {
     comments: number;
     corrections: number;
     photos: number;
   };
+  stats: CommunityProfileStats;
+  badges: Badge[];
+  recentVisits: CommunityRecentVisitItem[];
+  recentSearches: SavedSearchItem[];
 }
 
 export interface AdminDashboardStats {
@@ -374,9 +407,18 @@ export interface SavedSearchItem {
   id: string;
   name: string;
   scope: "search" | "planner";
+  isPublic: boolean;
   params: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PublicSavedSearchItem extends SavedSearchItem {
+  user: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
 }
 
 export interface AerodromeListItem {

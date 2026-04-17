@@ -223,6 +223,7 @@ model User {
   showCommunityProfile       Boolean   @default(false)
   showCommunityContributions Boolean   @default(true)
   showCommunityPhotos        Boolean   @default(true)
+  showPublicSearches         Boolean   @default(false)
   homeAerodromeId     String?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
@@ -237,6 +238,8 @@ model User {
   reports          Report[]
   aircraftProfiles AircraftProfile[]
   savedSearches    SavedSearch[]
+  followers        Follow[]           @relation("UserFollowers")
+  following        Follow[]           @relation("UserFollowing")
   aerodromeLists   AerodromeList[]
   notifications    Notification[]
   auditLogs        AuditLog[]
@@ -251,6 +254,22 @@ model User {
   @@index([email])
   @@index([status])
   @@map("users")
+  @@schema("public")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
+  @@map("follows")
   @@schema("public")
 }
 
@@ -532,6 +551,7 @@ model SavedSearch {
   userId    String
   name      String
   scope     String   @default("search") // "search" | "planner"
+  isPublic  Boolean  @default(false)
   params    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

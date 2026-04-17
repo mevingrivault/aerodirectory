@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus, Save, Bookmark, Lock, Wind, Moon } from "lucide-react";
+import { Search, Fuel, Utensils, ChevronLeft, ChevronRight, MapPin, Home, Bike, Bus, Save, Bookmark, Lock, Wind, Moon, Globe, GlobeLock } from "lucide-react";
 import { AerodromeTypeIcon } from "@/components/ui/aerodrome-type-icon";
 import type { SavedSearchItem } from "@aerodirectory/shared";
 
@@ -108,10 +108,11 @@ export default function SearchPage() {
   });
 
   const saveSearchMutation = useMutation({
-    mutationFn: (payload: { name: string; params: Record<string, string> }) =>
+    mutationFn: (payload: { name: string; params: Record<string, string>; isPublic: boolean }) =>
       apiClient.post("/search/saved", {
         name: payload.name,
         scope: "search",
+        isPublic: payload.isPublic,
         params: payload.params,
       }),
     onSuccess: () => {
@@ -127,9 +128,47 @@ export default function SearchPage() {
     },
   });
 
+  const updateSavedSearchVisibilityMutation = useMutation({
+    mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) =>
+      apiClient.put(`/search/saved/${id}`, { isPublic }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches"] });
+    },
+  });
+
   const results = data?.data ?? [];
   const meta = data?.meta;
   const savedSearches = savedSearchesRes?.data ?? [];
+
+  useEffect(() => {
+    const currentParams = new URLSearchParams(window.location.search);
+    const nextQuery = currentParams.get("q") ?? "";
+    const nextPage = Number(currentParams.get("page") ?? "1");
+    const nextFilters: Record<string, string> = {};
+
+    for (const [key, value] of currentParams.entries()) {
+      if (["q", "page", "limit", "lat", "lng", "radiusKm", "sortBy"].includes(key)) {
+        continue;
+      }
+      nextFilters[key] = value;
+    }
+
+    setQuery(nextQuery);
+    setFilters(nextFilters);
+    setPage(Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1);
+
+    const lat = currentParams.get("lat");
+    const lng = currentParams.get("lng");
+    if (lat && lng) {
+      setUserLat(Number(lat));
+      setUserLng(Number(lng));
+      setUseLocation(true);
+    } else {
+      setUserLat(null);
+      setUserLng(null);
+      setUseLocation(false);
+    }
+  }, []);
 
   const handleNearby = () => {
     if (useLocation) {
@@ -188,13 +227,16 @@ export default function SearchPage() {
   const handleSaveCurrentSearch = () => {
     const name = window.prompt("Nom de la recherche sauvegardée");
     if (!name || !name.trim()) return;
+    const isPublic = window.confirm(
+      "Rendre cette recherche publique sur votre profil si les recherches publiques sont activées ?",
+    );
 
     const params: Record<string, string> = {
       ...searchParams,
     };
     if (!query) delete params["q"];
 
-    saveSearchMutation.mutate({ name: name.trim(), params });
+    saveSearchMutation.mutate({ name: name.trim(), params, isPublic });
   };
 
   return (
@@ -247,10 +289,38 @@ export default function SearchPage() {
             <option value="">Choisir…</option>
             {savedSearches.map((saved) => (
               <option key={saved.id} value={saved.id}>
-                {saved.name}
+                {saved.name}{saved.isPublic ? " · public" : " · privé"}
               </option>
             ))}
           </select>
+          {selectedSavedSearchId && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
+                if (!saved) return;
+                updateSavedSearchVisibilityMutation.mutate({
+                  id: saved.id,
+                  isPublic: !saved.isPublic,
+                });
+              }}
+              disabled={updateSavedSearchVisibilityMutation.isPending}
+            >
+              {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? (
+                <>
+                  <GlobeLock className="mr-1 h-4 w-4" />
+                  Privatiser
+                </>
+              ) : (
+                <>
+                  <Globe className="mr-1 h-4 w-4" />
+                  Rendre public
+                </>
+              )}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ArrowRight,
   Ban,
   Clock3,
   FileText,
@@ -90,6 +91,108 @@ export default function AdminPage() {
     () => syncStatus?.recentRuns.slice(0, 8) ?? [],
     [syncStatus?.recentRuns],
   );
+
+  const moderationQueues = stats
+    ? [
+        {
+          href: "/admin/reports",
+          icon: AlertTriangle,
+          title: "Signalements",
+          value: stats.pendingReports,
+          valueLabel:
+            stats.pendingReports > 1 ? "contenus à examiner" : "contenu à examiner",
+          tone:
+            stats.pendingReports > 0
+              ? "border-amber-300/70 bg-amber-50/70"
+              : "border-border bg-background",
+          accent:
+            stats.pendingReports > 0 ? "text-amber-700" : "text-muted-foreground",
+          summary: "Commentaires, corrections et photos remontés par la communauté.",
+          cta: "Ouvrir la file",
+        },
+        {
+          href: "/admin/photos",
+          icon: ImagePlus,
+          title: "Photos",
+          value: stats.pendingPhotos,
+          valueLabel:
+            stats.pendingPhotos > 1 ? "photos à valider" : "photo à valider",
+          tone:
+            stats.pendingPhotos > 0
+              ? "border-primary/30 bg-primary/5"
+              : "border-border bg-background",
+          accent: stats.pendingPhotos > 0 ? "text-primary" : "text-muted-foreground",
+          summary: "Valider ou rejeter avant publication publique.",
+          cta: "Traiter les photos",
+        },
+        {
+          href: "/admin/comments",
+          icon: MessageSquare,
+          title: "Commentaires",
+          value: stats.activeComments,
+          valueLabel:
+            stats.activeComments > 1 ? "commentaires visibles" : "commentaire visible",
+          tone: "border-border bg-background",
+          accent: "text-foreground",
+          summary: "Rechercher, restaurer ou modérer les discussions.",
+          cta: "Accéder à la modération",
+        },
+      ]
+    : [];
+
+  const governanceModules = stats
+    ? [
+        {
+          href: "/admin/corrections",
+          icon: FileText,
+          title: "Corrections",
+          metric: "Contributions",
+          value: "Publier ou rejeter",
+          summary: "Garder la main sur les enrichissements sans toucher aux imports.",
+        },
+        {
+          href: "/admin/users",
+          icon: Users,
+          title: "Utilisateurs",
+          metric: `${stats.totalUsers}`,
+          value: stats.bannedUsers > 0 ? `${stats.bannedUsers} bannis` : "Aucun banni",
+          summary: "Profils, rôles et bannissements.",
+        },
+        {
+          href: "/admin/audit",
+          icon: Clock3,
+          title: "Audit",
+          metric: "Journal",
+          value: "Actions sensibles",
+          summary: "Retrouver l’acteur, la cible, l’action et le motif en cas de litige.",
+        },
+      ]
+    : [];
+
+  const healthMetrics = stats
+    ? [
+        {
+          label: "Utilisateurs",
+          value: stats.totalUsers,
+          hint: stats.bannedUsers > 0 ? `${stats.bannedUsers} bannis` : "Communauté active",
+        },
+        {
+          label: "Échecs login 24h",
+          value: stats.failedLogins24h,
+          hint: "Surveiller les pics d’authentification",
+        },
+        {
+          label: "Échecs captcha 24h",
+          value: stats.altchaFailures24h,
+          hint: "Détecter la pression bot ou formulaires cassés",
+        },
+        {
+          label: "Mail",
+          value: stats.mailFailed24h,
+          hint: `${stats.mailSent24h} envoyés sur 24h`,
+        },
+      ]
+    : [];
 
   const handleTrigger = async (source: AdminSyncRunItem["source"]) => {
     setTriggeringSource(source);
@@ -178,169 +281,155 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="rounded-full bg-primary/10 p-3 text-primary">
-          <Shield className="h-6 w-6" />
+      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/30 p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+            <Shield className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              File de modération, supervision opérationnelle et outils de contrôle pour les
+              contenus communautaires.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-bold">Administration</h1>
-          <p className="text-sm text-muted-foreground">
-            Modération, supervision et synchronisations nocturnes de la plateforme.
-          </p>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <div className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-muted-foreground">
+            Worker {syncStatus?.workerEnabled ? "actif" : "désactivé"}
+          </div>
+          <div className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-muted-foreground">
+            {stats?.pendingReports ?? 0} signalement{(stats?.pendingReports ?? 0) > 1 ? "s" : ""} en attente
+          </div>
+          <div className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-muted-foreground">
+            {stats?.pendingPhotos ?? 0} photo{(stats?.pendingPhotos ?? 0) > 1 ? "s" : ""} à valider
+          </div>
+          <div className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-muted-foreground">
+            {recentRuns.length > 0 ? "Historique sync à jour" : "Aucun run récent"}
+          </div>
         </div>
       </div>
 
       {stats && (
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Utilisateurs</div>
-              <div className="text-3xl font-bold">{stats.totalUsers}</div>
+        <div className="mb-8 grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
+          <Card className="border-border/80 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">À traiter maintenant</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Les files utiles en premier, avec accès direct aux actions de modération.
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {moderationQueues.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className={`group rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm ${item.tone}`}
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-2xl bg-background/80 p-2.5 shadow-sm ring-1 ring-black/5">
+                            <Icon className={`h-5 w-5 ${item.accent}`} />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold">{item.title}</h3>
+                              <span className={`text-sm font-medium ${item.accent}`}>
+                                {item.value} {item.valueLabel}
+                              </span>
+                            </div>
+                            <p className="max-w-xl text-sm text-muted-foreground">
+                              {item.summary}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground/80 transition-transform group-hover:translate-x-0.5">
+                          {item.cta}
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Utilisateurs bannis</div>
-              <div className="text-3xl font-bold text-destructive">{stats.bannedUsers}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Commentaires actifs</div>
-              <div className="text-3xl font-bold">{stats.activeComments}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Photos en attente</div>
-              <div className="text-3xl font-bold text-primary">{stats.pendingPhotos}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Signalements en attente</div>
-              <div className="text-3xl font-bold text-amber-600">{stats.pendingReports}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Échecs captcha (24h)</div>
-              <div className="text-3xl font-bold">{stats.altchaFailures24h}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">Échecs login (24h)</div>
-              <div className="text-3xl font-bold">{stats.failedLogins24h}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-2 text-sm text-muted-foreground">E-mails KO (24h)</div>
-              <div className="text-3xl font-bold text-destructive">{stats.mailFailed24h}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {stats.mailSent24h} envoyés
-              </div>
+
+          <Card className="border-border/80 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">État rapide</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Quelques signaux pour repérer un incident sans quitter la page.
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {healthMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3"
+                >
+                  <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                    {metric.label}
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold">{metric.value}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{metric.hint}</div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <Link href="/admin/users">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Users className="h-5 w-5" />
-                Utilisateurs
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Rechercher des membres, consulter leurs informations et gérer les bannissements.
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/comments">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <MessageSquare className="h-5 w-5" />
-                Commentaires
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Rechercher, filtrer et modérer les commentaires avec traçabilité.
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/photos">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <ImagePlus className="h-5 w-5" />
-                Photos
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Valider ou rejeter les photos avant leur publication publique.
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/reports">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <AlertTriangle className="h-5 w-5" />
-                Signalements
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Traiter les signalements utilisateur sur les commentaires, corrections et photos.
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/corrections">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <FileText className="h-5 w-5" />
-                Contributions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Publier ou rejeter les enrichissements communautaires sans toucher aux données importées.
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/audit">
-          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Clock3 className="h-5 w-5" />
-                Journal d&apos;audit
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Consulter les validations, suppressions, bannissements et modérations sur les contenus communautaires.
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
+      {governanceModules.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold">Modération & gouvernance</h2>
+            <p className="text-sm text-muted-foreground">
+              Les modules secondaires restent accessibles, sans concurrencer la file principale.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {governanceModules.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href}>
+                  <Card className="h-full border-border/80 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm">
+                    <CardContent className="flex h-full flex-col gap-4 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="rounded-2xl bg-muted/50 p-2.5">
+                          <Icon className="h-5 w-5 text-foreground" />
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-lg font-semibold">{item.title}</div>
+                        <div className="text-sm font-medium text-foreground/80">{item.value}</div>
+                        <p className="text-sm text-muted-foreground">{item.summary}</p>
+                      </div>
+                      <div className="mt-auto text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                        {item.metric}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Card>
           <CardHeader className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <ServerCog className="h-5 w-5 text-primary" />
-              Refresh nocturne
+              Synchronisations
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Le worker dédié planifie, reprend et journalise les synchronisations de données.
+              Lancer un refresh ciblé sans quitter l’espace d’administration.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -433,12 +522,12 @@ export default function AdminPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-destructive">
                 <Ban className="h-5 w-5" />
-                Actions sensibles
+                Zone sensible
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Les bannissements et modérations de contenus restent journalisés avec l’identité
-              de l’administrateur et la date de l’action.
+              Bannissements, suppressions, validations et rejets restent tracés dans le journal
+              d’audit avec l’acteur, la cible, l’action et le motif.
             </CardContent>
           </Card>
 
@@ -521,7 +610,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Clock3 className="h-5 w-5 text-primary" />
-            Historique récent
+            Derniers runs
           </CardTitle>
         </CardHeader>
         <CardContent>

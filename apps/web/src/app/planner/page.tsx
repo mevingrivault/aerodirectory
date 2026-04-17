@@ -26,9 +26,13 @@ import {
   ArrowUp,
   ArrowDown,
   Download,
+  Save,
+  Globe,
+  GlobeLock,
+  Bookmark,
 } from "lucide-react";
 import Link from "next/link";
-import type { PlannerResult } from "@aerodirectory/shared";
+import type { PlannerResult, SavedSearchItem } from "@aerodirectory/shared";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -491,6 +495,7 @@ export default function PlannerPage() {
   const [sortBy, setSortBy] = useState<SortBy>("time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [selectedSavedSearchId, setSelectedSavedSearchId] = useState("");
 
   // ── Results ──
   const [results, setResults] = useState<PlannerResult[] | null>(null);
@@ -523,6 +528,17 @@ export default function PlannerPage() {
 
   const profiles = profilesRes?.data ?? [];
   const suggestions = (suggestionsRes?.data ?? []).slice(0, 8);
+
+  const { data: savedSearchesRes } = useQuery({
+    queryKey: ["saved-searches-planner"],
+    queryFn: () =>
+      apiClient.get<SavedSearchItem[]>("/search/saved", {
+        scope: "planner",
+      }),
+    enabled: !!user,
+  });
+
+  const savedSearches = savedSearchesRes?.data ?? [];
 
   // Auto-select first profile when list loads
   useEffect(() => {
@@ -580,6 +596,35 @@ export default function PlannerPage() {
     },
   });
 
+  const savePlannerSearchMutation = useMutation({
+    mutationFn: (payload: { name: string; params: Record<string, string>; isPublic: boolean }) =>
+      apiClient.post("/search/saved", {
+        name: payload.name,
+        scope: "planner",
+        isPublic: payload.isPublic,
+        params: payload.params,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches-planner"] });
+    },
+  });
+
+  const deleteSavedSearchMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/search/saved/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches-planner"] });
+      setSelectedSavedSearchId("");
+    },
+  });
+
+  const updateSavedSearchVisibilityMutation = useMutation({
+    mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) =>
+      apiClient.put(`/search/saved/${id}`, { isPublic }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches-planner"] });
+    },
+  });
+
   // ── Handlers ──
   const handleSelectDeparture = (ad: AerodromeOption) => {
     setDepartureAerodrome(ad);
@@ -619,6 +664,143 @@ export default function PlannerPage() {
       allowedSurfaces: profileForm.allowedSurfaces,
     });
   };
+
+  const buildPlannerSearchParams = useCallback(() => {
+    const params: Record<string, string> = {
+      searchMode,
+      tripScope,
+      reserveMinutes: String(reserveMinutes),
+      sortBy,
+      departureGroundMinutes,
+      arrivalGroundMinutes,
+      minDistanceKm,
+      fuelPricePerLiter,
+      maxTimeMinutes: String(maxTimeMinutes),
+      minTimeMinutes,
+      maxCost: String(maxCost),
+      minCost,
+      viewMode,
+    };
+
+    if (departureAerodrome) {
+      params["departureId"] = departureAerodrome.id;
+      params["departureName"] = departureAerodrome.icaoCode
+        ? `${departureAerodrome.icaoCode} — ${departureAerodrome.name}`
+        : departureAerodrome.name;
+    }
+
+    if (selectedProfileId) {
+      params["profileId"] = selectedProfileId;
+    }
+
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) {
+        params[key] = "true";
+      }
+    }
+
+    return Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== ""),
+    );
+  }, [
+    arrivalGroundMinutes,
+    departureAerodrome,
+    departureGroundMinutes,
+    filters,
+    fuelPricePerLiter,
+    maxCost,
+    maxTimeMinutes,
+    minCost,
+    minDistanceKm,
+    minTimeMinutes,
+    reserveMinutes,
+    searchMode,
+    selectedProfileId,
+    sortBy,
+    tripScope,
+    viewMode,
+  ]);
+
+  const applySavedPlannerSearch = useCallback(
+    async (saved: SavedSearchItem) => {
+      const params = saved.params ?? {};
+
+      setSearchMode((params["searchMode"] as SearchMode) || "time");
+      setTripScope((params["tripScope"] as TripScope) || "round_trip");
+      setReserveMinutes(Number(params["reserveMinutes"] ?? "30"));
+      setSortBy((params["sortBy"] as SortBy) || "time");
+      setViewMode((params["viewMode"] as "list" | "map") || "list");
+      setDepartureGroundMinutes(params["departureGroundMinutes"] ?? "0");
+      setArrivalGroundMinutes(params["arrivalGroundMinutes"] ?? "0");
+      setMinDistanceKm(params["minDistanceKm"] ?? "0");
+      setFuelPricePerLiter(params["fuelPricePerLiter"] ?? "");
+      setMaxTimeMinutes(Number(params["maxTimeMinutes"] ?? "60"));
+      setMinTimeMinutes(params["minTimeMinutes"] ?? "");
+      setMaxCost(Number(params["maxCost"] ?? "100"));
+      setMinCost(params["minCost"] ?? "");
+      setFilters({
+        hasRestaurant: params["hasRestaurant"] === "true",
+        hasTransport: params["hasTransport"] === "true",
+        hasBikes: params["hasBikes"] === "true",
+        hasAccommodation: params["hasAccommodation"] === "true",
+        fuel100LL: params["fuel100LL"] === "true",
+        fuelSP98: params["fuelSP98"] === "true",
+        excludeVisited: params["excludeVisited"] === "true",
+      });
+
+      if (params["profileId"]) {
+        setSelectedProfileId(params["profileId"]);
+      }
+
+      if (params["departureId"]) {
+        try {
+          const departure = await apiClient.get<AerodromeOption>(`/aerodromes/${params["departureId"]}`);
+          setDepartureAerodrome(departure.data);
+          setDepartureSearch(
+            params["departureName"]
+              ?? (departure.data.icaoCode
+                ? `${departure.data.icaoCode} — ${departure.data.name}`
+                : departure.data.name),
+          );
+        } catch {
+          setDepartureAerodrome(null);
+        }
+      }
+    },
+    [],
+  );
+
+  const handleSaveCurrentPlannerSearch = () => {
+    const name = window.prompt("Nom de la recherche planificateur");
+    if (!name || !name.trim()) return;
+    const isPublic = window.confirm(
+      "Rendre cette recherche planificateur publique sur votre profil si les recherches publiques sont activées ?",
+    );
+
+    savePlannerSearchMutation.mutate({
+      name: name.trim(),
+      params: buildPlannerSearchParams(),
+      isPublic,
+    });
+  };
+
+  useEffect(() => {
+    const currentParams = new URLSearchParams(window.location.search);
+    const departureId = currentParams.get("departureId");
+    if (!departureId) {
+      return;
+    }
+
+    void applySavedPlannerSearch({
+      id: "url-replay",
+      name: "Replay URL",
+      scope: "planner",
+      isPublic: false,
+      params: Object.fromEntries(currentParams.entries()),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }, [applySavedPlannerSearch]);
 
   const handleCalculate = async () => {
     if (!selectedProfileId || !departureAerodrome) return;
@@ -1494,6 +1676,85 @@ export default function PlannerPage() {
               <Navigation className="mr-2 h-4 w-4" />
               {isCalculating ? "Calcul en cours…" : "Trouver les destinations"}
             </Button>
+
+            {user && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Bookmark className="h-4 w-4" />
+                  Recherches planificateur
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    className="h-9 min-w-[220px] flex-1 rounded-md border bg-background px-2 text-sm"
+                    value={selectedSavedSearchId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setSelectedSavedSearchId(id);
+                      const saved = savedSearches.find((item) => item.id === id);
+                      if (!saved) return;
+                      void applySavedPlannerSearch(saved);
+                    }}
+                  >
+                    <option value="">Choisir…</option>
+                    {savedSearches.map((saved) => (
+                      <option key={saved.id} value={saved.id}>
+                        {saved.name}{saved.isPublic ? " · public" : " · privé"}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSaveCurrentPlannerSearch}
+                    disabled={savePlannerSearchMutation.isPending}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Sauvegarder
+                  </Button>
+                </div>
+                {selectedSavedSearchId && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
+                        if (!saved) return;
+                        updateSavedSearchVisibilityMutation.mutate({
+                          id: saved.id,
+                          isPublic: !saved.isPublic,
+                        });
+                      }}
+                      disabled={updateSavedSearchVisibilityMutation.isPending}
+                    >
+                      {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? (
+                        <>
+                          <GlobeLock className="mr-1 h-4 w-4" />
+                          Privatiser
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="mr-1 h-4 w-4" />
+                          Rendre public
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        deleteSavedSearchMutation.mutate(selectedSavedSearchId);
+                      }}
+                      disabled={deleteSavedSearchMutation.isPending}
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

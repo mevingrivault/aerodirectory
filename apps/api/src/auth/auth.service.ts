@@ -31,6 +31,8 @@ import type {
   RegisterInput,
   LoginInput,
   AuthTokens,
+  Badge,
+  CommunityFollowListItem,
   CommunityPublicProfile,
   TotpSetupResponse,
   UserProfile,
@@ -41,6 +43,7 @@ import type {
   CheckEmailInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
+import { BADGES } from "@aerodirectory/shared";
 
 const windowedAuthenticator = new Authenticator({
   createDigest,
@@ -52,6 +55,9 @@ const windowedAuthenticator = new Authenticator({
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private static readonly COMMUNITY_RECENT_VISITS_LIMIT = 6;
+  private static readonly COMMUNITY_RECENT_SEARCHES_LIMIT = 5;
+  private static readonly COMMUNITY_FOLLOW_LIST_LIMIT = 12;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -585,6 +591,9 @@ export class AuthService {
         ...(input.showCommunityPhotos !== undefined
           ? { showCommunityPhotos: input.showCommunityPhotos }
           : {}),
+        ...(input.showPublicSearches !== undefined
+          ? { showPublicSearches: input.showPublicSearches }
+          : {}),
       },
       include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
@@ -773,6 +782,7 @@ export class AuthService {
         avatarKey: true,
         showCommunityContributions: true,
         showCommunityPhotos: true,
+        showPublicSearches: true,
         showCommunityProfile: true,
         createdAt: true,
         homeAerodrome: {
@@ -800,6 +810,8 @@ export class AuthService {
                 status: "READY",
               },
             },
+            followers: true,
+            following: true,
           },
         },
       },
@@ -809,6 +821,72 @@ export class AuthService {
       throw new NotFoundException("Profil communautaire introuvable.");
     }
 
+    const visits = await this.prisma.visit.findMany({
+      where: { userId },
+      select: {
+        status: true,
+        visitedAt: true,
+        aerodrome: {
+          select: {
+            id: true,
+            name: true,
+            icaoCode: true,
+            city: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+      orderBy: { visitedAt: "desc" },
+    });
+
+    const recentSearchRecords = user.showPublicSearches
+      ? await this.prisma.savedSearch.findMany({
+          where: { userId, isPublic: true },
+          orderBy: { updatedAt: "desc" },
+          take: AuthService.COMMUNITY_RECENT_SEARCHES_LIMIT,
+        })
+      : [];
+
+    const visibleVisits = visits.filter(
+      (
+        visit,
+      ): visit is typeof visit & { status: "VISITED" | "FAVORITE" } =>
+        visit.status === "VISITED" || visit.status === "FAVORITE",
+    );
+
+    const recentVisits = visibleVisits
+      .slice(0, AuthService.COMMUNITY_RECENT_VISITS_LIMIT)
+      .map((visit) => ({
+        id: `${visit.aerodrome.id}:${visit.visitedAt.toISOString()}`,
+        visitedAt: visit.visitedAt.toISOString(),
+        status: visit.status,
+        aerodrome: {
+          id: visit.aerodrome.id,
+          name: visit.aerodrome.name,
+          icaoCode: visit.aerodrome.icaoCode,
+          city: visit.aerodrome.city,
+        },
+      }));
+
+    const seenCount = visits.filter((visit) => visit.status === "SEEN").length;
+    const favoriteCount = visits.filter((visit) => visit.status === "FAVORITE").length;
+    const visitedEntries = visibleVisits;
+    const visitedCount = visitedEntries.length;
+    const estimatedDistanceNm = Math.round(
+      this.computeEstimatedDistanceNm(
+        [...visitedEntries].sort(
+          (left, right) => left.visitedAt.getTime() - right.visitedAt.getTime(),
+        ),
+      ),
+    );
+    const badges: Badge[] = BADGES.map((badge) => ({
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      earned: visitedCount >= badge.threshold,
+    }));
+
     return {
       id: user.id,
       displayName: user.displayName,
@@ -816,11 +894,174 @@ export class AuthService {
       avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
+      followersCount: user._count.followers,
+      followingCount: user._count.following,
       contributionStats: {
         comments: user._count.comments,
         corrections: user.showCommunityContributions ? user._count.corrections : 0,
         photos: user.showCommunityPhotos ? user._count.photos : 0,
       },
+      stats: {
+        visitedCount,
+        favoriteCount,
+        seenCount,
+        estimatedDistanceNm,
+      },
+      badges: badges.filter((badge) => badge.earned),
+      recentVisits,
+      recentSearches: recentSearchRecords.map((item) => ({
+        id: item.id,
+        name: item.name,
+        scope: item.scope as "search" | "planner",
+        isPublic: item.isPublic,
+        params: (item.params as Record<string, string>) ?? {},
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  async listFollowers(userId: string): Promise<CommunityFollowListItem[]> {
+    await this.ensureCommunityProfileVisible(userId);
+
+    const follows = await this.prisma.follow.findMany({
+      where: { followingId: userId },
+      orderBy: { createdAt: "desc" },
+      take: AuthService.COMMUNITY_FOLLOW_LIST_LIMIT,
+      select: {
+        follower: {
+          select: {
+            id: true,
+            displayName: true,
+            bio: true,
+            avatarKey: true,
+            showCommunityProfile: true,
+          },
+        },
+      },
+    });
+
+    return follows
+      .map((follow) => follow.follower)
+      .filter(
+        (follower): follower is NonNullable<typeof follower> =>
+          !!follower && follower.showCommunityProfile && !!follower.displayName,
+      )
+      .map((follower) => ({
+        id: follower.id,
+        displayName: follower.displayName!,
+        bio: follower.bio,
+        avatarUrl: this.storage.resolvePublicUrl(follower.avatarKey),
+      }));
+  }
+
+  async listFollowing(userId: string): Promise<CommunityFollowListItem[]> {
+    await this.ensureCommunityProfileVisible(userId);
+
+    const follows = await this.prisma.follow.findMany({
+      where: { followerId: userId },
+      orderBy: { createdAt: "desc" },
+      take: AuthService.COMMUNITY_FOLLOW_LIST_LIMIT,
+      select: {
+        following: {
+          select: {
+            id: true,
+            displayName: true,
+            bio: true,
+            avatarKey: true,
+            showCommunityProfile: true,
+          },
+        },
+      },
+    });
+
+    return follows
+      .map((follow) => follow.following)
+      .filter(
+        (following): following is NonNullable<typeof following> =>
+          !!following && following.showCommunityProfile && !!following.displayName,
+      )
+      .map((following) => ({
+        id: following.id,
+        displayName: following.displayName!,
+        bio: following.bio,
+        avatarUrl: this.storage.resolvePublicUrl(following.avatarKey),
+      }));
+  }
+
+  async getFollowStatus(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      return { isFollowing: false, canFollow: false };
+    }
+
+    await this.ensureCommunityProfileVisible(targetUserId);
+
+    const follow = await this.prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: currentUserId,
+          followingId: targetUserId,
+        },
+      },
+      select: { id: true },
+    });
+
+    return {
+      isFollowing: !!follow,
+      canFollow: true,
+    };
+  }
+
+  async followUser(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      throw new BadRequestException("Vous ne pouvez pas vous suivre vous-meme.");
+    }
+
+    await this.ensureCommunityProfileVisible(targetUserId);
+
+    await this.prisma.follow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId: currentUserId,
+          followingId: targetUserId,
+        },
+      },
+      create: {
+        followerId: currentUserId,
+        followingId: targetUserId,
+      },
+      update: {},
+    });
+
+    const followersCount = await this.prisma.follow.count({
+      where: { followingId: targetUserId },
+    });
+
+    return {
+      isFollowing: true,
+      followersCount,
+    };
+  }
+
+  async unfollowUser(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      throw new BadRequestException("Operation invalide.");
+    }
+
+    await this.prisma.follow.deleteMany({
+      where: {
+        followerId: currentUserId,
+        followingId: targetUserId,
+      },
+    });
+
+    const followersCount = await this.prisma.follow.count({
+      where: { followingId: targetUserId },
+    });
+
+    return {
+      isFollowing: false,
+      followersCount,
     };
   }
 
@@ -837,6 +1078,7 @@ export class AuthService {
     showCommunityProfile: boolean;
     showCommunityContributions: boolean;
     showCommunityPhotos: boolean;
+    showPublicSearches: boolean;
     createdAt: Date;
     homeAerodrome?: { id: string; name: string; icaoCode: string | null } | null;
   }): UserProfile {
@@ -853,9 +1095,70 @@ export class AuthService {
       showCommunityProfile: user.showCommunityProfile,
       showCommunityContributions: user.showCommunityContributions,
       showCommunityPhotos: user.showCommunityPhotos,
+      showPublicSearches: user.showPublicSearches,
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
     };
+  }
+
+  private async ensureCommunityProfileVisible(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        showCommunityProfile: true,
+      },
+    });
+
+    if (!user || !user.showCommunityProfile || !user.displayName) {
+      throw new NotFoundException("Profil communautaire introuvable.");
+    }
+
+    return user;
+  }
+
+  private computeEstimatedDistanceNm(
+    visits: Array<{
+      aerodrome: {
+        latitude: number;
+        longitude: number;
+      };
+    }>,
+  ): number {
+    let total = 0;
+
+    for (let index = 1; index < visits.length; index += 1) {
+      const previous = visits[index - 1]!.aerodrome;
+      const current = visits[index]!.aerodrome;
+      total += this.haversineNm(
+        previous.latitude,
+        previous.longitude,
+        current.latitude,
+        current.longitude,
+      );
+    }
+
+    return total;
+  }
+
+  private haversineNm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const earthRadiusNm = 3440.065;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusNm * c;
   }
 
   // ─── RGPD : export des données (Article 20) ────────────────
@@ -876,6 +1179,7 @@ export class AuthService {
         showCommunityProfile: true,
         showCommunityContributions: true,
         showCommunityPhotos: true,
+        showPublicSearches: true,
         createdAt: true,
         homeAerodromeId: true,
         visits: {
@@ -926,6 +1230,7 @@ export class AuthService {
         showCommunityProfile: user.showCommunityProfile,
         showCommunityContributions: user.showCommunityContributions,
         showCommunityPhotos: user.showCommunityPhotos,
+        showPublicSearches: user.showPublicSearches,
         createdAt: user.createdAt.toISOString(),
         homeAerodromeId: user.homeAerodromeId,
       },
