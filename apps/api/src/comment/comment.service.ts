@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from "@nestjs/common";
+import { PhotoStatus } from "@aerodirectory/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { NotificationService } from "../notification/notification.service";
@@ -480,7 +481,7 @@ export class CommentService {
       if (existingPendingReport) {
         throw new BadRequestException("Vous avez déjà signalé ce commentaire.");
       }
-    } else {
+    } else if (input.targetType === "correction") {
       const correction = await this.prisma.correction.findUnique({
         where: { id: input.targetId },
         select: {
@@ -516,6 +517,43 @@ export class CommentService {
 
       if (existingPendingReport) {
         throw new BadRequestException("Vous avez déjà signalé cette contribution.");
+      }
+    } else {
+      const photo = await this.prisma.photo.findUnique({
+        where: { id: input.targetId },
+        select: {
+          id: true,
+          userId: true,
+          aerodromeId: true,
+          status: true,
+        },
+      });
+
+      if (!photo || photo.aerodromeId !== aerodromeId) {
+        throw new NotFoundException("Photo introuvable.");
+      }
+
+      if (photo.userId === userId) {
+        throw new BadRequestException("Vous ne pouvez pas signaler votre propre photo.");
+      }
+
+      if (photo.status !== PhotoStatus.READY) {
+        throw new BadRequestException("Cette photo n'est pas visible publiquement.");
+      }
+
+      const existingPendingReport = await this.prisma.report.findFirst({
+        where: {
+          userId,
+          aerodromeId,
+          targetType: "photo",
+          targetId: input.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      if (existingPendingReport) {
+        throw new BadRequestException("Vous avez déjà signalé cette photo.");
       }
     }
 

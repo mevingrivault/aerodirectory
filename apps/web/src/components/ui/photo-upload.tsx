@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ImagePlus,
   Loader2,
+  ShieldAlert,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -54,6 +55,10 @@ export function PhotoUpload({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -230,10 +235,46 @@ export function PhotoUpload({
     }
   };
 
+  const handleReport = async (photoId: string) => {
+    const reason = window.prompt("Pourquoi signalez-vous cette photo ?");
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await apiClient.post(`/aerodromes/${aerodromeId}/reports`, {
+        targetType: "photo",
+        targetId: photoId,
+        reason: reason.trim(),
+      });
+      setActionMsg({
+        type: "success",
+        message: "Merci, votre signalement a bien été transmis à la modération.",
+      });
+    } catch (error) {
+      setActionMsg({
+        type: "error",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Impossible de signaler cette photo pour le moment.",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
       {existingPhotos.length > 0 && (
         <div className="space-y-3">
+          {actionMsg && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                actionMsg.type === "success"
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-destructive/50 bg-destructive/10 text-destructive"
+              }`}
+            >
+              {actionMsg.message}
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visiblePhotos.map((photo) => {
               const absoluteIndex = existingPhotos.findIndex((item) => item.id === photo.id);
@@ -275,6 +316,20 @@ export function PhotoUpload({
                       aria-label="Supprimer"
                     >
                       <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  {currentUserId && currentUserId !== photo.user.id && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleReport(photo.id);
+                      }}
+                      className="absolute left-2 top-2 z-10 hidden h-8 items-center justify-center gap-1 rounded-full bg-black/60 px-3 text-xs text-white transition-colors hover:bg-amber-600 group-hover:flex"
+                      aria-label="Signaler"
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Signaler
                     </button>
                   )}
                 </div>
@@ -422,6 +477,18 @@ export function PhotoUpload({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {currentUserId && currentUserId !== currentLightboxPhoto.user.id && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-white hover:bg-white/10 hover:text-white"
+                      onClick={() => handleReport(currentLightboxPhoto.id)}
+                    >
+                      <ShieldAlert className="mr-2 h-4 w-4" />
+                      Signaler
+                    </Button>
+                  )}
                   <span className="text-xs text-white/70">
                     {(lightboxIndex ?? 0) + 1} / {existingPhotos.length}
                   </span>

@@ -467,7 +467,7 @@ model Report {
   id            String        @id @default(cuid())
   userId        String
   aerodromeId   String
-  targetType    String // "comment" | "correction"
+  targetType    String // "comment" | "correction" | "photo"
   targetId      String
   reason        String
   contentStatus ContentStatus @default(PENDING)

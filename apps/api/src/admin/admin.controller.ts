@@ -16,6 +16,7 @@ import {
   AdminReportsQuerySchema,
   AdminCorrectionsQuerySchema,
   AdminMailEventsQuerySchema,
+  AdminContentAuditQuerySchema,
   AdminCommentsQuerySchema,
   AdminUsersQuerySchema,
   AdminImportOpenAirSchema,
@@ -31,6 +32,7 @@ import {
   type AdminReportsQueryInput,
   type AdminCorrectionsQueryInput,
   type AdminMailEventsQueryInput,
+  type AdminContentAuditQueryInput,
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
   type AdminImportOpenAirInput,
@@ -197,6 +199,15 @@ export class AdminController {
     query: AdminMailEventsQueryInput,
   ) {
     const { data, total } = await this.admin.listMailEvents(query);
+    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get("content-audit")
+  async contentAudit(
+    @Query(new ZodValidationPipe(AdminContentAuditQuerySchema))
+    query: AdminContentAuditQueryInput,
+  ) {
+    const { data, total } = await this.admin.listContentAuditLogs(query);
     return paginated(data, total, query.page ?? 1, query.limit ?? 20);
   }
 

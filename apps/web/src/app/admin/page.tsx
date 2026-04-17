@@ -246,7 +246,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <Link href="/admin/users">
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
@@ -298,7 +298,7 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Traiter les signalements utilisateur (commentaires et corrections).
+              Traiter les signalements utilisateur sur les commentaires, corrections et photos.
             </CardContent>
           </Card>
         </Link>
@@ -313,6 +313,20 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               Publier ou rejeter les enrichissements communautaires sans toucher aux données importées.
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/audit">
+          <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Clock3 className="h-5 w-5" />
+                Journal d&apos;audit
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Consulter les validations, suppressions, bannissements et modérations sur les contenus communautaires.
             </CardContent>
           </Card>
         </Link>

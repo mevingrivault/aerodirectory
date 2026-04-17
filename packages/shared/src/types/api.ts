@@ -304,7 +304,7 @@ export interface AdminPhotoListItem {
 
 export interface AdminReportListItem {
   id: string;
-  targetType: "comment" | "correction";
+  targetType: "comment" | "correction" | "photo";
   targetId: string;
   reason: string;
   contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
@@ -326,7 +326,7 @@ export interface AdminReportListItem {
     email: string;
   };
   targetPreview: string | null;
-  targetStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" | null;
+  targetStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" | "READY" | "SCANNING" | null;
 }
 
 export interface AdminMailEventItem {
@@ -337,6 +337,37 @@ export interface AdminMailEventItem {
   recipientMasked: string | null;
   recipientDomain: string | null;
   errorMessage: string | null;
+}
+
+export interface AdminContentAuditItem {
+  id: string;
+  createdAt: string;
+  actionType:
+    | "COMMENT_DELETE"
+    | "COMMENT_RESTORE"
+    | "CORRECTION_APPROVE"
+    | "CORRECTION_REJECT"
+    | "PHOTO_APPROVE"
+    | "PHOTO_REJECT"
+    | "REPORT_APPROVE"
+    | "REPORT_REJECT"
+    | "USER_BAN"
+    | "USER_UNBAN"
+    | "USER_DELETE";
+  targetType: "comment" | "correction" | "photo" | "user";
+  targetId: string;
+  targetSummary: string | null;
+  reason: string | null;
+  actor: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  } | null;
 }
 
 export interface SavedSearchItem {
