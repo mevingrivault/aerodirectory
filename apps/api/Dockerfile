@@ -16,7 +16,9 @@ FROM fetch AS builder
 WORKDIR /app
 
 COPY . .
-RUN pnpm install --frozen-lockfile --offline
+RUN pnpm install --frozen-lockfile --offline && \
+    find /app/node_modules/.pnpm -maxdepth 6 -path "*/altcha-lib/dist/cjs" -type d | \
+    while read d; do [ ! -f "$d/package.json" ] && printf '{"type":"commonjs"}\n' > "$d/package.json"; done; true
 
 RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/database build && \
