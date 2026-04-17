@@ -65,20 +65,28 @@ interface AerodromeDetail {
   id: string;
   name: string;
   icaoCode: string | null;
+  iataCode: string | null;
   latitude: number;
   longitude: number;
   elevation: number | null;
+  magneticDeclination: number | null;
   city: string | null;
   region: string | null;
   department: string | null;
   countryCode: string;
   aerodromeType: string;
   status: string;
+  ppr: boolean;
+  privateUse: boolean;
+  skydiveActivity: boolean;
+  winchOnly: boolean;
   description: string | null;
   altIdentifier: string | null;
   aipLink: string | null;
   vacLink: string | null;
   websiteUrl: string | null;
+  handlingFacilities: number[];
+  passengerFacilities: number[];
   hasRestaurant: boolean;
   hasBikes: boolean;
   hasTransport: boolean;
@@ -93,7 +101,11 @@ interface AerodromeDetail {
     identifier: string;
     length: number;
     width: number | null;
+    trueHeading: number | null;
+    mainRunway: boolean;
+    operations: number | null;
     surface: string;
+    surfaceComposition: number[];
     lighting: boolean;
     remarks: string | null;
   }[];
@@ -101,6 +113,7 @@ interface AerodromeDetail {
     id: string;
     type: string;
     mhz: number;
+    isPrimary: boolean;
     callsign: string | null;
     notes: string | null;
   }[];
@@ -111,6 +124,16 @@ interface AerodromeDetail {
     selfService: boolean;
     availabilityHours: string | null;
     paymentType: string;
+  }[];
+  corrections: {
+    id: string;
+    field: string;
+    currentValue: string | null;
+    proposedValue: string;
+    reason: string | null;
+    createdAt: string;
+    reviewedAt: string | null;
+    user: { id: string; displayName: string | null };
   }[];
   _count: { visits: number; comments: number };
 }
@@ -312,6 +335,79 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: "FERMÉ",
 };
 
+const SURFACE_LABELS: Record<number, string> = {
+  0: "Asphalte",
+  1: "Béton",
+  2: "Herbe",
+  3: "Terre",
+  4: "Gravier",
+  5: "Eau",
+};
+
+// openAIP runway operations codes
+const RUNWAY_OPERATIONS_LABELS: Record<number, string> = {
+  0: "VFR de jour",
+  1: "VFR de nuit",
+  2: "IFR",
+  3: "VFR & IFR",
+};
+
+// openAIP handling facilities codes
+const HANDLING_LABELS: Record<number, string> = {
+  0: "Avitaillement",
+  1: "Hangarage",
+  2: "Dégivrage",
+  3: "Remorquage",
+  4: "Assistance technique",
+  5: "Service météo",
+};
+
+// openAIP passenger facilities codes
+const PASSENGER_LABELS: Record<number, string> = {
+  0: "Terminal passagers",
+  1: "Hôtel",
+  2: "Transport",
+  3: "Taxi",
+  4: "Location voiture",
+  5: "Banque / Distributeur",
+  6: "Douanes",
+  7: "Santé",
+};
+
+const COMMUNITY_FIELD_OPTIONS = [
+  { value: "name", label: "Nom" },
+  { value: "city", label: "Ville" },
+  { value: "region", label: "Région" },
+  { value: "description", label: "Description" },
+  { value: "website", label: "Site web" },
+  { value: "aip", label: "Lien AIP" },
+  { value: "vac", label: "Lien VAC" },
+  { value: "restaurant", label: "Restauration" },
+  { value: "transport", label: "Transport" },
+  { value: "hébergement", label: "Hébergement" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "hangars", label: "Hangars" },
+  { value: "runways", label: "Pistes" },
+  { value: "frequencies", label: "Fréquences" },
+  { value: "fuels", label: "Carburants" },
+  { value: "local", label: "Info locale / conseil pilote" },
+  { value: "other", label: "Autre" },
+] as const;
+
+function formatDeclination(value: number | null) {
+  if (value == null) return null;
+  if (value === 0) return "0°";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}°`;
+}
+
+function formatOpenAipCode(code: number) {
+  return `Code ${code}`;
+}
+
+function formatCommunityFieldLabel(field: string) {
+  return COMMUNITY_FIELD_OPTIONS.find((option) => option.value === field)?.label ?? field;
+}
+
 export default function AerodromeDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -319,9 +415,17 @@ export default function AerodromeDetailPage() {
   const queryClient = useQueryClient();
   const solveAltcha = useAltchaAuto();
   const [commentText, setCommentText] = useState("");
+  const [correctionField, setCorrectionField] = useState<(typeof COMMUNITY_FIELD_OPTIONS)[number]["value"]>("description");
+  const [customCorrectionField, setCustomCorrectionField] = useState("");
+  const [correctionValue, setCorrectionValue] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [commentActionAlert, setCommentActionAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [correctionActionAlert, setCorrectionActionAlert] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
@@ -473,6 +577,10 @@ export default function AerodromeDetailPage() {
     enabled: !!user,
   });
 
+  const [optimisticVisitStatus, setOptimisticVisitStatus] = useState<string | null>(null);
+  const [visitActionStarted, setVisitActionStarted] = useState(false);
+  const [isVisitUpdating, setIsVisitUpdating] = useState(false);
+
   const addToListMutation = useMutation({
     mutationFn: (listId: string) =>
       apiClient.post(`/lists/${listId}/items`, { aerodromeId: id }),
@@ -497,12 +605,17 @@ export default function AerodromeDetailPage() {
     },
   });
 
-  const currentVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+  const serverVisitStatus = visitsRes?.data?.find((v) => v.aerodromeId === id)?.status ?? null;
+  const currentVisitStatus = optimisticVisitStatus ?? serverVisitStatus;
   const userLists = listsRes?.data ?? [];
+
+  useEffect(() => {
+    setOptimisticVisitStatus(null);
+  }, [serverVisitStatus, id]);
 
   // Auto-mark as SEEN on page open (don't downgrade VISITED/FAVORITE)
   useEffect(() => {
-    if (user && currentVisitStatus === null) {
+    if (user && !visitActionStarted && serverVisitStatus === null) {
       apiClient
         .put(`/visits/${id}`, { status: "SEEN" })
         .then(async () => {
@@ -514,7 +627,7 @@ export default function AerodromeDetailPage() {
         })
         .catch(() => {});
     }
-  }, [user, id, currentVisitStatus, refetchVisit, queryClient]);
+  }, [user, id, serverVisitStatus, visitActionStarted, refetchVisit, queryClient]);
 
   useEffect(() => {
     if (photosRes?.data) setPhotos(photosRes.data);
@@ -523,20 +636,67 @@ export default function AerodromeDetailPage() {
   const events = eventsRes?.data ?? [];
   const corrections = correctionsRes?.data ?? [];
   const comments = commentsRes?.data ?? [];
+  const communityCorrections = ad?.corrections ?? [];
   const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
   const nearbyAerodromes = allNearby.filter((n) => n.aerodromeType !== "ULTRALIGHT_FIELD").slice(0, 6);
   const nearbyUlm = allNearby.filter((n) => n.aerodromeType === "ULTRALIGHT_FIELD").slice(0, 6);
 
   const handleVisit = async (status: string) => {
+    setVisitActionStarted(true);
+    setIsVisitUpdating(true);
     let nextStatus = status;
     if (status === "FAVORITE" && currentVisitStatus === "FAVORITE") nextStatus = "VISITED";
     else if (status === "VISITED" && currentVisitStatus === "VISITED") nextStatus = "SEEN";
-    await apiClient.put(`/visits/${id}`, { status: nextStatus });
-    await Promise.all([
-      refetchVisit(),
-      queryClient.invalidateQueries({ queryKey: ["visits"] }),
-      queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
-    ]);
+    setOptimisticVisitStatus(nextStatus);
+
+    try {
+      await apiClient.put(`/visits/${id}`, { status: nextStatus });
+      await Promise.all([
+        refetchVisit(),
+        queryClient.invalidateQueries({ queryKey: ["visits"] }),
+        queryClient.invalidateQueries({ queryKey: ["aerodex-stats"] }),
+      ]);
+    } catch (error) {
+      setOptimisticVisitStatus(serverVisitStatus);
+      throw error;
+    } finally {
+      setIsVisitUpdating(false);
+    }
+  };
+
+  const handleSubmitCorrection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const field = correctionField === "other" ? customCorrectionField.trim() : correctionField;
+    if (!field || !correctionValue.trim()) return;
+
+    setCorrectionActionAlert(null);
+
+    try {
+      await apiClient.post(`/aerodromes/${id}/corrections`, {
+        field,
+        proposedValue: correctionValue.trim(),
+        reason: correctionReason.trim() || undefined,
+      });
+
+      setCorrectionValue("");
+      setCorrectionReason("");
+      setCustomCorrectionField("");
+      setCorrectionField("description");
+      setCorrectionActionAlert({
+        type: "success",
+        message:
+          "Votre contribution a bien été enregistrée. Elle sera visible publiquement après validation par un admin.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["aerodrome", id] });
+    } catch (error) {
+      setCorrectionActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible d'envoyer cette contribution pour le moment.",
+      });
+    }
   };
 
   const isInList = (list: UserAerodromeList) =>
@@ -685,15 +845,51 @@ export default function AerodromeDetailPage() {
     }
   };
 
+  const handleReportCorrection = async (correctionId: string) => {
+    const reason = window.prompt("Pourquoi signalez-vous cette contribution ?");
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await apiClient.post(`/aerodromes/${id}/reports`, {
+        targetType: "correction",
+        targetId: correctionId,
+        reason: reason.trim(),
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["aerodrome", id] });
+      setCorrectionActionAlert({
+        type: "success",
+        message: "La contribution a été signalée et masquée en attendant modération.",
+      });
+    } catch (error) {
+      setCorrectionActionAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Impossible de signaler cette contribution.",
+      });
+    }
+  };
+
   const renderCommentCard = (comment: Comment, nested = false) => (
     <div
       key={comment.id}
       className={`rounded-md border p-3 ${nested ? "bg-muted/30 ml-4 mt-3" : ""}`}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-medium text-sm">
-          {comment.user.displayName || "Anonyme"}
-        </span>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="font-medium text-sm">
+            {comment.user.displayName ? (
+              <Link
+                href={`/community/${comment.user.id}`}
+                className="hover:text-primary hover:underline"
+              >
+                {comment.user.displayName}
+              </Link>
+            ) : (
+              "Membre"
+            )}
+          </span>
         <span className="text-xs text-muted-foreground">
           {new Date(comment.createdAt).toLocaleDateString("fr-FR")}
         </span>
@@ -889,6 +1085,7 @@ export default function AerodromeDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={isVisitUpdating}
                   className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
                   onClick={() => handleVisit("VISITED")}
                 >
@@ -897,6 +1094,7 @@ export default function AerodromeDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={isVisitUpdating}
                   className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
                   onClick={() => handleVisit("FAVORITE")}
                 >
@@ -964,6 +1162,224 @@ export default function AerodromeDetailPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5" /> Informations aéronautiques
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {ad.icaoCode && <Badge variant="outline">ICAO {ad.icaoCode}</Badge>}
+              {ad.iataCode && <Badge variant="outline">IATA {ad.iataCode}</Badge>}
+              {ad.altIdentifier && <Badge variant="outline">Alt. {ad.altIdentifier}</Badge>}
+              {ad.ppr && <Badge variant="secondary">PPR requis</Badge>}
+              {ad.privateUse && <Badge variant="secondary">Usage privé</Badge>}
+              {ad.skydiveActivity && <Badge variant="secondary">Activité parachutage</Badge>}
+              {ad.winchOnly && <Badge variant="secondary">Treuil uniquement</Badge>}
+              {ad.magneticDeclination != null && (
+                <Badge variant="outline">Déclinaison {formatDeclination(ad.magneticDeclination)}</Badge>
+              )}
+            </div>
+
+            {(ad.handlingFacilities.length > 0 || ad.passengerFacilities.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {ad.handlingFacilities.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Handling</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ad.handlingFacilities.map((code) => (
+                        <Badge key={`handling-${code}`} variant="outline">
+                          {HANDLING_LABELS[code] ?? `Code ${code}`}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {ad.passengerFacilities.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Services passagers</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ad.passengerFacilities.map((code) => (
+                        <Badge key={`passenger-${code}`} variant="outline">
+                          {PASSENGER_LABELS[code] ?? `Code ${code}`}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
+              Elles complètent la fiche sans modifier la donnée importée.
+            </div>
+
+            {correctionActionAlert && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  correctionActionAlert.type === "success"
+                    ? "border-green-300 bg-green-50 text-green-800"
+                    : "border-red-300 bg-red-50 text-red-800"
+                }`}
+              >
+                {correctionActionAlert.message}
+              </div>
+            )}
+
+            {user ? (
+              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
+                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Type de contribution</label>
+                    <select
+                      value={correctionField}
+                      onChange={(event) =>
+                        setCorrectionField(
+                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
+                        )
+                      }
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Proposition</label>
+                    <textarea
+                      value={correctionValue}
+                      onChange={(event) => setCorrectionValue(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
+                    />
+                  </div>
+                </div>
+
+                {correctionField === "other" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Champ concerné</label>
+                    <Input
+                      value={customCorrectionField}
+                      onChange={(event) => setCustomCorrectionField(event.target.value)}
+                      maxLength={100}
+                      placeholder="Ex. procédures locales, accès, horaires..."
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Contexte ou justification</label>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Optionnel : source, précision locale, explication..."
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Votre proposition sera relue avant publication.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !correctionValue.trim() ||
+                      (correctionField === "other" && !customCorrectionField.trim())
+                    }
+                  >
+                    Proposer une contribution
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline">
+                  Connectez-vous
+                </Link>{" "}
+                pour proposer une correction ou un enrichissement.
+              </p>
+            )}
+
+            {communityCorrections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucune contribution communautaire publiée pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {communityCorrections.map((correction) => (
+                  <div key={correction.id} className="rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {formatCommunityFieldLabel(correction.field)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                            par{" "}
+                            {correction.user.displayName ? (
+                              <Link
+                                href={`/community/${correction.user.id}`}
+                                className="hover:text-primary hover:underline"
+                              >
+                                {correction.user.displayName}
+                              </Link>
+                            ) : (
+                              "Membre"
+                            )}{" "}
+                            le{" "}
+                              {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
+                            </span>
+                        </div>
+                        {correction.currentValue && (
+                          <p className="text-xs text-muted-foreground">
+                            Référence officielle : {correction.currentValue}
+                          </p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
+                        {correction.reason && (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            Contexte : {correction.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      {user && user.id !== correction.user.id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReportCorrection(correction.id)}
+                        >
+                          Signaler
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Runways */}
         <Card>
           <CardHeader>
@@ -977,17 +1393,32 @@ export default function AerodromeDetailPage() {
             ) : (
               <div className="space-y-3">
                 {ad.runways.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between rounded-md border p-3">
-                    <div>
-                      <span className="font-mono font-bold">{r.identifier}</span>
-                      <span className="ml-2 text-muted-foreground">
+                  <div key={r.id} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="font-mono font-bold">{r.identifier}</span>
+                        <span className="ml-2 text-muted-foreground">
                         {r.length}m × {r.width ?? "?"}m
-                      </span>
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">{r.surface}</Badge>
+                      {r.mainRunway && <Badge variant="secondary">Principale</Badge>}
                       {r.lighting && <Badge variant="secondary">Balisée</Badge>}
                     </div>
+                    {(r.trueHeading != null || r.operations != null || r.surfaceComposition.length > 0 || r.remarks) && (
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+                        {r.trueHeading != null && <span>QFU vrai {r.trueHeading}°</span>}
+                        {r.operations != null && <span>{RUNWAY_OPERATIONS_LABELS[r.operations] ?? `Opérations code ${r.operations}`}</span>}
+                        {r.surfaceComposition.length > 0 && (
+                          <span>
+                            Composition {r.surfaceComposition.map((code) => SURFACE_LABELS[code] ?? formatOpenAipCode(code)).join(", ")}
+                          </span>
+                        )}
+                        {r.remarks && <span>{r.remarks}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1008,11 +1439,13 @@ export default function AerodromeDetailPage() {
             ) : (
               <div className="space-y-2">
                 {ad.frequencies.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between">
-                    <span>
-                      <Badge variant="outline" className="mr-2">{f.type}</Badge>
-                      {f.callsign}
-                    </span>
+                  <div key={f.id} className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{f.type}</Badge>
+                      <span>{f.callsign}</span>
+                      {f.isPrimary && <Badge variant="secondary">Principale</Badge>}
+                      {f.notes && <span className="text-sm text-muted-foreground">{f.notes}</span>}
+                    </div>
                     <span className="font-mono">{f.mhz.toFixed(3)} MHz</span>
                   </div>
                 ))}

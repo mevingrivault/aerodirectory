@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { Prisma, type VisitStatus } from "@aerodirectory/database";
 import type {
   AircraftProfileInput,
   PlannerQueryInput,
@@ -90,7 +91,18 @@ export class PlannerService {
           }
         : {};
 
-    const aerodromes = await this.prisma.aerodrome.findMany({
+    const visitsClause = input.excludeVisited
+      ? {
+          visits: {
+            none: {
+              userId,
+              status: { in: ["VISITED", "FAVORITE"] as VisitStatus[] },
+            },
+          },
+        }
+      : {};
+
+    const aerodromes = (await this.prisma.aerodrome.findMany({
       where: {
         status: "OPEN",
         runways: {
@@ -105,12 +117,18 @@ export class PlannerService {
         ...(filters.hasBikes ? { hasBikes: true } : {}),
         ...(filters.hasAccommodation ? { hasAccommodation: true } : {}),
         ...fuelsClause,
+        ...visitsClause,
       },
       include: {
         runways: true,
         fuels: { where: { available: true } },
       },
-    });
+    })) as Prisma.AerodromeGetPayload<{
+      include: {
+        runways: true;
+        fuels: { where: { available: true } };
+      };
+    }>[];
 
     const fuelPricePerLiter = input.fuelPricePerLiter ?? 0;
     const results: PlannerResult[] = [];
@@ -125,6 +143,7 @@ export class PlannerService {
 
       // Skip departure aerodrome itself and anything beyond range
       if (distanceNm < 0.5) continue;
+      if (input.minDistanceNm && distanceNm < input.minDistanceNm) continue;
       if (distanceNm > maxOneWayNm) continue;
       if (input.maxDistanceNm && distanceNm > input.maxDistanceNm) continue;
 

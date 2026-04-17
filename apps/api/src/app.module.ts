@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
-import { ScheduleModule } from "@nestjs/schedule/dist";
+import { ScheduleModule } from "@nestjs/schedule";
 import { SyncModule } from "./sync/sync.module";
 import { AltchaModule } from "./altcha/altcha.module";
 import { CryptoModule } from "./common/crypto.module";
@@ -20,6 +20,7 @@ import { AdminModule } from "./admin/admin.module";
 import { PhotoModule } from "./photo/photo.module";
 import { NotificationModule } from "./notification/notification.module";
 import { ListModule } from "./list/list.module";
+import { AirspaceModule } from "./airspace/airspace.module";
 import { ThrottlerGuard } from "@nestjs/throttler";
 
 @Module({
@@ -62,6 +63,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
     PhotoModule,
     NotificationModule,
     ListModule,
+    AirspaceModule,
     SyncModule,
   ],
   providers: [

@@ -93,4 +93,12 @@ export class StorageService implements OnModuleInit {
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
   }
+
+  resolvePublicUrl(key: string | null | undefined): string | null {
+    if (!key) {
+      return null;
+    }
+
+    return this.publicUrl ? `${this.publicUrl}/${key}` : key;
+  }
 }

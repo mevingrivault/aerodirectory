@@ -35,8 +35,10 @@ export const PlannerQuerySchema = z.object({
   arrivalGroundMinutes: z.number().int().min(0).max(60).default(0),
 
   // Sorting & legacy
+  minDistanceNm: z.number().nonnegative().max(5000).optional(),
   maxDistanceNm: z.number().positive().max(5000).optional(),
   sortBy: z.enum(["time", "cost", "distance"]).default("time"),
+  excludeVisited: z.boolean().optional(),
 
   // Destination filters
   filters: z

@@ -42,6 +42,8 @@ export function getSourceScheduleDescription(source: SyncSource) {
   switch (source) {
     case "OPENAIP":
       return "Aérodromes openAIP, chaque nuit à 02:00";
+    case "AIRSPACES":
+      return "Espaces aériens openAIP, chaque nuit à 02:30";
     case "OSM":
       return "POI OSM + flags, chaque dimanche à 03:00";
     case "REGIONS":

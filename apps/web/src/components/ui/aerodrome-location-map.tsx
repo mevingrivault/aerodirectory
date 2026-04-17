@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Copy, Crosshair, ExternalLink, Map } from "lucide-react";
 
-type MapStyleKey = "default" | "terrain" | "light";
+type MapStyleKey = "default" | "satellite" | "hybrid";
 
 interface AerodromeLocationMapProps {
   aerodromeId: string;
@@ -19,31 +19,52 @@ interface AerodromeLocationMapProps {
 
 const MAP_STYLE_OPTIONS: Array<{ key: MapStyleKey; label: string }> = [
   { key: "default", label: "Plan" },
-  { key: "terrain", label: "Relief" },
-  { key: "light", label: "Clair" },
+  { key: "satellite", label: "Satellite" },
+  { key: "hybrid", label: "Hybride" },
 ];
 
 function buildRasterStyle(style: MapStyleKey) {
-  const sourceByStyle: Record<
-    MapStyleKey,
-    { tiles: string[]; attribution: string }
-  > = {
+  if (style === "hybrid") {
+    return {
+      version: 8,
+      sources: {
+        base: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          ],
+          tileSize: 256,
+          attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+        },
+        labels: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+          ],
+          tileSize: 256,
+        },
+      },
+      layers: [
+        { id: "base", type: "raster", source: "base" },
+        { id: "labels", type: "raster", source: "labels" },
+      ],
+    };
+  }
+
+  const tilesByStyle: Record<"default" | "satellite", { tiles: string[]; attribution: string }> = {
     default: {
       tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       attribution: "&copy; OpenStreetMap contributors",
     },
-    terrain: {
-      tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
-      attribution:
-        "Kartendaten: &copy; OpenStreetMap contributors, SRTM | Kartendarstellung: &copy; OpenTopoMap",
-    },
-    light: {
-      tiles: ["https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    satellite: {
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
     },
   };
 
-  const source = sourceByStyle[style];
+  const source = tilesByStyle[style];
 
   return {
     version: 8,
@@ -55,13 +76,7 @@ function buildRasterStyle(style: MapStyleKey) {
         attribution: source.attribution,
       },
     },
-    layers: [
-      {
-        id: "raster",
-        type: "raster",
-        source: "raster",
-      },
-    ],
+    layers: [{ id: "raster", type: "raster", source: "raster" }],
   };
 }
 

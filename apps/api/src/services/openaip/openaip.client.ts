@@ -77,6 +77,34 @@ export interface OpenAipFrequency {
   primary?: boolean;
 }
 
+// Altitude reference: 0=MSL, 1=AGL, 2=FL (flight level)
+export interface OpenAipAltitude {
+  value: number;
+  unit: number; // 0=feet, 1=meters
+  referenceDatum: number;
+}
+
+export interface OpenAipAirspace {
+  _id: string;
+  name: string;
+  type: number;         // 0-26, see schema comments
+  icaoClass: number;    // 0=A,1=B,2=C,3=D,4=E,5=F,6=G,7=SPC
+  activity: number;     // 0=All, 1=Parachute, 2=Aerobatic, etc.
+  onDemand: boolean;
+  onRequest: boolean;
+  byNotam: boolean;
+  specialAgreement: boolean;
+  requestCompliance: boolean;
+  country: string;
+  geometry: {
+    type: "Polygon" | "MultiPolygon";
+    coordinates: number[][][] | number[][][][];
+  };
+  upperLimit: OpenAipAltitude;
+  lowerLimit: OpenAipAltitude;
+  remarks?: string;
+}
+
 // ─── Client ──────────────────────────────────────────────
 
 export class OpenAipClient {
@@ -126,21 +154,26 @@ export class OpenAipClient {
   }
 
   /**
-   * Fetch airspaces for a given country (future use).
+   * Fetch all airspaces for a given country, handling pagination automatically.
    */
-  async getAirspaces(country = "FR"): Promise<unknown[]> {
-    const allItems: unknown[] = [];
+  async getAirspaces(country = "FR"): Promise<OpenAipAirspace[]> {
+    const allItems: OpenAipAirspace[] = [];
     let page = 1;
     let totalPages = 1;
 
     do {
-      const response = await this.fetchPage<unknown>(
+      const response = await this.fetchPage<OpenAipAirspace>(
         "/airspaces",
         { country, page: String(page), limit: String(DEFAULT_PAGE_LIMIT) },
       );
 
       allItems.push(...response.items);
       totalPages = response.totalPages;
+
+      console.log(
+        `  [openAIP] Airspaces page ${page}/${totalPages} — ${response.items.length} items (total: ${allItems.length})`,
+      );
+
       page++;
     } while (page <= totalPages);
 

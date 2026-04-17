@@ -36,6 +36,7 @@ export default function RegisterPage() {
   const [showRules, setShowRules] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const [communityConsent, setCommunityConsent] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,6 +76,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!communityConsent) {
+      setError("Vous devez accepter les reglages communautaires pour creer un compte.");
+      return;
+    }
+
     const altcha = altchaRef.current?.getPayload() ?? altchaPayload ?? undefined;
     if (!altcha) {
       setError("Veuillez compléter la vérification anti-robot.");
@@ -85,7 +91,13 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const message = await register(email, password, displayName.trim(), altcha);
+      const message = await register(
+        email,
+        password,
+        displayName.trim(),
+        communityConsent,
+        altcha,
+      );
       setSuccess(message);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message.toLowerCase() : "";
@@ -303,6 +315,24 @@ export default function RegisterPage() {
                   }}
                 />
 
+                <label className="block rounded-md border p-3 text-sm">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={communityConsent}
+                      onChange={(e) => setCommunityConsent(e.target.checked)}
+                      required
+                    />
+                    <span className="text-muted-foreground">
+                      J&apos;accepte les reglages communautaires. Mon profil public
+                      reste masque par defaut, mais mes commentaires et mes photos
+                      validees sont publics par defaut jusqu&apos;a ce que je change
+                      ces preferences dans mon profil.
+                    </span>
+                  </div>
+                </label>
+
                 <Button
                   type="submit"
                   className="w-full"
@@ -311,6 +341,7 @@ export default function RegisterPage() {
                     !displayNameOk ||
                     !allRulesOk ||
                     !confirmOk ||
+                    !communityConsent ||
                     emailStatus === "checking" ||
                     emailStatus === "taken"
                   }

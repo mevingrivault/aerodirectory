@@ -24,6 +24,10 @@ export const AerodromeSearchSchema = PaginationSchema.extend({
   hasBikes: z.coerce.boolean().optional(),
   hasTransport: z.coerce.boolean().optional(),
   nightOperations: z.coerce.boolean().optional(),
+  ppr: z.coerce.boolean().optional(),
+  privateUse: z.coerce.boolean().optional(),
+  skydiveActivity: z.coerce.boolean().optional(),
+  winchOnly: z.coerce.boolean().optional(),
   status: z.enum(["OPEN", "CLOSED", "RESTRICTED", "SEASONAL"]).optional(),
   // Geospatial
   lat: z.coerce.number().min(-90).max(90).optional(),

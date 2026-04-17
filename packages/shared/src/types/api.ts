@@ -93,11 +93,31 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  communityConsentAt: string | null;
   role: string;
   emailVerified: string | null;
   totpEnabled: boolean;
+  showCommunityProfile: boolean;
+  showCommunityContributions: boolean;
+  showCommunityPhotos: boolean;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+}
+
+export interface CommunityPublicProfile {
+  id: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+  contributionStats: {
+    comments: number;
+    corrections: number;
+    photos: number;
+  };
 }
 
 export interface AdminDashboardStats {
@@ -115,7 +135,7 @@ export interface AdminDashboardStats {
 
 export interface AdminSyncRunItem {
   id: string;
-  source: "OPENAIP" | "OSM" | "REGIONS" | "RGPD";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD";
   runType: "SCHEDULED" | "MANUAL" | "RETRY" | "RECOVERY";
   scope: string | null;
   status: "QUEUED" | "RETRY_SCHEDULED" | "IN_PROGRESS" | "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
@@ -131,7 +151,7 @@ export interface AdminSyncRunItem {
 }
 
 export interface AdminSyncSourceStatus {
-  source: "OPENAIP" | "OSM" | "REGIONS" | "RGPD";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD";
   schedule: string;
   description: string;
   nextPlannedAt: string | null;
@@ -146,6 +166,24 @@ export interface AdminSyncStatusResponse {
   running: boolean;
   sources: AdminSyncSourceStatus[];
   recentRuns: AdminSyncRunItem[];
+}
+
+export interface MailDiagnosticsSnapshot {
+  checkedAt: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  from: string;
+  appUrl: string;
+  user: string | null;
+  verified: boolean;
+  verifyError: string | null;
+}
+
+export interface AdminMailTestResponse {
+  sentTo: string;
+  messageId: string;
+  diagnostics: MailDiagnosticsSnapshot;
 }
 
 export interface AdminUserListItem {
@@ -196,6 +234,46 @@ export interface AdminCommentListItem {
     count: number;
     reasons: string[];
   };
+}
+
+export interface CommunityCorrectionItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
+}
+
+export interface AdminCorrectionListItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
 }
 
 export interface AdminPhotoListItem {

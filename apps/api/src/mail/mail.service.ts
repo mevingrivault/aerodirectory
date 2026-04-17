@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 import { AuditService } from "../audit/audit.service";
@@ -15,18 +15,80 @@ interface SyncSummaryMailRun {
   errorMessage?: string | null;
 }
 
+export interface MailDiagnosticsSnapshot {
+  checkedAt: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  from: string;
+  appUrl: string;
+  user: string | null;
+  verified: boolean;
+  verifyError: string | null;
+}
+
+function parseBoolean(value: string | boolean | undefined, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseNumber(value: string | number | undefined, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getErrorDetails(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+
+  const candidate = error as Error & {
+    code?: string;
+    response?: string;
+    responseCode?: number;
+    command?: string;
+  };
+
+  return [
+    candidate.message,
+    candidate.code ? `code=${candidate.code}` : null,
+    candidate.responseCode ? `responseCode=${candidate.responseCode}` : null,
+    candidate.command ? `command=${candidate.command}` : null,
+    candidate.response ? `response=${candidate.response}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function maskValue(value: string | undefined): string | null {
+  if (!value) return null;
+  if (value.length <= 4) return "*".repeat(value.length);
+  return `${value.slice(0, 2)}***${value.slice(-2)}`;
+}
+
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private readonly transporter: nodemailer.Transporter;
   private readonly from: string;
   private readonly appUrl: string;
+  private readonly smtpHost: string;
+  private readonly smtpPort: number;
+  private readonly smtpSecure: boolean;
+  private readonly smtpUser?: string;
 
   constructor(
     private readonly config: ConfigService,
     private readonly audit: AuditService,
   ) {
-    this.from = this.config.get<string>("MAIL_FROM", "Navventura <noreply@navventura.fr>");
+    this.from =
+      this.config.get<string>("MAIL_FROM") ||
+      this.config.get<string>("SMTP_FROM") ||
+      "Navventura <noreply@navventura.fr>";
 
     this.appUrl =
       this.config.get<string>("APP_URL") ||
@@ -35,15 +97,101 @@ export class MailService {
         ? "https://navventura.fr"
         : "http://localhost:3000");
 
+    this.smtpHost = this.config.get<string>("SMTP_HOST", "localhost");
+    this.smtpPort = parseNumber(this.config.get<string>("SMTP_PORT"), 587);
+    this.smtpSecure = parseBoolean(
+      this.config.get<string>("SMTP_SECURE"),
+      this.smtpPort === 465,
+    );
+    this.smtpUser = this.config.get<string>("SMTP_USER") || undefined;
+    const smtpPass = this.config.get<string>("SMTP_PASS") || undefined;
+
     this.transporter = nodemailer.createTransport({
-      host: this.config.get<string>("SMTP_HOST", "localhost"),
-      port: this.config.get<number>("SMTP_PORT", 587),
-      secure: this.config.get<boolean>("SMTP_SECURE", false),
-      auth: {
-        user: this.config.get<string>("SMTP_USER"),
-        pass: this.config.get<string>("SMTP_PASS"),
-      },
+      host: this.smtpHost,
+      port: this.smtpPort,
+      secure: this.smtpSecure,
+      auth:
+        this.smtpUser && smtpPass
+          ? {
+              user: this.smtpUser,
+              pass: smtpPass,
+            }
+          : undefined,
     });
+  }
+
+  async onModuleInit() {
+    try {
+      await this.transporter.verify();
+      this.logger.log(
+        `SMTP ready on ${this.smtpHost}:${this.smtpPort} (secure=${this.smtpSecure}, user=${this.smtpUser ?? "none"}, from=${this.from})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `SMTP verification failed for ${this.smtpHost}:${this.smtpPort} (secure=${this.smtpSecure}, from=${this.from}) | ${getErrorDetails(error)}`,
+      );
+    }
+  }
+
+  async getDiagnosticsSnapshot(): Promise<MailDiagnosticsSnapshot> {
+    try {
+      await this.transporter.verify();
+      return {
+        checkedAt: new Date().toISOString(),
+        host: this.smtpHost,
+        port: this.smtpPort,
+        secure: this.smtpSecure,
+        from: this.from,
+        appUrl: this.appUrl,
+        user: maskValue(this.smtpUser),
+        verified: true,
+        verifyError: null,
+      };
+    } catch (error) {
+      return {
+        checkedAt: new Date().toISOString(),
+        host: this.smtpHost,
+        port: this.smtpPort,
+        secure: this.smtpSecure,
+        from: this.from,
+        appUrl: this.appUrl,
+        user: maskValue(this.smtpUser),
+        verified: false,
+        verifyError: getErrorDetails(error),
+      };
+    }
+  }
+
+  async sendAdminTestEmail(
+    email: string,
+    payload: { requestedBy: string },
+  ): Promise<{ messageId: string; diagnostics: MailDiagnosticsSnapshot }> {
+    const diagnostics = await this.getDiagnosticsSnapshot();
+
+    const result = await this.transporter.sendMail({
+      from: this.from,
+      to: email,
+      subject: "Test e-mail Navventura",
+      html: `
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111827;">
+          <h2 style="margin-bottom:8px;">Test d'envoi e-mail</h2>
+          <p>Ce message a été envoyé depuis l'administration Navventura.</p>
+          <p><strong>Demandé par :</strong> ${payload.requestedBy}</p>
+          <p><strong>Date :</strong> ${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}</p>
+          <p><strong>SMTP :</strong> ${diagnostics.host}:${diagnostics.port} (secure=${diagnostics.secure ? "true" : "false"})</p>
+        </body>
+        </html>
+      `,
+      text: `Test d'envoi e-mail Navventura\n\nDemandé par : ${payload.requestedBy}\nDate : ${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}\nSMTP : ${diagnostics.host}:${diagnostics.port} (secure=${diagnostics.secure ? "true" : "false"})`,
+    });
+
+    return {
+      messageId: result.messageId,
+      diagnostics,
+    };
   }
 
   async sendEmailVerification(email: string, token: string): Promise<void> {
@@ -80,7 +228,7 @@ export class MailService {
       });
       await this.trackMailDelivery("email_verification", "sent", { email });
     } catch (err) {
-      this.logger.error(`Failed to send verification email to ${email}`, err);
+      this.logger.error(`Failed to send verification email to ${email} | ${getErrorDetails(err)}`);
       await this.trackMailDelivery("email_verification", "failed", {
         email,
         error: err,
@@ -122,7 +270,7 @@ export class MailService {
       });
       await this.trackMailDelivery("password_reset", "sent", { email });
     } catch (err) {
-      this.logger.error(`Failed to send password reset email to ${email}`, err);
+      this.logger.error(`Failed to send password reset email to ${email} | ${getErrorDetails(err)}`);
       await this.trackMailDelivery("password_reset", "failed", {
         email,
         error: err,
@@ -208,7 +356,7 @@ export class MailService {
         email: recipients[0] ?? null,
       });
     } catch (error) {
-      this.logger.error("Failed to send sync summary email", error);
+      this.logger.error(`Failed to send sync summary email | ${getErrorDetails(error)}`);
       await this.trackMailDelivery("sync_summary", "failed", {
         email: recipients[0] ?? null,
         error,

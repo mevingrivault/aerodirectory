@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Ban,
   Clock3,
+  FileText,
   ImagePlus,
   Mail,
   MessageSquare,
@@ -17,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import type {
+  AdminMailTestResponse,
   AdminMailEventItem,
   AdminDashboardStats,
   AdminSyncRunItem,
@@ -29,17 +31,22 @@ import { Button } from "@/components/ui/button";
 
 const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
   OPENAIP: "openAIP",
+  AIRSPACES: "Espaces aériens",
   OSM: "OSM + flags",
   REGIONS: "Régions / villes",
   RGPD: "Nettoyage RGPD",
 };
 
 export default function AdminPage() {
+  const apiBase = process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:4000/api/v1";
   const { user, loading } = useAuth();
   const router = useRouter();
   const [triggeringSource, setTriggeringSource] = useState<AdminSyncRunItem["source"] | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncMsgType, setSyncMsgType] = useState<"success" | "error">("success");
+  const [mailActionLoading, setMailActionLoading] = useState<"test" | "download" | null>(null);
+  const [mailMsg, setMailMsg] = useState<string | null>(null);
+  const [mailMsgType, setMailMsgType] = useState<"success" | "error">("success");
 
   useEffect(() => {
     if (!loading && user?.role !== "ADMIN") {
@@ -105,6 +112,63 @@ export default function AdminPage() {
       setSyncMsg(error instanceof Error ? error.message : "Impossible de lancer la synchronisation.");
     } finally {
       setTriggeringSource(null);
+    }
+  };
+
+  const handleSendTestMail = async () => {
+    setMailActionLoading("test");
+    setMailMsg(null);
+
+    try {
+      const response = await apiClient.post<AdminMailTestResponse>("/admin/mail/test");
+      setMailMsgType("success");
+      setMailMsg(
+        `Mail de test envoyé à ${response.data.sentTo}. Message ID : ${response.data.messageId}`,
+      );
+    } catch (error) {
+      setMailMsgType("error");
+      setMailMsg(
+        error instanceof Error ? error.message : "Impossible d'envoyer le mail de test.",
+      );
+    } finally {
+      setMailActionLoading(null);
+    }
+  };
+
+  const handleDownloadDiagnostics = async () => {
+    setMailActionLoading("download");
+    setMailMsg(null);
+
+    try {
+      const response = await fetch(`${apiBase}/admin/mail/diagnostics`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Impossible de télécharger le diagnostic.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const disposition = response.headers.get("Content-Disposition");
+      const fileNameMatch = disposition?.match(/filename=\"?([^"]+)\"?/i);
+      anchor.href = url;
+      anchor.download = fileNameMatch?.[1] || "navventura-mail-diagnostics.txt";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      setMailMsgType("success");
+      setMailMsg("Diagnostic téléchargé.");
+    } catch (error) {
+      setMailMsgType("error");
+      setMailMsg(
+        error instanceof Error ? error.message : "Impossible de télécharger le diagnostic.",
+      );
+    } finally {
+      setMailActionLoading(null);
     }
   };
 
@@ -182,7 +246,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Link href="/admin/users">
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
@@ -243,12 +307,12 @@ export default function AdminPage() {
           <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-xl">
-                <Shield className="h-5 w-5" />
-                Corrections
+                <FileText className="h-5 w-5" />
+                Contributions
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Valider ou rejeter les propositions de correction et d&apos;enrichissement communautaires.
+              Publier ou rejeter les enrichissements communautaires sans toucher aux données importées.
             </CardContent>
           </Card>
         </Link>
@@ -377,6 +441,37 @@ export default function AdminPage() {
                 l’adresse de surcouche configurée si tu définis{" "}
                 <code>SYNC_REPORT_EMAIL_OVERRIDE</code>.
               </p>
+              {mailMsg && (
+                <div
+                  className={`rounded-lg border px-4 py-3 text-sm ${
+                    mailMsgType === "error"
+                      ? "border-destructive/40 bg-destructive/5 text-destructive"
+                      : "border-green-600/30 bg-green-50 text-green-700"
+                  }`}
+                >
+                  {mailMsg}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleSendTestMail}
+                  disabled={mailActionLoading !== null}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  {mailActionLoading === "test" ? "Envoi..." : "Envoyer un mail de test"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadDiagnostics}
+                  disabled={mailActionLoading !== null}
+                >
+                  <Clock3 className="mr-2 h-4 w-4" />
+                  {mailActionLoading === "download"
+                    ? "Préparation..."
+                    : "Télécharger le diagnostic"}
+                </Button>
+              </div>
               <div className="space-y-2">
                 {mailEvents.map((event) => (
                   <div key={event.id} className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">

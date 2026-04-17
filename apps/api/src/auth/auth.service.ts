@@ -5,6 +5,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -30,6 +31,7 @@ import type {
   RegisterInput,
   LoginInput,
   AuthTokens,
+  CommunityPublicProfile,
   TotpSetupResponse,
   UserProfile,
   UpdateProfileInput,
@@ -113,6 +115,7 @@ export class AuthService {
         email: input.email,
         passwordHash,
         displayName: input.displayName,
+        communityConsentAt: new Date(),
       },
     });
 
@@ -566,7 +569,22 @@ export class AuthService {
       where: { id: userId },
       data: {
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
         ...(input.homeAerodromeId !== undefined ? { homeAerodromeId: input.homeAerodromeId } : {}),
+        ...(input.communityProfileConsentAcknowledged
+          ? {
+              communityConsentAt: new Date(),
+            }
+          : {}),
+        ...(input.showCommunityProfile !== undefined
+          ? { showCommunityProfile: input.showCommunityProfile }
+          : {}),
+        ...(input.showCommunityContributions !== undefined
+          ? { showCommunityContributions: input.showCommunityContributions }
+          : {}),
+        ...(input.showCommunityPhotos !== undefined
+          ? { showCommunityPhotos: input.showCommunityPhotos }
+          : {}),
       },
       include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
@@ -683,13 +701,142 @@ export class AuthService {
     return this.toProfile(user);
   }
 
+  async uploadAvatar(
+    userId: string,
+    file: {
+      buffer: Buffer;
+      ext: string;
+      mimeType: string;
+    },
+  ): Promise<UserProfile> {
+    const existingUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        avatarKey: true,
+      },
+    });
+
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.ext,
+      file.mimeType,
+      "avatars",
+    );
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        avatarKey: uploaded.key,
+        avatarMimeType: file.mimeType,
+      },
+      include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
+    });
+
+    if (existingUser.avatarKey && existingUser.avatarKey !== uploaded.key) {
+      await this.storage.delete(existingUser.avatarKey);
+    }
+
+    return this.toProfile(user);
+  }
+
+  async deleteAvatar(userId: string): Promise<UserProfile> {
+    const existingUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        avatarKey: true,
+      },
+    });
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        avatarKey: null,
+        avatarMimeType: null,
+      },
+      include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
+    });
+
+    if (existingUser.avatarKey) {
+      await this.storage.delete(existingUser.avatarKey);
+    }
+
+    return this.toProfile(user);
+  }
+
+  async getCommunityProfile(userId: string): Promise<CommunityPublicProfile> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        bio: true,
+        avatarKey: true,
+        showCommunityContributions: true,
+        showCommunityPhotos: true,
+        showCommunityProfile: true,
+        createdAt: true,
+        homeAerodrome: {
+          select: {
+            id: true,
+            name: true,
+            icaoCode: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: {
+              where: {
+                deletedAt: null,
+                contentStatus: "APPROVED",
+              },
+            },
+            corrections: {
+              where: {
+                contentStatus: "APPROVED",
+              },
+            },
+            photos: {
+              where: {
+                status: "READY",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user || !user.showCommunityProfile || !user.displayName) {
+      throw new NotFoundException("Profil communautaire introuvable.");
+    }
+
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      bio: user.bio,
+      avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+      createdAt: user.createdAt.toISOString(),
+      homeAerodrome: user.homeAerodrome ?? null,
+      contributionStats: {
+        comments: user._count.comments,
+        corrections: user.showCommunityContributions ? user._count.corrections : 0,
+        photos: user.showCommunityPhotos ? user._count.photos : 0,
+      },
+    };
+  }
+
   private toProfile(user: {
     id: string;
     email: string;
     displayName: string | null;
+    bio: string | null;
+    avatarKey?: string | null;
+    communityConsentAt?: Date | null;
     role: string;
     emailVerified: Date | null;
     totpEnabled: boolean;
+    showCommunityProfile: boolean;
+    showCommunityContributions: boolean;
+    showCommunityPhotos: boolean;
     createdAt: Date;
     homeAerodrome?: { id: string; name: string; icaoCode: string | null } | null;
   }): UserProfile {
@@ -697,9 +844,15 @@ export class AuthService {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      bio: user.bio,
+      avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+      communityConsentAt: user.communityConsentAt?.toISOString() ?? null,
       role: user.role,
       emailVerified: user.emailVerified?.toISOString() ?? null,
       totpEnabled: user.totpEnabled,
+      showCommunityProfile: user.showCommunityProfile,
+      showCommunityContributions: user.showCommunityContributions,
+      showCommunityPhotos: user.showCommunityPhotos,
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
     };
@@ -713,9 +866,16 @@ export class AuthService {
         id: true,
         email: true,
         displayName: true,
+        bio: true,
+        avatarKey: true,
+        avatarMimeType: true,
+        communityConsentAt: true,
         role: true,
         emailVerified: true,
         totpEnabled: true,
+        showCommunityProfile: true,
+        showCommunityContributions: true,
+        showCommunityPhotos: true,
         createdAt: true,
         homeAerodromeId: true,
         visits: {
@@ -756,9 +916,16 @@ export class AuthService {
         id: user.id,
         email: user.email,
         displayName: user.displayName,
+        bio: user.bio,
+        avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+        avatarMimeType: user.avatarMimeType,
+        communityConsentAt: user.communityConsentAt?.toISOString() ?? null,
         role: user.role,
         emailVerified: user.emailVerified?.toISOString() ?? null,
         totpEnabled: user.totpEnabled,
+        showCommunityProfile: user.showCommunityProfile,
+        showCommunityContributions: user.showCommunityContributions,
+        showCommunityPhotos: user.showCommunityPhotos,
         createdAt: user.createdAt.toISOString(),
         homeAerodromeId: user.homeAerodromeId,
       },

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Check, PencilLine, X } from "lucide-react";
+import { ArrowLeft, Check, FileText, X } from "lucide-react";
 import type { AdminCorrectionListItem } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -13,12 +13,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<AdminCorrectionListItem["contentStatus"], string> = {
   PENDING: "En attente",
-  APPROVED: "Validée",
+  APPROVED: "Publiée",
   REJECTED: "Rejetée",
   FLAGGED: "Signalée",
 };
+
+function formatFieldLabel(field: string) {
+  const labels: Record<string, string> = {
+    name: "Nom",
+    city: "Ville",
+    region: "Région",
+    description: "Description",
+    website: "Site web",
+    aip: "Lien AIP",
+    vac: "Lien VAC",
+    restaurant: "Restauration",
+    transport: "Transport",
+    "hébergement": "Hébergement",
+    maintenance: "Maintenance",
+    hangars: "Hangars",
+    runways: "Pistes",
+    frequencies: "Fréquences",
+    fuels: "Carburants",
+    local: "Info locale / conseil pilote",
+  };
+
+  return labels[field] ?? field;
+}
 
 export default function AdminCorrectionsPage() {
   const { user, loading } = useAuth();
@@ -60,28 +83,30 @@ export default function AdminCorrectionsPage() {
       await apiClient.post(`/admin/corrections/${correction.id}/approve`, {
         note: note.trim() || undefined,
       });
-      setFeedback({ type: "success", message: "Correction validée." });
+      setFeedback({ type: "success", message: "Contribution publiée." });
       await correctionsQuery.refetch();
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Impossible de valider cette correction.",
+        message:
+          error instanceof Error ? error.message : "Impossible de publier cette contribution.",
       });
     }
   };
 
   const handleReject = async (correction: AdminCorrectionListItem) => {
-    const note = window.prompt("Note interne optionnelle :") ?? "";
+    const note = window.prompt("Motif interne optionnel :") ?? "";
     try {
       await apiClient.post(`/admin/corrections/${correction.id}/reject`, {
         note: note.trim() || undefined,
       });
-      setFeedback({ type: "success", message: "Correction rejetée." });
+      setFeedback({ type: "success", message: "Contribution rejetée." });
       await correctionsQuery.refetch();
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Impossible de rejeter cette correction.",
+        message:
+          error instanceof Error ? error.message : "Impossible de rejeter cette contribution.",
       });
     }
   };
@@ -94,11 +119,11 @@ export default function AdminCorrectionsPage() {
           className="mb-2 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour à l&apos;administration
+          Retour a l&apos;administration
         </Link>
-        <h1 className="text-3xl font-bold">Corrections communautaires</h1>
+        <h1 className="text-3xl font-bold">Contributions communautaires</h1>
         <p className="text-sm text-muted-foreground">
-          Valider ou rejeter les propositions de correction des membres.
+          Publier ou rejeter les propositions membres sans modifier la donnée importée.
         </p>
       </div>
 
@@ -116,7 +141,7 @@ export default function AdminCorrectionsPage() {
 
       <div className="mb-6 grid gap-3 lg:grid-cols-[1fr_220px]">
         <Input
-          placeholder="Rechercher par champ, valeur, auteur, aérodrome…"
+          placeholder="Rechercher par champ, valeur, auteur, aérodrome..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -128,7 +153,7 @@ export default function AdminCorrectionsPage() {
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="pending">En attente</option>
-          <option value="approved">Validées</option>
+          <option value="approved">Publiées</option>
           <option value="rejected">Rejetées</option>
           <option value="all">Toutes</option>
         </select>
@@ -137,7 +162,7 @@ export default function AdminCorrectionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <PencilLine className="h-5 w-5" />
+            <FileText className="h-5 w-5" />
             File de modération
           </CardTitle>
         </CardHeader>
@@ -145,11 +170,7 @@ export default function AdminCorrectionsPage() {
           {corrections.map((correction) => (
             <div key={correction.id} className="space-y-3 rounded-lg border p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
-                  {correction.aerodrome.icaoCode
-                    ? `${correction.aerodrome.name} (${correction.aerodrome.icaoCode})`
-                    : correction.aerodrome.name}
-                </Badge>
+                <Badge variant="outline">{formatFieldLabel(correction.field)}</Badge>
                 <Badge
                   variant={
                     correction.contentStatus === "PENDING"
@@ -161,72 +182,60 @@ export default function AdminCorrectionsPage() {
                           : "outline"
                   }
                 >
-                  {STATUS_LABELS[correction.contentStatus] ?? correction.contentStatus}
+                  {STATUS_LABELS[correction.contentStatus]}
+                </Badge>
+                <Badge variant="outline">
+                  {correction.aerodrome.icaoCode
+                    ? `${correction.aerodrome.name} (${correction.aerodrome.icaoCode})`
+                    : correction.aerodrome.name}
                 </Badge>
               </div>
 
-              <div className="text-sm">
+              <div className="space-y-2 text-sm">
                 <div className="text-muted-foreground">
                   Proposé par {correction.user.displayName || correction.user.email} ·{" "}
                   {new Date(correction.createdAt).toLocaleString("fr-FR")}
                 </div>
-                <div className="mt-2">
-                  <span className="font-medium">Champ :</span>{" "}
-                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{correction.field}</span>
-                </div>
                 {correction.currentValue && (
-                  <div className="mt-1">
-                    <span className="font-medium">Valeur actuelle :</span>{" "}
-                    <span className="text-muted-foreground">{correction.currentValue}</span>
+                  <div className="rounded-md border bg-muted/20 p-3">
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">
+                      Référence officielle
+                    </div>
+                    <div className="whitespace-pre-wrap">{correction.currentValue}</div>
                   </div>
                 )}
-                <div className="mt-1">
-                  <span className="font-medium">Valeur proposée :</span> {correction.proposedValue}
+                <div className="rounded-md border bg-primary/5 p-3">
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
+                    Proposition membre
+                  </div>
+                  <div className="whitespace-pre-wrap">{correction.proposedValue}</div>
                 </div>
                 {correction.reason && (
-                  <div className="mt-1">
-                    <span className="font-medium">Justification :</span>{" "}
-                    <span className="text-muted-foreground">{correction.reason}</span>
-                  </div>
-                )}
-                {correction.reviewedBy && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Traité par {correction.reviewedBy.displayName || correction.reviewedBy.email} ·{" "}
-                    {correction.reviewedAt
-                      ? new Date(correction.reviewedAt).toLocaleString("fr-FR")
-                      : "—"}
+                  <div className="text-muted-foreground whitespace-pre-wrap">
+                    <span className="font-medium">Contexte :</span> {correction.reason}
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Link href={`/aerodrome/${correction.aerodrome.id}`} target="_blank">
-                  <Button variant="ghost" size="sm">
-                    Voir la fiche
+              {correction.contentStatus === "PENDING" && (
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => handleApprove(correction)}>
+                    <Check className="mr-2 h-4 w-4" />
+                    Publier
                   </Button>
-                </Link>
-                {correction.contentStatus === "PENDING" && (
-                  <>
-                    <Button size="sm" onClick={() => handleApprove(correction)}>
-                      <Check className="mr-2 h-4 w-4" />
-                      Valider
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleReject(correction)}
-                    >
-                      <X className="mr-2 h-4 w-4" />
-                      Rejeter
-                    </Button>
-                  </>
-                )}
-              </div>
+                  <Button variant="destructive" onClick={() => handleReject(correction)}>
+                    <X className="mr-2 h-4 w-4" />
+                    Rejeter
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
 
           {corrections.length === 0 && (
-            <p className="text-sm text-muted-foreground">Aucune correction trouvée.</p>
+            <p className="text-sm text-muted-foreground">
+              Aucune contribution trouvée.
+            </p>
           )}
         </CardContent>
       </Card>

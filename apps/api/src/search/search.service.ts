@@ -115,6 +115,18 @@ export class SearchService {
     if (filters.nightOperations !== undefined) {
       where.nightOperations = filters.nightOperations;
     }
+    if (filters.ppr !== undefined) {
+      where.ppr = filters.ppr;
+    }
+    if (filters.privateUse !== undefined) {
+      where.privateUse = filters.privateUse;
+    }
+    if (filters.skydiveActivity !== undefined) {
+      where.skydiveActivity = filters.skydiveActivity;
+    }
+    if (filters.winchOnly !== undefined) {
+      where.winchOnly = filters.winchOnly;
+    }
 
     // Runway filters (length, surface)
     if (filters.minRunwayLength || filters.surface) {

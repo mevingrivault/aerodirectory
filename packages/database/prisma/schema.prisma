@@ -121,6 +121,7 @@ enum PhotoStatus {
 
 enum SyncSource {
   OPENAIP
+  AIRSPACES
   OSM
   REGIONS
   RGPD
@@ -215,6 +216,13 @@ model User {
   bannedById    String?
   role                Role      @default(MEMBER)
   displayName         String?   @unique
+  bio                 String?
+  avatarKey           String?
+  avatarMimeType      String?
+  communityConsentAt  DateTime?
+  showCommunityProfile       Boolean   @default(false)
+  showCommunityContributions Boolean   @default(true)
+  showCommunityPhotos        Boolean   @default(true)
   homeAerodromeId     String?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
@@ -268,20 +276,28 @@ model Aerodrome {
   id               String          @id @default(cuid())
   name             String
   icaoCode         String?         @unique
+  iataCode         String?
   altIdentifier    String?
   latitude         Float
   longitude        Float
   elevation        Int? // feet
+  magneticDeclination Float?
   city             String?
   region           String?
   department       String?
   countryCode      String          @default("FR")
   aerodromeType    AerodromeType   @default(SMALL_AIRPORT)
   status           AerodromeStatus @default(OPEN)
+  ppr              Boolean         @default(false)
+  privateUse       Boolean         @default(false)
+  skydiveActivity  Boolean         @default(false)
+  winchOnly        Boolean         @default(false)
   aipLink          String?
   vacLink          String?
   websiteUrl       String?
   description      String?
+  handlingFacilities  Int[]        @default([])
+  passengerFacilities Int[]        @default([])
   hasRestaurant    Boolean         @default(false)
   hasBikes         Boolean         @default(false)
   hasTransport     Boolean         @default(false)
@@ -328,7 +344,11 @@ model Runway {
   identifier  String // e.g. "09/27"
   length      Int // meters
   width       Int? // meters
+  trueHeading Int?
+  mainRunway  Boolean     @default(false)
+  operations  Int?
   surface     SurfaceType
+  surfaceComposition Int[] @default([])
   lighting    Boolean     @default(false)
   remarks     String?
   createdAt   DateTime    @default(now())
@@ -345,6 +365,7 @@ model Frequency {
   aerodromeId String
   type        FrequencyType
   mhz         Float
+  isPrimary   Boolean       @default(false)
   callsign    String?
   notes       String?
   createdAt   DateTime      @default(now())
@@ -594,8 +615,6 @@ model AuditLog {
   @@schema("public")
 }
 
-// ─── Airspace (future use) ──────────────────────────────
-
 model SyncRun {
   id                String        @id @default(cuid())
   source            SyncSource
@@ -652,24 +671,6 @@ model SyncRunStep {
   @@schema("public")
 }
 
-model Airspace {
-  id         String  @id @default(cuid())
-  name       String
-  class      String // A, B, C, D, E, G, CTR, TMA, etc.
-  lowerLimit String // e.g. "SFC", "FL065", "3500ft AMSL"
-  upperLimit String // e.g. "FL195", "6000ft AMSL"
-  geometry   Json // GeoJSON polygon
-  source     String? // e.g. "openaip", "openair"
-  sourceId   String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([source, sourceId])
-  @@index([class])
-  @@map("airspaces")
-  @@schema("public")
-}
 
 // ─── Photo ───────────────────────────────────────────────
 
@@ -700,6 +701,48 @@ model Photo {
   @@index([userId])
   @@index([reviewedById])
   @@map("photos")
+  @@schema("public")
+}
+
+// ─── Airspace ────────────────────────────────────────────
+
+model Airspace {
+  id          String  @id @default(cuid())
+  name        String
+  // openAIP type code (0=Other, 1=Restricted, 2=Danger, 3=Prohibited, 4=CTR, 5=TMA,
+  //   6=RMZ, 7=TMZ, 8=FIR, 9=UIR, 10=ADIZ, 11=ATZ, 12=MATZ, 13=Airway,
+  //   14=MTR, 15=Alert, 16=Warning, 17=Protected, 18=HTZ, 19=Glider, 20=TRP,
+  //   21=TIZ, 22=TIA, 23=MBZ, 24=GP, 25=WTSZ, 26=NOTAM)
+  type        Int
+  // ICAO class: A B C D E F G or special codes
+  icaoClass   String
+  // Altitude limits — stored as human-readable strings (e.g. "SFC", "FL065", "3500ft MSL")
+  lowerLimit  String
+  upperLimit  String
+  // Raw limit values for filtering
+  lowerLimitFt  Int?   // feet MSL, null = SFC (0) or unknown
+  upperLimitFt  Int?   // feet MSL, null = unlimited or unknown
+  // GeoJSON polygon geometry (type: "Polygon" | "MultiPolygon", coordinates: ...)
+  geometry    Json
+  countryCode String  @default("FR")
+  // openAIP specific
+  activity    Int?    // 0=All, 1=Parachute, 2=Aerobatic, 3=Airshow, 4=Glider...
+  onDemand    Boolean @default(false)
+  onRequest   Boolean @default(false)
+  remarks     String?
+
+  sourceId    String?
+  sourceRawHash String?
+  lastSyncedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceId])
+  @@index([type])
+  @@index([icaoClass])
+  @@index([countryCode])
+  @@map("airspaces")
   @@schema("public")
 }
 

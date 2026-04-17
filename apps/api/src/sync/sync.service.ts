@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { Cron } from "@nestjs/schedule/dist";
+import { Cron } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, type SyncRun, type SyncRunStatus, type SyncSource } from "@aerodirectory/database";
 import Redis from "ioredis";
@@ -9,6 +9,7 @@ import { MailService } from "../mail/mail.service";
 import { SyncLockService } from "./sync-lock.service";
 import { computeNextCronOccurrence, getSourceScheduleDescription } from "./sync.schedule";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
+import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
 import {
   ensureOsmArtifacts,
@@ -21,6 +22,7 @@ import { runSyncAerodromeFlagsTask } from "./tasks/flags-sync.task";
 
 const ACTIVE_RUN_STATUSES: SyncRunStatus[] = ["QUEUED", "RETRY_SCHEDULED", "IN_PROGRESS"];
 const OPENAIP_CRON = process.env["SYNC_OPENAIP_CRON"] ?? "0 2 * * *";
+const AIRSPACES_CRON = process.env["SYNC_AIRSPACES_CRON"] ?? "30 2 * * *";
 const OSM_CRON = process.env["SYNC_OSM_CRON"] ?? "0 3 * * 0";
 const RGPD_CRON = process.env["SYNC_RGPD_CRON"] ?? "30 4 * * *";
 const REPORT_CRON = process.env["SYNC_REPORT_CRON"] ?? "30 7 * * *";
@@ -83,7 +85,19 @@ export class SyncService implements OnModuleInit {
 
   async onModuleInit() {
     if (!this.workerEnabled) {
+      this.logger.log("Worker désactivé (SYNC_ENABLED != true)");
       return;
+    }
+
+    this.logger.log(`Worker démarré (id=${this.workerId}, redis=${this.redis ? "oui" : "non"})`);
+
+    if (this.redis) {
+      try {
+        await this.redis.ping();
+        this.logger.log("Connexion Redis OK");
+      } catch (error) {
+        this.logger.error(`Connexion Redis échouée : ${asErrorMessage(error)}`);
+      }
     }
 
     await this.updateWorkerHeartbeat();
@@ -107,6 +121,15 @@ export class SyncService implements OnModuleInit {
   async scheduleOpenAip() {
     if (!this.workerEnabled) return;
     await this.enqueueRun("OPENAIP", "SCHEDULED");
+  }
+
+  @Cron(AIRSPACES_CRON, {
+    name: "sync-enqueue-airspaces",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleAirspaces() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("AIRSPACES", "SCHEDULED");
   }
 
   @Cron(OSM_CRON, {
@@ -172,7 +195,7 @@ export class SyncService implements OnModuleInit {
       }),
     ]);
 
-    const sources: SyncSource[] = ["OPENAIP", "OSM", "REGIONS", "RGPD"];
+    const sources: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD"];
     const sourceStatuses = await Promise.all(
       sources.map(async (source) => {
         const lastRun = await this.prisma.syncRun.findFirst({
@@ -196,7 +219,7 @@ export class SyncService implements OnModuleInit {
     );
 
     return {
-      workerEnabled: heartbeat?.alive ?? this.workerEnabled,
+      workerEnabled: heartbeat !== null ? heartbeat.alive : this.workerEnabled,
       workerId: heartbeat?.workerId ?? this.workerId,
       running: activeRuns.some((run) => run.status === "IN_PROGRESS"),
       sources: sourceStatuses,
@@ -412,6 +435,8 @@ export class SyncService implements OnModuleInit {
     switch (run.source) {
       case "OPENAIP":
         return this.executeOpenAip(run);
+      case "AIRSPACES":
+        return this.executeAirspaces(run);
       case "OSM":
         return this.executeOsm(run);
       case "REGIONS":
@@ -468,6 +493,42 @@ export class SyncService implements OnModuleInit {
       };
     } catch (error) {
       await this.failStep(run.id, "openaip_import", error);
+      throw error;
+    }
+  }
+
+  private async executeAirspaces(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "airspaces_import", 1);
+
+    try {
+      const apiKey = this.config.getOrThrow<string>("OPENAIP_API_KEY");
+      const result = await runOpenAipAirspacesSyncTask(this.prisma as never, apiKey);
+      await this.completeStep(run.id, "airspaces_import", {
+        metrics: {
+          total: result.total,
+          created: result.created,
+          updated: result.updated,
+          unchanged: result.unchanged,
+          errors: result.errors.length,
+        },
+        logSummary: `Créés: ${result.created}, mis à jour: ${result.updated}, erreurs: ${result.errors.length}`,
+      });
+
+      return {
+        source: "AIRSPACES" as const,
+        status: result.errors.length > 0 ? ("PARTIAL" as const) : ("SUCCESS" as const),
+        summary: toInputJsonValue({
+          total: result.total,
+          created: result.created,
+          updated: result.updated,
+          unchanged: result.unchanged,
+          errors: result.errors,
+        }),
+        errorMessage:
+          result.errors.length > 0 ? `${result.errors.length} erreur(s) lors du sync espaces aériens.` : null,
+      };
+    } catch (error) {
+      await this.failStep(run.id, "airspaces_import", error);
       throw error;
     }
   }
@@ -549,7 +610,7 @@ export class SyncService implements OnModuleInit {
       await this.completeStep(run.id, "import", {
         artifactPath: artifacts.geojsonSeq,
         metrics: importStats as unknown as Record<string, unknown>,
-        logSummary: `${importStats.upserted} POI importés, ${importStats.errors} erreurs.`,
+        logSummary: `${importStats.upserted} POI importés, ${importStats.skipped} ignorés, ${importStats.duplicatesCollapsed} doublons consolidés, ${importStats.errors} erreurs.`,
       });
 
       await this.startStep(run.id, "sync_flags", 5);
@@ -571,7 +632,10 @@ export class SyncService implements OnModuleInit {
             geojsonSeq: artifacts.geojsonSeq,
           },
         }),
-        errorMessage: importStats.errors > 0 ? `${importStats.errors} erreur(s) pendant l'import OSM.` : null,
+        errorMessage:
+          importStats.errors > 0
+            ? `${importStats.errors} erreur(s) pendant l'import OSM.${importStats.firstError ? ` Première erreur: ${importStats.firstError}` : ""}`
+            : null,
       };
     } catch (error) {
       const lastRunningStep = await this.prisma.syncRunStep.findFirst({
@@ -811,6 +875,8 @@ export class SyncService implements OnModuleInit {
     switch (source) {
       case "OPENAIP":
         return OPENAIP_CRON;
+      case "AIRSPACES":
+        return AIRSPACES_CRON;
       case "OSM":
         return OSM_CRON;
       case "REGIONS":
@@ -864,6 +930,7 @@ export class SyncService implements OnModuleInit {
     try {
       const raw = await this.redis.get(WORKER_HEARTBEAT_KEY);
       if (!raw) {
+        // Clé absente : heartbeat jamais écrit ou TTL expiré → worker inactif
         return { alive: false, workerId: null };
       }
 

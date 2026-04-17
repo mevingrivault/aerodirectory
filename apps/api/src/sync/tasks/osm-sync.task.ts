@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@aerodirectory/database";
+import { Prisma } from "@aerodirectory/database";
 import { createReadStream } from "node:fs";
 import {
   access,
@@ -30,6 +31,15 @@ interface OsmPoiRow {
   lon: number;
   category: OsmCategory;
   tags: Record<string, string>;
+}
+
+interface OsmImportStats {
+  lines: number;
+  upserted: number;
+  skipped: number;
+  errors: number;
+  duplicatesCollapsed: number;
+  firstError: string | null;
 }
 
 const GEOFABRIK_URL = "https://download.geofabrik.de/europe/france-latest.osm.pbf";
@@ -200,28 +210,67 @@ function parseGeoJsonSeqLine(rawLine: string): OsmPoiRow | null {
 async function upsertBatch(prisma: PrismaClient, rows: OsmPoiRow[]) {
   if (rows.length === 0) return;
 
-  const values: unknown[] = [];
-  const placeholders: string[] = [];
-  let index = 1;
+  const rowFragments = rows.map(
+    (row) =>
+      Prisma.sql`(${row.osmId}, ${row.lat}, ${row.lon}, ${row.category}, ${JSON.stringify(row.tags)}::jsonb, NOW(), NOW())`,
+  );
 
-  for (const row of rows) {
-    placeholders.push(
-      `($${index++}, $${index++}, $${index++}, $${index++}, $${index++}::jsonb, NOW(), NOW())`,
-    );
-    values.push(row.osmId, row.lat, row.lon, row.category, JSON.stringify(row.tags));
-  }
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO osm.pois ("osmId", "lat", "lon", "category", "tags", "importedAt", "updatedAt")
-     VALUES ${placeholders.join(", ")}
+  await prisma.$executeRaw(
+    Prisma.sql`INSERT INTO osm.pois ("osmId", "lat", "lon", "category", "tags", "importedAt", "updatedAt")
+     VALUES ${Prisma.join(rowFragments)}
      ON CONFLICT ("osmId") DO UPDATE SET
        "lat" = EXCLUDED."lat",
        "lon" = EXCLUDED."lon",
        "category" = EXCLUDED."category",
        "tags" = EXCLUDED."tags",
        "updatedAt" = NOW()`,
-    ...values,
   );
+}
+
+function normalizeErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function dedupeBatch(rows: OsmPoiRow[]) {
+  const byOsmId = new Map<string, OsmPoiRow>();
+  for (const row of rows) {
+    byOsmId.set(row.osmId, row);
+  }
+
+  return {
+    rows: Array.from(byOsmId.values()),
+    collapsed: rows.length - byOsmId.size,
+  };
+}
+
+async function flushBatch(
+  prisma: PrismaClient,
+  rows: OsmPoiRow[],
+  stats: OsmImportStats,
+) {
+  if (rows.length === 0) return;
+
+  const deduped = dedupeBatch(rows);
+  stats.duplicatesCollapsed += deduped.collapsed;
+
+  try {
+    await upsertBatch(prisma, deduped.rows);
+    stats.upserted += deduped.rows.length;
+    return;
+  } catch (error) {
+    stats.firstError ??= normalizeErrorMessage(error);
+  }
+
+  for (const row of deduped.rows) {
+    try {
+      await upsertBatch(prisma, [row]);
+      stats.upserted += 1;
+    } catch (error) {
+      stats.firstError ??= normalizeErrorMessage(error);
+      stats.errors += 1;
+    }
+  }
 }
 
 export async function ensureOsmArtifacts(dataDir: string): Promise<OsmArtifacts> {
@@ -287,11 +336,13 @@ export async function importOsmGeoJsonSeq(
 ) {
   await ensureFile(geojsonPath);
 
-  const stats = {
+  const stats: OsmImportStats = {
     lines: 0,
     upserted: 0,
     skipped: 0,
     errors: 0,
+    duplicatesCollapsed: 0,
+    firstError: null,
   };
   let batch: OsmPoiRow[] = [];
 
@@ -310,23 +361,13 @@ export async function importOsmGeoJsonSeq(
 
     batch.push(row);
     if (batch.length >= BATCH_SIZE) {
-      try {
-        await upsertBatch(prisma, batch);
-        stats.upserted += batch.length;
-      } catch {
-        stats.errors += batch.length;
-      }
+      await flushBatch(prisma, batch, stats);
       batch = [];
     }
   }
 
   if (batch.length > 0) {
-    try {
-      await upsertBatch(prisma, batch);
-      stats.upserted += batch.length;
-    } catch {
-      stats.errors += batch.length;
-    }
+    await flushBatch(prisma, batch, stats);
   }
 
   return stats;

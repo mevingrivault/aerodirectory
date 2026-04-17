@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X, TriangleAlert, Download } from "lucide-react";
+import { Shield, Key, Mail, CheckCircle, Pencil, Lock, MapPin, Search, X, TriangleAlert, Download, ImagePlus, UserCircle2 } from "lucide-react";
 import type { TotpSetupResponse } from "@aerodirectory/shared";
 
 interface AerodromeOption {
@@ -49,6 +49,12 @@ export default function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [nameAlert, setNameAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const [bioDraft, setBioDraft] = useState("");
+  const [bioLoading, setBioLoading] = useState(false);
+  const [bioAlert, setBioAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarAlert, setAvatarAlert] = useState<{ type: AlertType; msg: string } | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Change password state
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
@@ -65,6 +71,8 @@ export default function ProfilePage() {
   const [showHomeSuggestions, setShowHomeSuggestions] = useState(false);
   const [homeAlert, setHomeAlert] = useState<{ type: AlertType; msg: string } | null>(null);
   const homeSearchRef = useRef<HTMLDivElement>(null);
+  const [privacyLoading, setPrivacyLoading] = useState<string | null>(null);
+  const [privacyAlert, setPrivacyAlert] = useState<{ type: AlertType; msg: string } | null>(null);
 
   const { data: homeSuggestionsRes } = useQuery({
     queryKey: ["aerodrome-search-home", homeSearch],
@@ -82,6 +90,10 @@ export default function ProfilePage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    setBioDraft(user?.bio ?? "");
+  }, [user?.bio]);
 
   if (loading) {
     return (
@@ -197,6 +209,30 @@ export default function ProfilePage() {
     }
   };
 
+  const handlePrivacyChange = async (
+    field: "showCommunityProfile" | "showCommunityContributions" | "showCommunityPhotos",
+    value: boolean,
+  ) => {
+    setPrivacyLoading(field);
+    setPrivacyAlert(null);
+
+    try {
+      await apiClient.put("/auth/profile", { [field]: value });
+      await refreshProfile();
+      setPrivacyAlert({
+        type: "success",
+        msg: "Préférences de confidentialité mises à jour.",
+      });
+    } catch {
+      setPrivacyAlert({
+        type: "error",
+        msg: "Impossible de mettre à jour les préférences de confidentialité.",
+      });
+    } finally {
+      setPrivacyLoading(null);
+    }
+  };
+
   // ─── TOTP ───────────────────────────────────────────────
 
   const handleSetupTotp = async () => {
@@ -227,6 +263,60 @@ export default function ProfilePage() {
       await refreshProfile();
     } catch {
       setTotpAlert({ type: "error", msg: "Code invalide. Veuillez réessayer." });
+    }
+  };
+
+  const handleSaveBio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBioLoading(true);
+    setBioAlert(null);
+    try {
+      await apiClient.put("/auth/profile", {
+        bio: bioDraft.trim() || null,
+      });
+      await refreshProfile();
+      setBioAlert({ type: "success", msg: "Presentation mise a jour." });
+    } catch {
+      setBioAlert({ type: "error", msg: "Impossible de mettre a jour la presentation." });
+    } finally {
+      setBioLoading(false);
+    }
+  };
+
+  const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setAvatarLoading(true);
+    setAvatarAlert(null);
+    try {
+      await apiClient.upload("/auth/profile/avatar", file);
+      await refreshProfile();
+      setAvatarAlert({ type: "success", msg: "Avatar mis a jour." });
+    } catch (error) {
+      setAvatarAlert({
+        type: "error",
+        msg: error instanceof Error ? error.message : "Impossible d'envoyer cet avatar.",
+      });
+    } finally {
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+      setAvatarLoading(false);
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    setAvatarLoading(true);
+    setAvatarAlert(null);
+    try {
+      await apiClient.delete("/auth/profile/avatar");
+      await refreshProfile();
+      setAvatarAlert({ type: "success", msg: "Avatar retire." });
+    } catch {
+      setAvatarAlert({ type: "error", msg: "Impossible de retirer l'avatar." });
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -294,6 +384,167 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Membre depuis</span>
             <span>{new Date(user.createdAt).toLocaleDateString("fr-FR")}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Identite communautaire</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {avatarAlert && <Alert type={avatarAlert.type} msg={avatarAlert.msg} />}
+          {bioAlert && <Alert type={bioAlert.type} msg={bioAlert.msg} />}
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex flex-col items-center gap-3">
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt={`Avatar de ${user.displayName ?? "Membre"}`}
+                  className="h-24 w-24 rounded-full border object-cover"
+                />
+              ) : (
+                <div className="flex h-24 w-24 items-center justify-center rounded-full border bg-muted">
+                  <UserCircle2 className="h-12 w-12 text-muted-foreground" />
+                </div>
+              )}
+
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                className="hidden"
+                onChange={handleUploadAvatar}
+              />
+
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={avatarLoading}
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                  {avatarLoading ? "Envoi..." : "Changer l'avatar"}
+                </Button>
+                {user.avatarUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={avatarLoading}
+                    onClick={handleDeleteAvatar}
+                  >
+                    Retirer
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveBio} className="flex-1 space-y-3">
+              <div>
+                <label htmlFor="bio" className="text-sm font-medium">
+                  Bio courte
+                </label>
+                <textarea
+                  id="bio"
+                  className="mt-1 min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  maxLength={280}
+                  placeholder="Quelques mots pour vous presenter a la communaute..."
+                  value={bioDraft}
+                  onChange={(e) => setBioDraft(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {bioDraft.length}/280 caracteres
+                </p>
+              </div>
+
+              <Button type="submit" variant="outline" disabled={bioLoading}>
+                {bioLoading ? "Enregistrement..." : "Enregistrer la presentation"}
+              </Button>
+              {user.showCommunityProfile && (
+                <div>
+                  <a
+                    href={`/community/${user.id}`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Voir mon profil public
+                  </a>
+                </div>
+              )}
+            </form>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Confidentialité communautaire</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {privacyAlert && <Alert type={privacyAlert.type} msg={privacyAlert.msg} />}
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Afficher mon nom sur mon profil communautaire</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Si cette option est désactivée, vos contenus publics restent visibles mais signés comme “Membre”.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityProfile}
+                disabled={privacyLoading === "showCommunityProfile"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityProfile", event.target.checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Rendre mes contributions publiques</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Contrôle la visibilité publique de vos commentaires et enrichissements communautaires.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityContributions}
+                disabled={privacyLoading === "showCommunityContributions"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityContributions", event.target.checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Rendre mes photos publiques</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Par défaut, vos photos validées peuvent être vues sur les fiches terrain. Vous pouvez couper cette visibilité à tout moment.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showCommunityPhotos}
+                disabled={privacyLoading === "showCommunityPhotos"}
+                onChange={(event) =>
+                  handlePrivacyChange("showCommunityPhotos", event.target.checked)
+                }
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

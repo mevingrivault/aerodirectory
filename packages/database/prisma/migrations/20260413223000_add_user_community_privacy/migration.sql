@@ -1,0 +1,4 @@
+ALTER TABLE "public"."users"
+ADD COLUMN IF NOT EXISTS "showCommunityProfile" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "showCommunityContributions" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "showCommunityPhotos" BOOLEAN NOT NULL DEFAULT true;

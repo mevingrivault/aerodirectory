@@ -60,6 +60,7 @@ interface PlannerFilters {
   hasAccommodation: boolean;
   fuel100LL: boolean;
   fuelSP98: boolean;
+  excludeVisited: boolean;
 }
 
 type SearchMode = "time" | "cost" | "unlimited";
@@ -120,6 +121,61 @@ function escapeHtml(value: string): string {
 
 // ─── PlannerMap ─────────────────────────────────────────────────────────────
 
+type PlannerMapStyle = "osm" | "satellite" | "hybrid";
+
+const PLANNER_MAP_STYLES: Record<PlannerMapStyle, object> = {
+  osm: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "&copy; OpenStreetMap contributors",
+      },
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  },
+  satellite: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  },
+  hybrid: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      },
+      labels: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+      },
+    },
+    layers: [
+      { id: "base", type: "raster", source: "base" },
+      { id: "labels", type: "raster", source: "labels" },
+    ],
+  },
+};
+
 function PlannerMap({
   departure,
   results,
@@ -133,6 +189,7 @@ function PlannerMap({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<any[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapStyle, setMapStyle] = useState<PlannerMapStyle>("osm");
 
   // Init map once
   useEffect(() => {
@@ -146,18 +203,7 @@ function PlannerMap({
 
       const map = new ml.default.Map({
         container: containerRef.current,
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: "&copy; OpenStreetMap contributors",
-            },
-          },
-          layers: [{ id: "osm", type: "raster", source: "osm" }],
-        },
+        style: PLANNER_MAP_STYLES.osm as any,
         center: [2.3, 46.6],
         zoom: 6,
       });
@@ -255,12 +301,29 @@ function PlannerMap({
     });
   }, [mapLoaded, departure, results]);
 
+  // Switch base map style
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    map.setStyle(PLANNER_MAP_STYLES[mapStyle]);
+  }, [mapStyle, mapLoaded]);
+
   return (
-    <div
-      ref={containerRef}
-      className="w-full rounded-lg overflow-hidden border"
-      style={{ height: 580 }}
-    />
+    <div className="relative w-full rounded-lg overflow-hidden border" style={{ height: 580 }}>
+      <div ref={containerRef} className="h-full w-full" />
+      {/* Style switcher */}
+      <div className="absolute left-3 bottom-8 z-10 flex rounded-md shadow-md overflow-hidden border bg-background/95 backdrop-blur text-xs font-medium">
+        {(["osm", "satellite", "hybrid"] as const).map((s, i) => (
+          <button
+            key={s}
+            onClick={() => setMapStyle(s)}
+            className={`px-3 py-1.5 transition-colors ${i > 0 ? "border-l border-border" : ""} ${mapStyle === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {s === "osm" ? "Plan" : s === "satellite" ? "Satellite" : "Hybride"}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -400,7 +463,9 @@ export default function PlannerPage() {
   // ── Search parameters ──
   const [searchMode, setSearchMode] = useState<SearchMode>("time");
   const [maxTimeMinutes, setMaxTimeMinutes] = useState(60);
+  const [minTimeMinutes, setMinTimeMinutes] = useState("");
   const [maxCost, setMaxCost] = useState(100);
+  const [minCost, setMinCost] = useState("");
   const [tripScope, setTripScope] = useState<TripScope>("round_trip");
 
   // ── Options (collapsed) ──
@@ -409,6 +474,7 @@ export default function PlannerPage() {
   const [fuelPricePerLiter, setFuelPricePerLiter] = useState("");
   const [departureGroundMinutes, setDepartureGroundMinutes] = useState("0");
   const [arrivalGroundMinutes, setArrivalGroundMinutes] = useState("0");
+  const [minDistanceKm, setMinDistanceKm] = useState("0");
 
   // ── Filters ──
   const [filters, setFilters] = useState<PlannerFilters>({
@@ -418,6 +484,7 @@ export default function PlannerPage() {
     hasAccommodation: false,
     fuel100LL: false,
     fuelSP98: false,
+    excludeVisited: false,
   });
 
   // ── Sort + view ──
@@ -430,6 +497,7 @@ export default function PlannerPage() {
   const [calcError, setCalcError] = useState("");
   const [isCalculating, setIsCalculating] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
 
   // ── Queries ──
   const { data: profilesRes } = useQuery({
@@ -557,6 +625,7 @@ export default function PlannerPage() {
     setIsCalculating(true);
     setCalcError("");
     setShowAll(false);
+    setCollapsedRegions(new Set());
 
     const payload: Record<string, unknown> = {
       profileId: selectedProfileId,
@@ -570,17 +639,34 @@ export default function PlannerPage() {
       sortBy,
     };
 
-    if (searchMode === "time") payload.maxTimeMinutes = maxTimeMinutes;
-    if (searchMode === "cost") payload.maxCost = maxCost;
+    if (searchMode === "time") {
+      payload.maxTimeMinutes = maxTimeMinutes;
+      const parsedMin = parseInt(minTimeMinutes);
+      if (parsedMin > 0) payload.minTimeMinutes = parsedMin;
+    }
+    if (searchMode === "cost") {
+      payload.maxCost = maxCost;
+      const parsedMinCost = parseFloat(minCost);
+      if (parsedMinCost > 0) payload.minCost = parsedMinCost;
+    }
 
     const fuelPrice = parseFloat(fuelPricePerLiter);
     if (fuelPrice > 0) payload.fuelPricePerLiter = fuelPrice;
+
+    const parsedMinDistanceKm = parseFloat(minDistanceKm);
+    if (parsedMinDistanceKm > 0) {
+      payload.minDistanceNm = parsedMinDistanceKm * 0.539957;
+    }
 
     const activeFilters: Partial<PlannerFilters> = {};
     for (const [k, v] of Object.entries(filters)) {
       if (v) (activeFilters as Record<string, boolean>)[k] = true;
     }
-    if (Object.keys(activeFilters).length > 0) payload.filters = activeFilters;
+    if (Object.keys(activeFilters).length > 0) {
+      const { excludeVisited, ...destinationFilters } = activeFilters as PlannerFilters;
+      if (excludeVisited) payload.excludeVisited = true;
+      if (Object.keys(destinationFilters).length > 0) payload.filters = destinationFilters;
+    }
 
     try {
       const res = await apiClient.post<PlannerResult[]>("/planner/calculate", payload);
@@ -611,19 +697,27 @@ export default function PlannerPage() {
       })
     : null;
 
-  // Group by region (used when sortBy === "region")
-  const regionGroups: [string, PlannerResult[]][] =
-    sortBy === "region" && sortedResults
-      ? (() => {
-          const map: Record<string, PlannerResult[]> = {};
-          for (const r of sortedResults) {
-            const key = r.aerodrome.region ?? "Région inconnue";
-            if (!map[key]) map[key] = [];
-            map[key]!.push(r);
-          }
-          return Object.entries(map);
-        })()
-      : [];
+  // Always group by region
+  const regionGroups: [string, PlannerResult[]][] = sortedResults
+    ? (() => {
+        const map: Record<string, PlannerResult[]> = {};
+        for (const r of sortedResults) {
+          const key = r.aerodrome.region ?? "Région inconnue";
+          if (!map[key]) map[key] = [];
+          map[key]!.push(r);
+        }
+        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b, "fr"));
+      })()
+    : [];
+
+  const toggleRegion = (region: string) => {
+    setCollapsedRegions((prev) => {
+      const next = new Set(prev);
+      if (next.has(region)) next.delete(region);
+      else next.add(region);
+      return next;
+    });
+  };
 
   const visibleResults = sortedResults
     ? showAll
@@ -1119,36 +1213,68 @@ export default function PlannerPage() {
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      autoComplete="off"
-                      name="planner-max-time-minutes"
-                      min={10}
-                      max={480}
-                      value={maxTimeMinutes}
-                      onChange={(e) => setMaxTimeMinutes(parseInt(e.target.value) || 60)}
-                      className="w-20 text-center"
-                    />
-                    <span className="text-sm text-muted-foreground">minutes</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Min (min, optionnel)</label>
+                      <Input
+                        type="number"
+                        autoComplete="off"
+                        name="planner-min-time-minutes"
+                        min={0}
+                        max={480}
+                        placeholder="—"
+                        value={minTimeMinutes}
+                        onChange={(e) => setMinTimeMinutes(e.target.value)}
+                        className="text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Max (min)</label>
+                      <Input
+                        type="number"
+                        autoComplete="off"
+                        name="planner-max-time-minutes"
+                        min={10}
+                        max={480}
+                        value={maxTimeMinutes}
+                        onChange={(e) => setMaxTimeMinutes(parseInt(e.target.value) || 60)}
+                        className="text-center"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Cost input */}
               {searchMode === "cost" && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    autoComplete="off"
-                    name="planner-max-cost"
-                    min={10}
-                    max={10000}
-                    value={maxCost}
-                    onChange={(e) => setMaxCost(parseInt(e.target.value) || 100)}
-                    className="w-28 text-center"
-                  />
-                  <span className="text-sm text-muted-foreground">€ max</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Min € (optionnel)</label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-min-cost"
+                      min={0}
+                      max={10000}
+                      placeholder="—"
+                      value={minCost}
+                      onChange={(e) => setMinCost(e.target.value)}
+                      className="text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Max €</label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-max-cost"
+                      min={10}
+                      max={10000}
+                      value={maxCost}
+                      onChange={(e) => setMaxCost(parseInt(e.target.value) || 100)}
+                      className="text-center"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1204,6 +1330,21 @@ export default function PlannerPage() {
                       max={120}
                       value={reserveMinutes}
                       onChange={(e) => setReserveMinutes(parseInt(e.target.value) || 30)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Distance mini (km)
+                    </label>
+                    <Input
+                      type="number"
+                      autoComplete="off"
+                      name="planner-min-distance-km"
+                      min={0}
+                      max={1000}
+                      step="1"
+                      value={minDistanceKm}
+                      onChange={(e) => setMinDistanceKm(e.target.value)}
                     />
                   </div>
                   <div>
@@ -1292,6 +1433,17 @@ export default function PlannerPage() {
                     {icon} {label}
                   </button>
                 ))}
+                <button
+                  onClick={() => toggleFilter("excludeVisited")}
+                  className={cn(
+                    "text-xs rounded-full border px-3 py-1 transition-colors",
+                    filters.excludeVisited
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                  )}
+                >
+                  ✓ Retirer déjà visités
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -1360,6 +1512,8 @@ export default function PlannerPage() {
                     {tripScope === "round_trip" ? "Aller-Retour" : "Aller simple"}
                     {searchMode === "time" && ` · ≤ ${formatFlightTime(maxTimeMinutes / 60)}`}
                     {searchMode === "cost" && ` · ≤ ${maxCost} €`}
+                    {parseFloat(minDistanceKm) > 0 && ` · ≥ ${parseFloat(minDistanceKm).toFixed(0)} km`}
+                    {filters.excludeVisited && " · déjà visités exclus"}
                   </span>
                 )}
               </div>
@@ -1458,38 +1612,35 @@ export default function PlannerPage() {
                     </p>
                   </CardContent>
                 </Card>
-              ) : sortBy === "region" ? (
-                <div className="space-y-4">
-                  {regionGroups.map(([region, items]) => (
-                    <div key={region}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {region}
-                        </span>
-                        <span className="text-xs text-muted-foreground">({items.length})</span>
-                        <div className="flex-1 border-t border-border" />
-                      </div>
-                      <div className="space-y-2">
-                        {items.map((r) => (
-                          <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               ) : (
-                <div className="space-y-2">
-                  {visibleResults!.map((r) => (
-                    <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
-                  ))}
-                  {sortedResults.length > 20 && !showAll && (
-                    <button
-                      onClick={() => setShowAll(true)}
-                      className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-2.5 transition-colors"
-                    >
-                      Voir les {sortedResults.length - 20} destinations supplémentaires
-                    </button>
-                  )}
+                <div className="space-y-3">
+                  {regionGroups.map(([region, items]) => {
+                    const isCollapsed = collapsedRegions.has(region);
+                    return (
+                      <div key={region} className="rounded-md border overflow-hidden">
+                        <button
+                          onClick={() => toggleRegion(region)}
+                          className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
+                        >
+                          <span className="text-xs font-semibold uppercase tracking-wide flex-1 text-left">
+                            {region}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{items.length}</span>
+                          {isCollapsed
+                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                        </button>
+                        {!isCollapsed && (
+                          <div className="divide-y">
+                            {items.map((r) => (
+                              <ResultCard key={r.aerodrome.id} result={r} tripScope={tripScope} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
