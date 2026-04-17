@@ -22,10 +22,7 @@ export const RegisterSchema = z.object({
   password: passwordSchema,
   displayName: displayNameSchema,
   communityProfileConsent: z.literal(true, {
-    errorMap: () => ({
-      message:
-        "Vous devez accepter les reglages communautaires pour creer un compte.",
-    }),
+    message: "Vous devez accepter les reglages communautaires pour creer un compte.",
   }),
 });
 
