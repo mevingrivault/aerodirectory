@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import type { StringValue } from "ms";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
 import { TOTP } from "otplib";
@@ -517,8 +518,8 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload),
       this.jwt.signAsync(payload, {
-        secret: this.config.get<string>("JWT_REFRESH_SECRET"),
-        expiresIn: this.config.get<string>("JWT_REFRESH_EXPIRES_IN", "7d"),
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+        expiresIn: (this.config.get("JWT_REFRESH_EXPIRES_IN") ?? "7d") as StringValue,
       }),
     ]);
 
