@@ -462,10 +462,10 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               <div className="result-price-val">
                 {r.estimatedCost.toFixed(2).replace(".", ",")} <span className="unit">€</span>
               </div>
-              <div className="result-price-sub">avec redevance</div>
+              <div className="result-price-sub">estimé</div>
             </div>
           )}
-          <svg className="ico result-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+          <svg style={{width:16,height:16,flexShrink:0,color:"var(--ink-400)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="m9 18 6-6-6-6"/>
           </svg>
         </div>
@@ -1363,8 +1363,8 @@ export default function PlannerPage() {
         }
         .result-price-val .unit { font-family: var(--f-sans); font-size: 12px; color: var(--ink-500); font-weight: 500; margin-left: 2px; }
         .result-price-sub { font-size: 11px; color: var(--ink-500); font-family: var(--f-mono); }
-        .result-chevron { color: var(--ink-400); }
-        .result-row:hover .result-chevron { color: var(--horizon-700); }
+        .result-right > svg { color: var(--ink-400); }
+        .result-row:hover .result-right > svg { color: var(--horizon-700); }
         .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
         .badge-oaci { font-family: var(--f-mono); font-weight: 500; background: var(--paper-100); color: var(--ink-950); border: 1px solid var(--ink-300); letter-spacing: 0.08em; height: 20px; font-size: 10px; }
         .badge-vfr { background: var(--vfr-100); color: var(--vfr-700); }
@@ -1372,16 +1372,16 @@ export default function PlannerPage() {
 
         /* Mobile FAB + drawer */
         .planner-fab {
-          display: none; position: fixed; right: 16px; bottom: 16px; z-index: 25;
-          height: 52px; padding: 0 18px; border-radius: 999px;
+          display: none; position: fixed; right: 16px; bottom: 20px; z-index: 200;
+          height: 48px; padding: 0 20px; border-radius: 999px;
           background: var(--ink-950); color: white; border: 0;
-          box-shadow: 0 12px 32px -12px rgba(20,30,50,.18);
-          font-size: 14px; font-weight: 500;
+          box-shadow: 0 4px 24px rgba(20,30,50,.35);
+          font-size: 14px; font-weight: 600;
           align-items: center; gap: 8px; cursor: pointer; font-family: inherit;
         }
         .planner-scrim {
-          display: none; position: fixed; inset: 0;
-          background: rgba(20, 30, 50, 0.4); z-index: 45;
+          position: fixed; inset: 0;
+          background: rgba(20,30,50,.5); z-index: 100;
         }
         .planner-sidebar-mobile-head {
           display: none; align-items: center; justify-content: space-between;
@@ -1407,11 +1407,26 @@ export default function PlannerPage() {
         /* Create profile form */
         .planner-form { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--ink-200); border-radius: 10px; background: var(--paper-50); }
 
+        /* View toggle — large touch targets */
+        .planner-view-toggle {
+          display: flex; gap: 8px; margin-left: 6px;
+        }
+        .planner-view-btn {
+          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+          height: 36px; padding: 0 14px; min-width: 72px;
+          border-radius: 8px; font-family: var(--f-sans); font-size: 13px; font-weight: 500;
+          cursor: pointer; border: 1px solid var(--ink-300);
+          background: white; color: var(--ink-700);
+          transition: all .15s;
+        }
+        .planner-view-btn.active { background: var(--ink-950); color: white; border-color: var(--ink-950); }
+        .planner-view-btn:not(.active):hover { background: var(--paper-100); }
+
         @media (max-width: 1200px) {
           .planner-layout { grid-template-columns: 290px 1fr; gap: 20px; }
         }
         @media (max-width: 960px) {
-          .planner-page-wrap { padding: 20px 16px 96px !important; }
+          .planner-page-wrap { padding: 20px 16px 88px !important; }
           .planner-page-title { font-size: 28px !important; }
           .planner-page-sub { margin-left: 0 !important; font-size: 14px !important; }
           .planner-page-title-ico { width: 32px !important; height: 32px !important; }
@@ -1419,31 +1434,28 @@ export default function PlannerPage() {
           .planner-sidebar {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             max-height: 100dvh; background: var(--paper-50);
-            z-index: 50; padding: 20px 16px; overflow-y: auto;
+            z-index: 150; padding: 20px 16px 32px; overflow-y: auto;
             transform: translateX(-100%);
             transition: transform .25s cubic-bezier(.2,.8,.2,1);
           }
           .planner-sidebar.open { transform: translateX(0); }
-          .planner-fab { display: inline-flex; }
+          .planner-fab { display: inline-flex !important; }
           .planner-sidebar-mobile-head { display: flex; }
-          body.drawer-open .planner-fab { display: none; }
-          body.drawer-open .planner-scrim { display: block; }
-          body:not(.drawer-open) .planner-scrim { display: none; }
-          .result-row { grid-template-columns: 32px 1fr auto; padding: 14px 16px; }
+          .result-row { grid-template-columns: 32px 1fr auto; padding: 12px 14px; }
           .planner-results-head { flex-direction: column; align-items: flex-start; gap: 10px; }
-          .planner-results-tools { width: 100%; flex-wrap: wrap; }
+          .planner-results-tools { width: 100%; }
         }
         @media (max-width: 640px) {
-          .planner-page-wrap { padding: 16px 12px 96px !important; }
+          .planner-page-wrap { padding: 16px 12px 88px !important; }
           .planner-page-title { font-size: 22px !important; gap: 10px !important; }
-          .result-row { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px; }
+          .result-row { grid-template-columns: 1fr; gap: 6px; padding: 12px; }
           .result-ico { display: none; }
-          .result-right { width: 100%; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--ink-200); }
-          .result-price-val { font-size: 17px; }
-          .planner-region-head { padding: 10px 14px; }
-          .planner-results-tools { gap: 6px; }
-          .planner-btn-secondary { font-size: 11px; height: 30px; padding: 0 8px; }
-          .planner-seg button { font-size: 11px; }
+          .result-chevron { display: none; }
+          .result-right { width: 100%; justify-content: flex-start; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--ink-200); }
+          .result-price-val { font-size: 16px; }
+          .planner-region-head { padding: 10px 12px; }
+          .planner-results-tools { gap: 6px; flex-wrap: wrap; }
+          .planner-view-btn { height: 40px; min-width: 80px; font-size: 14px; }
         }
       `}</style>
 
@@ -1508,53 +1520,61 @@ export default function PlannerPage() {
             </div>
 
             {/* Saved searches */}
-            {user && savedSearches.length > 0 && (
+            {user && (
               <div className="planner-saved-panel">
                 <div className="planner-saved-label">
                   <IcoBookmark />
                   Recherches sauvegardées
                 </div>
-                <select
-                  className="planner-saved-select"
-                  value={selectedSavedSearchId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setSelectedSavedSearchId(id);
-                    const saved = savedSearches.find((item) => item.id === id);
-                    if (!saved) return;
-                    void applySavedPlannerSearch(saved);
-                  }}
-                >
-                  <option value="">Choisir une recherche…</option>
-                  {savedSearches.map((saved) => (
-                    <option key={saved.id} value={saved.id}>
-                      {saved.name}{saved.isPublic ? " · public" : " · privé"}
-                    </option>
-                  ))}
-                </select>
-                {selectedSavedSearchId && (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                      className="planner-btn-secondary"
-                      onClick={() => {
-                        const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
+                {savedSearches.length === 0 ? (
+                  <p style={{ fontSize: 12, color: "var(--ink-500)", margin: 0 }}>
+                    Aucune recherche sauvegardée. Configurez et lancez une recherche, puis sauvegardez-la.
+                  </p>
+                ) : (
+                  <>
+                    <select
+                      className="planner-saved-select"
+                      value={selectedSavedSearchId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedSavedSearchId(id);
+                        const saved = savedSearches.find((item) => item.id === id);
                         if (!saved) return;
-                        updateSavedSearchVisibilityMutation.mutate({ id: saved.id, isPublic: !saved.isPublic });
+                        void applySavedPlannerSearch(saved);
                       }}
-                      disabled={updateSavedSearchVisibilityMutation.isPending}
                     >
-                      <IcoGlobe />
-                      {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? "Privatiser" : "Rendre public"}
-                    </button>
-                    <button
-                      className="planner-btn-secondary"
-                      style={{ color: "oklch(0.45 0.15 25)" }}
-                      onClick={() => deleteSavedSearchMutation.mutate(selectedSavedSearchId)}
-                      disabled={deleteSavedSearchMutation.isPending}
-                    >
-                      Supprimer
-                    </button>
-                  </div>
+                      <option value="">Choisir une recherche…</option>
+                      {savedSearches.map((saved) => (
+                        <option key={saved.id} value={saved.id}>
+                          {saved.name}{saved.isPublic ? " · public" : " · privé"}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSavedSearchId && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          className="planner-btn-secondary"
+                          onClick={() => {
+                            const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
+                            if (!saved) return;
+                            updateSavedSearchVisibilityMutation.mutate({ id: saved.id, isPublic: !saved.isPublic });
+                          }}
+                          disabled={updateSavedSearchVisibilityMutation.isPending}
+                        >
+                          <IcoGlobe />
+                          {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? "Privatiser" : "Rendre public"}
+                        </button>
+                        <button
+                          className="planner-btn-secondary"
+                          style={{ color: "oklch(0.45 0.15 25)" }}
+                          onClick={() => deleteSavedSearchMutation.mutate(selectedSavedSearchId)}
+                          disabled={deleteSavedSearchMutation.isPending}
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -2032,13 +2052,13 @@ export default function PlannerPage() {
                   <button className="planner-btn-secondary" onClick={handleExportCsv}><IcoDownload />CSV</button>
                   <button className="planner-btn-secondary" onClick={handleExportBriefing}><IcoDownload />Briefing</button>
                   <button className="planner-btn-secondary" onClick={handleExportPdf}><IcoDownload />PDF</button>
-                  <div className="planner-seg" style={{ marginLeft: 6 }}>
-                    <button className={cn(viewMode === "list" && "active")} onClick={() => setViewMode("list")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+                  <div className="planner-view-toggle">
+                    <button className={cn("planner-view-btn", viewMode === "list" && "active")} onClick={() => setViewMode("list")}>
+                      <svg style={{width:14,height:14,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
                       Liste
                     </button>
-                    <button className={cn(viewMode === "map" && "active")} onClick={() => setViewMode("map")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/></svg>
+                    <button className={cn("planner-view-btn", viewMode === "map" && "active")} onClick={() => setViewMode("map")}>
+                      <svg style={{width:14,height:14,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/></svg>
                       Carte
                     </button>
                   </div>
