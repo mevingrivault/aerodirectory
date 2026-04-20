@@ -1432,11 +1432,13 @@ export default function PlannerPage() {
           .planner-page-title-ico { width: 32px !important; height: 32px !important; }
           .planner-layout { grid-template-columns: 1fr; }
           .planner-sidebar {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            max-height: 100dvh; background: var(--paper-50);
-            z-index: 150; padding: 20px 16px 32px; overflow-y: auto;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
+            background: var(--paper-50);
+            z-index: 150; padding: 20px 16px 48px; overflow-y: auto; overflow-x: hidden;
+            box-sizing: border-box;
             transform: translateX(-100%);
             transition: transform .25s cubic-bezier(.2,.8,.2,1);
+            -webkit-overflow-scrolling: touch;
           }
           .planner-sidebar.open { transform: translateX(0); }
           .planner-fab { display: inline-flex !important; }
@@ -1467,7 +1469,7 @@ export default function PlannerPage() {
       />
 
       {/* Mobile FAB */}
-      <button className="planner-fab" onClick={() => setSidebarOpen(true)}>
+      <button className="planner-fab" onClick={() => setSidebarOpen(true)} style={{ display: sidebarOpen ? "none" : undefined }}>
         <IcoFilter />
         Filtres
         {activeFilterCount > 0 && (
@@ -1508,8 +1510,8 @@ export default function PlannerPage() {
 
         <div className="planner-layout">
 
-          {/* ─── SIDEBAR ─── */}
-          <aside className={cn("planner-sidebar", sidebarOpen && "open")}>
+          {/* ─── SIDEBAR (desktop: grid col; mobile: fixed drawer via CSS) ─── */}
+          <aside className={cn("planner-sidebar", sidebarOpen && "open")} aria-hidden={!sidebarOpen}>
 
             {/* Mobile header */}
             <div className="planner-sidebar-mobile-head">
