@@ -159,7 +159,7 @@ jobs:
           file: apps/web/Dockerfile
           push: true
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'https://api.navventura.fr/api/v1' }}
+            NEXT_PUBLIC_API_URL=https://api.navventura.fr/api/v1
             NEXT_PUBLIC_VAC_URL_PATTERN=${{ vars.NEXT_PUBLIC_VAC_URL_PATTERN }}
             NEXT_PUBLIC_CDN_URL=${{ vars.NEXT_PUBLIC_CDN_URL }}
           tags: |
