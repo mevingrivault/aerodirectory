@@ -83,33 +83,35 @@ function escapeHtml(value: string): string {
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
 
+const icoStyle = {width:16,height:16,flexShrink:0} as const;
+
 const IcoSearch = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
   </svg>
 );
 const IcoPlane = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17.8 19.2 16 11l3.5-3.5c.6-.6.8-1.4.6-2.1-.3-.8-1-1.3-1.8-1.5-.8-.1-1.6.1-2.1.6L12.7 8 4 6.4 2.4 8 9 12l-3 3H2l2 3 3 2 3-4v-4l4 6.6 1.8-1.4Z"/>
   </svg>
 );
 const IcoClock = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
   </svg>
 );
 const IcoSettings = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
   </svg>
 );
 const IcoFilter = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3Z"/>
   </svg>
 );
 const IcoSort = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>
   </svg>
 );
@@ -119,12 +121,12 @@ const IcoNav = () => (
   </svg>
 );
 const IcoNavIco = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:18,height:18,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
   </svg>
 );
 const IcoMapPin = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 10c0 7-8 12-8 12s-8-5-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
   </svg>
 );
@@ -139,52 +141,42 @@ const IcoX = () => (
   </svg>
 );
 const IcoPlus = () => (
-  <svg className="ico" style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 12h14"/><path d="M12 5v14"/>
   </svg>
 );
 const IcoTrash = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
   </svg>
 );
 const IcoCheck = () => (
-  <svg style={{width:14,height:14,color:"var(--horizon-700)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:14,height:14,flexShrink:0,color:"var(--horizon-700)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="m5 13 4 4L19 7"/>
   </svg>
 );
-const IcoList = () => (
-  <svg style={{width:12,height:12,verticalAlign:"-2px",marginRight:4}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
-  </svg>
-);
-const IcoMapView = () => (
-  <svg style={{width:12,height:12,verticalAlign:"-2px",marginRight:4}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/>
-  </svg>
-);
 const IcoDownload = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
   </svg>
 );
 const IcoSave = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
   </svg>
 );
 const IcoGlobe = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
   </svg>
 );
 const IcoBookmark = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:14,height:14,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
   </svg>
 );
 const IcoInfo = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+  <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
   </svg>
 );
@@ -1419,28 +1411,39 @@ export default function PlannerPage() {
           .planner-layout { grid-template-columns: 290px 1fr; gap: 20px; }
         }
         @media (max-width: 960px) {
+          .planner-page-wrap { padding: 20px 16px 96px !important; }
+          .planner-page-title { font-size: 28px !important; }
+          .planner-page-sub { margin-left: 0 !important; font-size: 14px !important; }
+          .planner-page-title-ico { width: 32px !important; height: 32px !important; }
           .planner-layout { grid-template-columns: 1fr; }
           .planner-sidebar {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             max-height: 100dvh; background: var(--paper-50);
-            z-index: 50; padding: 20px; overflow-y: auto;
+            z-index: 50; padding: 20px 16px; overflow-y: auto;
             transform: translateX(-100%);
             transition: transform .25s cubic-bezier(.2,.8,.2,1);
           }
           .planner-sidebar.open { transform: translateX(0); }
           .planner-fab { display: inline-flex; }
-          .planner-scrim { display: block; }
           .planner-sidebar-mobile-head { display: flex; }
           body.drawer-open .planner-fab { display: none; }
           body.drawer-open .planner-scrim { display: block; }
           body:not(.drawer-open) .planner-scrim { display: none; }
           .result-row { grid-template-columns: 32px 1fr auto; padding: 14px 16px; }
+          .planner-results-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+          .planner-results-tools { width: 100%; flex-wrap: wrap; }
         }
         @media (max-width: 640px) {
-          .result-row { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+          .planner-page-wrap { padding: 16px 12px 96px !important; }
+          .planner-page-title { font-size: 22px !important; gap: 10px !important; }
+          .result-row { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px; }
           .result-ico { display: none; }
           .result-right { width: 100%; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--ink-200); }
-          .planner-region-head { padding: 12px 14px; }
+          .result-price-val { font-size: 17px; }
+          .planner-region-head { padding: 10px 14px; }
+          .planner-results-tools { gap: 6px; }
+          .planner-btn-secondary { font-size: 11px; height: 30px; padding: 0 8px; }
+          .planner-seg button { font-size: 11px; }
         }
       `}</style>
 
@@ -1467,26 +1470,26 @@ export default function PlannerPage() {
         )}
       </button>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "32px 32px 64px" }}>
+      <div className="planner-page-wrap" style={{ maxWidth: 1400, margin: "0 auto", padding: "32px 32px 64px" }}>
 
         {/* Page head */}
         <div style={{ marginBottom: 28 }}>
-          <h1 style={{
+          <h1 className="planner-page-title" style={{
             display: "flex", alignItems: "center", gap: 14,
             fontFamily: "var(--f-serif)", fontWeight: 500,
             fontSize: 40, lineHeight: 1.05, letterSpacing: "-0.015em",
             margin: 0, color: "var(--ink-950)",
           }}>
-            <span style={{
+            <span className="planner-page-title-ico" style={{
               width: 40, height: 40, borderRadius: 8,
               background: "var(--horizon-100)", color: "var(--horizon-700)",
-              display: "grid", placeItems: "center",
+              display: "grid", placeItems: "center", flexShrink: 0,
             }}>
               <IcoNav />
             </span>
             Planificateur de vol
           </h1>
-          <p style={{ fontSize: 15, color: "var(--ink-700)", margin: "10px 0 0 54px", maxWidth: 620 }}>
+          <p className="planner-page-sub" style={{ fontSize: 15, color: "var(--ink-700)", margin: "10px 0 0 54px", maxWidth: 620 }}>
             Trouvez les destinations accessibles depuis votre terrain de départ, selon vos contraintes de temps et de budget.
           </p>
         </div>
@@ -1503,6 +1506,58 @@ export default function PlannerPage() {
                 <IcoX /> Fermer
               </button>
             </div>
+
+            {/* Saved searches */}
+            {user && savedSearches.length > 0 && (
+              <div className="planner-saved-panel">
+                <div className="planner-saved-label">
+                  <IcoBookmark />
+                  Recherches sauvegardées
+                </div>
+                <select
+                  className="planner-saved-select"
+                  value={selectedSavedSearchId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedSavedSearchId(id);
+                    const saved = savedSearches.find((item) => item.id === id);
+                    if (!saved) return;
+                    void applySavedPlannerSearch(saved);
+                  }}
+                >
+                  <option value="">Choisir une recherche…</option>
+                  {savedSearches.map((saved) => (
+                    <option key={saved.id} value={saved.id}>
+                      {saved.name}{saved.isPublic ? " · public" : " · privé"}
+                    </option>
+                  ))}
+                </select>
+                {selectedSavedSearchId && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      className="planner-btn-secondary"
+                      onClick={() => {
+                        const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
+                        if (!saved) return;
+                        updateSavedSearchVisibilityMutation.mutate({ id: saved.id, isPublic: !saved.isPublic });
+                      }}
+                      disabled={updateSavedSearchVisibilityMutation.isPending}
+                    >
+                      <IcoGlobe />
+                      {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? "Privatiser" : "Rendre public"}
+                    </button>
+                    <button
+                      className="planner-btn-secondary"
+                      style={{ color: "oklch(0.45 0.15 25)" }}
+                      onClick={() => deleteSavedSearchMutation.mutate(selectedSavedSearchId)}
+                      disabled={deleteSavedSearchMutation.isPending}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Départ */}
             <div className="planner-panel">
@@ -1948,62 +2003,12 @@ export default function PlannerPage() {
               </button>
             </div>
 
-            {/* Saved searches */}
+            {/* Save current search */}
             {user && (
-              <div className="planner-saved-panel">
-                <div className="planner-saved-label">
-                  <IcoBookmark />
-                  Recherches sauvegardées
-                </div>
-                <select
-                  className="planner-saved-select"
-                  value={selectedSavedSearchId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setSelectedSavedSearchId(id);
-                    const saved = savedSearches.find((item) => item.id === id);
-                    if (!saved) return;
-                    void applySavedPlannerSearch(saved);
-                  }}
-                >
-                  <option value="">Choisir une recherche…</option>
-                  {savedSearches.map((saved) => (
-                    <option key={saved.id} value={saved.id}>
-                      {saved.name}{saved.isPublic ? " · public" : " · privé"}
-                    </option>
-                  ))}
-                </select>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button className="planner-btn-secondary" onClick={handleSaveCurrentPlannerSearch} disabled={savePlannerSearchMutation.isPending}>
-                    <IcoSave />
-                    Sauvegarder
-                  </button>
-                  {selectedSavedSearchId && (
-                    <>
-                      <button
-                        className="planner-btn-secondary"
-                        onClick={() => {
-                          const saved = savedSearches.find((item) => item.id === selectedSavedSearchId);
-                          if (!saved) return;
-                          updateSavedSearchVisibilityMutation.mutate({ id: saved.id, isPublic: !saved.isPublic });
-                        }}
-                        disabled={updateSavedSearchVisibilityMutation.isPending}
-                      >
-                        <IcoGlobe />
-                        {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? "Privatiser" : "Rendre public"}
-                      </button>
-                      <button
-                        className="planner-btn-secondary"
-                        style={{ color: "oklch(0.45 0.15 25)" }}
-                        onClick={() => deleteSavedSearchMutation.mutate(selectedSavedSearchId)}
-                        disabled={deleteSavedSearchMutation.isPending}
-                      >
-                        Supprimer
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+              <button className="planner-btn-secondary" style={{ width: "100%" }} onClick={handleSaveCurrentPlannerSearch} disabled={savePlannerSearchMutation.isPending}>
+                <IcoSave />
+                Sauvegarder cette recherche
+              </button>
             )}
           </aside>
 
@@ -2028,11 +2033,13 @@ export default function PlannerPage() {
                   <button className="planner-btn-secondary" onClick={handleExportBriefing}><IcoDownload />Briefing</button>
                   <button className="planner-btn-secondary" onClick={handleExportPdf}><IcoDownload />PDF</button>
                   <div className="planner-seg" style={{ marginLeft: 6 }}>
-                    <button className={cn(viewMode === "list" && "active")} onClick={() => setViewMode("list")}>
-                      <IcoList />Liste
+                    <button className={cn(viewMode === "list" && "active")} onClick={() => setViewMode("list")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+                      Liste
                     </button>
-                    <button className={cn(viewMode === "map" && "active")} onClick={() => setViewMode("map")}>
-                      <IcoMapView />Carte
+                    <button className={cn(viewMode === "map" && "active")} onClick={() => setViewMode("map")} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/></svg>
+                      Carte
                     </button>
                   </div>
                 </div>
