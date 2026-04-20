@@ -28,6 +28,10 @@
     --terrain-700: oklch(0.48 0.08 130);
     --terrain-500: oklch(0.62 0.10 130);
     --terrain-100: oklch(0.94 0.04 130);
+    --brass-700: oklch(0.55 0.10 75);
+    --brass-500: oklch(0.70 0.12 75);
+    --brass-300: oklch(0.85 0.08 75);
+    --brass-100: oklch(0.95 0.04 75);
     --vfr-700: oklch(0.45 0.12 150);
     --vfr-500: oklch(0.60 0.13 150);
     --vfr-100: oklch(0.93 0.05 150);
