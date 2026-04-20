@@ -79,6 +79,7 @@ services:
       - seaweedfs-filer
     networks:
       - internal
+      - proxy
 
   clamav-updater:
     image: clamav/clamav:stable
