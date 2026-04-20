@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CapCard } from "@/components/ui/cap-card";
 
 const API_BASE =
   process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:4000/api/v1";
@@ -317,69 +318,38 @@ export default async function HomePage() {
             gap: 1, background: "var(--ink-200)",
             border: "1px solid var(--ink-200)", borderRadius: 12, overflow: "hidden",
           }}>
-            {[
-              {
-                num: "01 · Search", href: "/search",
-                label: "Rechercher des aérodromes",
-                desc: "Filtrez par nom, code OACI, type de piste, carburant disponible, restaurant, hébergement — et retrouvez le terrain qui colle à votre après-midi.",
-                link: "Ouvrir la recherche",
-                icoStyle: { background: "var(--horizon-100)", color: "var(--horizon-700)" },
-                icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-              },
-              {
-                num: "02 · Map", href: "/map",
-                label: "Carte interactive",
-                desc: "Explorez les terrains sur une carte pan-Aéro avec OpenStreetMap en fond et un filtrage temps réel par type, services et distance.",
-                link: "Ouvrir la carte",
-                icoStyle: { background: "var(--terrain-100)", color: "var(--terrain-800)" },
-                icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/></svg>,
-              },
-              {
-                num: "03 · Logbook", href: "/aerodex",
-                label: "Aérodex — carnet de vol",
-                desc: "Marquez vos visites, collectionnez les badges, consultez vos statistiques. Un carnet de terrain qui se remplit au fil de vos aventures.",
-                link: "Voir mon carnet",
-                icoStyle: { background: "var(--horizon-100)", color: "var(--horizon-700)" },
-                icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/></svg>,
-              },
-              {
-                num: "04 · Planner", href: "/planner",
-                label: "Planificateur de vol",
-                desc: "Renseignez votre profil avion et trouvez les terrains accessibles avec une estimation de temps, de coût carburant et de distance.",
-                link: "Planifier un vol",
-                icoStyle: { background: "var(--terrain-100)", color: "var(--terrain-800)" },
-                icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>,
-              },
-            ].map((cap) => (
-              <Link key={cap.href} href={cap.href} style={{
-                background: "white", padding: "32px 28px 36px",
-                display: "flex", flexDirection: "column", gap: 20,
-                textDecoration: "none", minHeight: 280,
-                transition: "background .2s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--paper-50)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "white"; }}
-              >
-                <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 500, color: "var(--ink-400)", letterSpacing: "0.1em" }}>{cap.num}</div>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 8,
-                  display: "grid", placeItems: "center",
-                  ...cap.icoStyle,
-                }}>{cap.icon}</div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 18, color: "var(--ink-950)" }}>{cap.label}</div>
-                  <p style={{ fontSize: 14, color: "var(--ink-700)", lineHeight: 1.55, margin: "8px 0 0" }}>{cap.desc}</p>
-                </div>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  fontSize: 13, fontWeight: 500, color: "var(--horizon-700)",
-                  marginTop: "auto",
-                }}>
-                  {cap.link}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </span>
-              </Link>
-            ))}
+            <CapCard
+              num="01 · Search" href="/search"
+              label="Rechercher des aérodromes"
+              desc="Filtrez par nom, code OACI, type de piste, carburant disponible, restaurant, hébergement — et retrouvez le terrain qui colle à votre après-midi."
+              link="Ouvrir la recherche"
+              icoStyle={{ background: "var(--horizon-100)", color: "var(--horizon-700)" }}
+              icon={<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>}
+            />
+            <CapCard
+              num="02 · Map" href="/map"
+              label="Carte interactive"
+              desc="Explorez les terrains sur une carte pan-Aéro avec OpenStreetMap en fond et un filtrage temps réel par type, services et distance."
+              link="Ouvrir la carte"
+              icoStyle={{ background: "var(--terrain-100)", color: "var(--terrain-800)" }}
+              icon={<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6 9 4l6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v16"/><path d="M15 6v16"/></svg>}
+            />
+            <CapCard
+              num="03 · Logbook" href="/aerodex"
+              label="Aérodex — carnet de vol"
+              desc="Marquez vos visites, collectionnez les badges, consultez vos statistiques. Un carnet de terrain qui se remplit au fil de vos aventures."
+              link="Voir mon carnet"
+              icoStyle={{ background: "var(--horizon-100)", color: "var(--horizon-700)" }}
+              icon={<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/></svg>}
+            />
+            <CapCard
+              num="04 · Planner" href="/planner"
+              label="Planificateur de vol"
+              desc="Renseignez votre profil avion et trouvez les terrains accessibles avec une estimation de temps, de coût carburant et de distance."
+              link="Planifier un vol"
+              icoStyle={{ background: "var(--terrain-100)", color: "var(--terrain-800)" }}
+              icon={<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>}
+            />
           </div>
         </section>
 
