@@ -87,15 +87,11 @@ export class StorageService implements OnModuleInit {
     };
   }
 
-  /** Delete an object by its key */
+  /** Delete an object by its key — throws on failure */
   async delete(key: string): Promise<void> {
-    try {
-      await this.client.send(
-        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
-      );
-    } catch (err) {
-      this.logger.error(`Failed to delete object ${key}`, err);
-    }
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   resolvePublicUrl(key: string | null | undefined): string | null {

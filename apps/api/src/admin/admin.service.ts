@@ -12,6 +12,8 @@ import { parseOpenAirFile } from "../services/airspace/openair-parser";
 import type {
   AdminImportOpenAirInput,
   AdminCommentsQueryInput,
+  AdminContentAuditItem,
+  AdminContentAuditQueryInput,
   AdminCorrectionsQueryInput,
   AdminMailEventsQueryInput,
   AdminMailEventItem,
@@ -192,7 +194,7 @@ export class AdminService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, status: true },
+      select: { id: true, email: true, displayName: true, role: true, status: true },
     });
 
     if (!user) {
@@ -209,24 +211,29 @@ export class AdminService {
       throw new BadRequestException("Cet utilisateur est déjà banni.");
     }
 
+    const reason = input.reason?.trim() || null;
+
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         status: "BANNED",
         bannedAt: new Date(),
-        bannedReason: input.reason?.trim() || null,
+        bannedReason: reason,
         bannedById: adminId,
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "USER_BAN",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "USER_BAN",
+      targetType: "user",
+      targetId: userId,
+      targetSummary: user.displayName || user.email,
+      reason,
       ip,
       userAgent,
       metadata: {
         targetUserId: userId,
-        reason: input.reason?.trim() || null,
       },
     });
   }
@@ -239,7 +246,7 @@ export class AdminService {
   ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, status: true },
+      select: { id: true, email: true, displayName: true, status: true },
     });
 
     if (!user) {
@@ -260,12 +267,18 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "USER_UNBAN",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "USER_UNBAN",
+      targetType: "user",
+      targetId: userId,
+      targetSummary: user.displayName || user.email,
+      reason: null,
       ip,
       userAgent,
-      metadata: { targetUserId: userId },
+      metadata: {
+        targetUserId: userId,
+      },
     });
   }
 
@@ -306,19 +319,23 @@ export class AdminService {
       throw new BadRequestException("Mot de passe administrateur incorrect.");
     }
 
+    const reason = input.reason?.trim() || null;
+
     await this.prisma.user.delete({ where: { id: userId } });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "USER_DELETE",
+      targetType: "user",
+      targetId: target.id,
+      targetSummary: target.displayName || target.email,
+      reason,
       ip,
       userAgent,
       metadata: {
-        type: "USER_DELETE",
         targetUserId: target.id,
         targetEmail: target.email,
         targetDisplayName: target.displayName,
-        reason: input.reason?.trim() || null,
       },
     });
   }
@@ -551,6 +568,7 @@ export class AdminService {
         userId: true,
         aerodromeId: true,
         field: true,
+        proposedValue: true,
         contentStatus: true,
       },
     });
@@ -572,17 +590,19 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "CORRECTION_APPROVE",
+      targetType: "correction",
+      targetId: correctionId,
+      targetSummary: `${correction.field}: ${correction.proposedValue}`.slice(0, 180),
+      reason: input.note?.trim() || null,
+      aerodromeId: correction.aerodromeId,
       ip,
       userAgent,
       metadata: {
-        type: "CORRECTION_APPROVE",
         correctionId,
-        aerodromeId: correction.aerodromeId,
         field: correction.field,
-        note: input.note?.trim() || null,
       },
     });
 
@@ -617,6 +637,7 @@ export class AdminService {
         userId: true,
         aerodromeId: true,
         field: true,
+        proposedValue: true,
         contentStatus: true,
       },
     });
@@ -638,17 +659,19 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "CORRECTION_REJECT",
+      targetType: "correction",
+      targetId: correctionId,
+      targetSummary: `${correction.field}: ${correction.proposedValue}`.slice(0, 180),
+      reason: input.note?.trim() || null,
+      aerodromeId: correction.aerodromeId,
       ip,
       userAgent,
       metadata: {
-        type: "CORRECTION_REJECT",
         correctionId,
-        aerodromeId: correction.aerodromeId,
         field: correction.field,
-        note: input.note?.trim() || null,
       },
     });
 
@@ -680,6 +703,8 @@ export class AdminService {
       where: { id: commentId },
       select: {
         id: true,
+        content: true,
+        aerodromeId: true,
         replies: {
           select: { id: true },
         },
@@ -704,15 +729,20 @@ export class AdminService {
       }),
     ]);
 
-    await this.audit.log({
-      userId: adminId,
-      action: "COMMENT_DELETE",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "COMMENT_DELETE",
+      targetType: "comment",
+      targetId: commentId,
+      targetSummary: comment.content.slice(0, 180),
+      reason: input.reason?.trim() || null,
+      aerodromeId: comment.aerodromeId,
       ip,
       userAgent,
       metadata: {
         commentId,
-        reason: input.reason?.trim() || null,
         moderation: true,
+        deletedReplyCount: comment.replies.length,
       },
     });
   }
@@ -726,7 +756,7 @@ export class AdminService {
   ): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, deletedAt: true, contentStatus: true },
+      select: { id: true, content: true, aerodromeId: true, deletedAt: true, contentStatus: true },
     });
 
     if (!comment) {
@@ -759,15 +789,18 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "COMMENT_RESTORE",
+      targetType: "comment",
+      targetId: commentId,
+      targetSummary: comment.content.slice(0, 180),
+      reason: input.note?.trim() || null,
+      aerodromeId: comment.aerodromeId,
       ip,
       userAgent,
       metadata: {
-        type: "COMMENT_RESTORE",
         commentId,
-        note: input.note?.trim() || null,
       },
     });
   }
@@ -1040,15 +1073,18 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "PHOTO_APPROVE",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "PHOTO_APPROVE",
+      targetType: "photo",
+      targetId: photoId,
+      targetSummary: `Photo ${photoId}`,
+      reason: input.note?.trim() || null,
+      aerodromeId: photo.aerodromeId,
       ip,
       userAgent,
       metadata: {
         photoId,
-        aerodromeId: photo.aerodromeId,
-        note: input.note?.trim() || null,
       },
     });
   }
@@ -1083,15 +1119,18 @@ export class AdminService {
       },
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "PHOTO_REJECT",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "PHOTO_REJECT",
+      targetType: "photo",
+      targetId: photoId,
+      targetSummary: `Photo ${photoId}`,
+      reason: input.reason?.trim() || null,
+      aerodromeId: photo.aerodromeId,
       ip,
       userAgent,
       metadata: {
         photoId,
-        aerodromeId: photo.aerodromeId,
-        reason: input.reason?.trim() || null,
       },
     });
   }
@@ -1177,11 +1216,14 @@ export class AdminService {
     const correctionIds = reports
       .filter((report) => report.targetType === "correction")
       .map((report) => report.targetId);
+    const photoIds = reports
+      .filter((report) => report.targetType === "photo")
+      .map((report) => report.targetId);
     const reviewerIds = Array.from(
       new Set(reports.map((report) => report.reviewedBy).filter((id): id is string => !!id)),
     );
 
-    const [comments, corrections, reviewers] = await Promise.all([
+    const [comments, corrections, photos, reviewers] = await Promise.all([
       commentIds.length
         ? this.prisma.comment.findMany({
             where: { id: { in: commentIds } },
@@ -1199,6 +1241,21 @@ export class AdminService {
             },
           })
         : [],
+      photoIds.length
+        ? this.prisma.photo.findMany({
+            where: { id: { in: photoIds } },
+            select: {
+              id: true,
+              createdAt: true,
+              status: true,
+              user: {
+                select: {
+                  displayName: true,
+                },
+              },
+            },
+          })
+        : [],
       reviewerIds.length
         ? this.prisma.user.findMany({
             where: { id: { in: reviewerIds } },
@@ -1209,11 +1266,12 @@ export class AdminService {
 
     const commentsById = new Map(comments.map((c) => [c.id, c]));
     const correctionsById = new Map(corrections.map((c) => [c.id, c]));
+    const photosById = new Map(photos.map((photo) => [photo.id, photo]));
     const reviewersById = new Map(reviewers.map((u) => [u.id, u]));
 
     return {
       data: reports.map((report) =>
-        this.toAdminReportListItem(report, commentsById, correctionsById, reviewersById),
+        this.toAdminReportListItem(report, commentsById, correctionsById, photosById, reviewersById),
       ),
       total,
     };
@@ -1260,10 +1318,15 @@ export class AdminService {
             where: { id: report.targetId },
             select: { userId: true },
           })
-        : this.prisma.correction.findUnique({
-            where: { id: report.targetId },
-            select: { userId: true },
-          }),
+        : report.targetType === "correction"
+          ? this.prisma.correction.findUnique({
+              where: { id: report.targetId },
+              select: { userId: true },
+            })
+          : this.prisma.photo.findUnique({
+              where: { id: report.targetId },
+              select: { userId: true },
+            }),
       this.prisma.aerodrome.findUnique({
         where: { id: report.aerodromeId },
         select: { name: true },
@@ -1289,26 +1352,42 @@ export class AdminService {
           where: { id: report.targetId },
           data: { contentStatus: "FLAGGED" },
         });
-      } else {
+      } else if (report.targetType === "correction") {
         await tx.correction.updateMany({
           where: { id: report.targetId },
           data: { contentStatus: "FLAGGED" },
         });
+      } else {
+        await tx.photo.updateMany({
+          where: { id: report.targetId, status: "READY" },
+          data: {
+            status: "REJECTED",
+            rejectedReason: input.note?.trim() || "Photo signalée par la communauté.",
+            reviewedAt: new Date(),
+            reviewedById: adminId,
+          },
+        });
       }
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "REPORT_APPROVE",
+      targetType:
+        report.targetType === "comment"
+          ? "comment"
+          : report.targetType === "correction"
+            ? "correction"
+            : "photo",
+      targetId: report.targetId,
+      targetSummary: `${report.targetType} ${report.targetId}`,
+      reason: input.note?.trim() || null,
+      aerodromeId: report.aerodromeId,
       ip,
       userAgent,
       metadata: {
-        type: "REPORT_APPROVE",
         reportId,
-        targetType: report.targetType,
-        targetId: report.targetId,
-        aerodromeId: report.aerodromeId,
-        note: input.note?.trim() || null,
+        reportTargetType: report.targetType,
       },
     });
 
@@ -1332,7 +1411,9 @@ export class AdminService {
         message:
           report.targetType === "comment"
             ? `Un commentaire a été marqué comme signalé sur ${aerodrome?.name ?? "un aérodrome"}.`
-            : `Une correction proposée a été marquée comme signalée sur ${aerodrome?.name ?? "un aérodrome"}.`,
+            : report.targetType === "correction"
+              ? `Une correction proposée a été marquée comme signalée sur ${aerodrome?.name ?? "un aérodrome"}.`
+              : `Une photo a été retirée après signalement sur ${aerodrome?.name ?? "un aérodrome"}.`,
         linkUrl: `/aerodrome/${report.aerodromeId}`,
         metadata: { targetType: report.targetType, targetId: report.targetId },
       });
@@ -1380,10 +1461,15 @@ export class AdminService {
             where: { id: report.targetId },
             select: { userId: true },
           })
-        : this.prisma.correction.findUnique({
-            where: { id: report.targetId },
-            select: { userId: true },
-          }),
+        : report.targetType === "correction"
+          ? this.prisma.correction.findUnique({
+              where: { id: report.targetId },
+              select: { userId: true },
+            })
+          : this.prisma.photo.findUnique({
+              where: { id: report.targetId },
+              select: { userId: true },
+            }),
       this.prisma.aerodrome.findUnique({
         where: { id: report.aerodromeId },
         select: { name: true },
@@ -1409,7 +1495,7 @@ export class AdminService {
           where: { id: report.targetId, contentStatus: "FLAGGED" },
           data: { contentStatus: "APPROVED" },
         });
-      } else {
+      } else if (report.targetType === "correction") {
         await tx.correction.updateMany({
           where: { id: report.targetId, contentStatus: "FLAGGED" },
           data: { contentStatus: "PENDING" },
@@ -1417,18 +1503,24 @@ export class AdminService {
       }
     });
 
-    await this.audit.log({
-      userId: adminId,
-      action: "ADMIN_ACTION",
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "REPORT_REJECT",
+      targetType:
+        report.targetType === "comment"
+          ? "comment"
+          : report.targetType === "correction"
+            ? "correction"
+            : "photo",
+      targetId: report.targetId,
+      targetSummary: `${report.targetType} ${report.targetId}`,
+      reason: input.note?.trim() || null,
+      aerodromeId: report.aerodromeId,
       ip,
       userAgent,
       metadata: {
-        type: "REPORT_REJECT",
         reportId,
-        targetType: report.targetType,
-        targetId: report.targetId,
-        aerodromeId: report.aerodromeId,
-        note: input.note?.trim() || null,
+        reportTargetType: report.targetType,
       },
     });
 
@@ -1452,7 +1544,9 @@ export class AdminService {
         message:
           report.targetType === "comment"
             ? `Votre commentaire a été rétabli sur ${aerodrome?.name ?? "un aérodrome"}.`
-            : `Votre correction proposée a été rétablie sur ${aerodrome?.name ?? "un aérodrome"}.`,
+            : report.targetType === "correction"
+              ? `Votre correction proposée a été rétablie sur ${aerodrome?.name ?? "un aérodrome"}.`
+              : `Votre photo a été conservée après examen sur ${aerodrome?.name ?? "un aérodrome"}.`,
         linkUrl: `/aerodrome/${report.aerodromeId}`,
         metadata: { targetType: report.targetType, targetId: report.targetId },
       });
@@ -1574,6 +1668,75 @@ export class AdminService {
       });
 
     return { data: items, total };
+  }
+
+  async listContentAuditLogs(query: AdminContentAuditQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const targetType = query.targetType ?? "all";
+    const actionType = query.actionType ?? "all";
+
+    const andFilters: Array<Record<string, unknown>> = [
+      { metadata: { path: ["category"], equals: "community_content_admin" } },
+    ];
+
+    if (targetType !== "all") {
+      andFilters.push({ metadata: { path: ["targetType"], equals: targetType } });
+    }
+
+    if (actionType !== "all") {
+      andFilters.push({ metadata: { path: ["actionType"], equals: actionType } });
+    }
+
+    const where = { AND: andFilters };
+
+    const [logs, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          createdAt: true,
+          metadata: true,
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    const aerodromeIds = logs
+      .map((log) => {
+        const metadata = log.metadata as Record<string, unknown> | null;
+        return typeof metadata?.["aerodromeId"] === "string" ? metadata["aerodromeId"] : null;
+      })
+      .filter((id): id is string => !!id);
+
+    const aerodromes = aerodromeIds.length
+      ? await this.prisma.aerodrome.findMany({
+          where: { id: { in: Array.from(new Set(aerodromeIds)) } },
+          select: {
+            id: true,
+            name: true,
+            icaoCode: true,
+          },
+        })
+      : [];
+    const aerodromesById = new Map(aerodromes.map((aerodrome) => [aerodrome.id, aerodrome]));
+
+    return {
+      data: logs
+        .map((log) => this.toAdminContentAuditItem(log, aerodromesById))
+        .filter((item): item is AdminContentAuditItem => item !== null),
+      total,
+    };
   }
 
   private toAdminUserListItem(user: {
@@ -1703,22 +1866,32 @@ export class AdminService {
     },
     commentsById: Map<string, { id: string; content: string; contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" }>,
     correctionsById: Map<string, { id: string; field: string; proposedValue: string; contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" }>,
+    photosById: Map<string, { id: string; createdAt: Date; status: "PENDING" | "SCANNING" | "REJECTED" | "READY"; user: { displayName: string | null } }>,
     reviewersById: Map<string, { id: string; displayName: string | null; email: string }>,
   ): AdminReportListItem {
-    const isComment = report.targetType === "comment";
-    const commentTarget = isComment ? commentsById.get(report.targetId) : undefined;
-    const correctionTarget = !isComment ? correctionsById.get(report.targetId) : undefined;
+    const commentTarget = report.targetType === "comment" ? commentsById.get(report.targetId) : undefined;
+    const correctionTarget = report.targetType === "correction" ? correctionsById.get(report.targetId) : undefined;
+    const photoTarget = report.targetType === "photo" ? photosById.get(report.targetId) : undefined;
 
     const targetPreview = commentTarget
       ? commentTarget.content.slice(0, 180)
       : correctionTarget
         ? `${correctionTarget.field}: ${correctionTarget.proposedValue}`.slice(0, 180)
+        : photoTarget
+          ? `Photo publiée le ${photoTarget.createdAt.toLocaleDateString("fr-FR")}${
+              photoTarget.user.displayName ? ` par ${photoTarget.user.displayName}` : ""
+            }`
         : null;
-    const targetStatus = commentTarget?.contentStatus ?? correctionTarget?.contentStatus ?? null;
+    const targetStatus = commentTarget?.contentStatus ?? correctionTarget?.contentStatus ?? photoTarget?.status ?? null;
 
     return {
       id: report.id,
-      targetType: isComment ? "comment" : "correction",
+      targetType:
+        report.targetType === "comment"
+          ? "comment"
+          : report.targetType === "correction"
+            ? "correction"
+            : "photo",
       targetId: report.targetId,
       reason: report.reason,
       contentStatus: report.contentStatus,
@@ -1769,6 +1942,131 @@ export class AdminService {
           ? metadata["errorMessage"]
           : null,
     };
+  }
+
+  private async logCommunityAdminAction(params: {
+    adminId: string;
+    actionType: AdminContentAuditItem["actionType"];
+    targetType: AdminContentAuditItem["targetType"];
+    targetId: string;
+    targetSummary: string | null;
+    reason: string | null;
+    aerodromeId?: string | null;
+    ip?: string;
+    userAgent?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    await this.audit.log({
+      userId: params.adminId,
+      action: this.mapCommunityActionToAuditAction(params.actionType),
+      ip: params.ip,
+      userAgent: params.userAgent,
+      metadata: {
+        category: "community_content_admin",
+        actionType: params.actionType,
+        targetType: params.targetType,
+        targetId: params.targetId,
+        targetSummary: params.targetSummary,
+        aerodromeId: params.aerodromeId ?? null,
+        reason: params.reason,
+        ...(params.metadata ?? {}),
+      },
+    });
+  }
+
+  private mapCommunityActionToAuditAction(
+    actionType: AdminContentAuditItem["actionType"],
+  ): "ADMIN_ACTION" | "COMMENT_DELETE" | "PHOTO_APPROVE" | "PHOTO_REJECT" | "USER_BAN" | "USER_UNBAN" {
+    switch (actionType) {
+      case "COMMENT_DELETE":
+        return "COMMENT_DELETE";
+      case "PHOTO_APPROVE":
+        return "PHOTO_APPROVE";
+      case "PHOTO_REJECT":
+        return "PHOTO_REJECT";
+      case "USER_BAN":
+        return "USER_BAN";
+      case "USER_UNBAN":
+        return "USER_UNBAN";
+      default:
+        return "ADMIN_ACTION";
+    }
+  }
+
+  private toAdminContentAuditItem(
+    log: {
+      id: string;
+      createdAt: Date;
+      metadata: unknown;
+      user: {
+        id: string;
+        displayName: string | null;
+        email: string;
+      } | null;
+    },
+    aerodromesById: Map<string, { id: string; name: string; icaoCode: string | null }>,
+  ): AdminContentAuditItem | null {
+    const metadata = log.metadata as Record<string, unknown> | null;
+    if (!metadata || metadata["category"] !== "community_content_admin") {
+      return null;
+    }
+
+    const actionType = metadata["actionType"];
+    const targetType = metadata["targetType"];
+    const targetId = metadata["targetId"];
+
+    if (
+      !this.isContentAuditActionType(actionType) ||
+      !this.isContentAuditTargetType(targetType) ||
+      typeof targetId !== "string"
+    ) {
+      return null;
+    }
+
+    const aerodromeId =
+      typeof metadata["aerodromeId"] === "string" ? metadata["aerodromeId"] : null;
+
+    return {
+      id: log.id,
+      createdAt: log.createdAt.toISOString(),
+      actionType,
+      targetType,
+      targetId,
+      targetSummary:
+        typeof metadata["targetSummary"] === "string" ? metadata["targetSummary"] : null,
+      reason: typeof metadata["reason"] === "string" ? metadata["reason"] : null,
+      actor: log.user,
+      aerodrome: aerodromeId ? (aerodromesById.get(aerodromeId) ?? null) : null,
+    };
+  }
+
+  private isContentAuditActionType(
+    value: unknown,
+  ): value is AdminContentAuditItem["actionType"] {
+    return (
+      value === "COMMENT_DELETE" ||
+      value === "COMMENT_RESTORE" ||
+      value === "CORRECTION_APPROVE" ||
+      value === "CORRECTION_REJECT" ||
+      value === "PHOTO_APPROVE" ||
+      value === "PHOTO_REJECT" ||
+      value === "REPORT_APPROVE" ||
+      value === "REPORT_REJECT" ||
+      value === "USER_BAN" ||
+      value === "USER_UNBAN" ||
+      value === "USER_DELETE"
+    );
+  }
+
+  private isContentAuditTargetType(
+    value: unknown,
+  ): value is AdminContentAuditItem["targetType"] {
+    return (
+      value === "comment" ||
+      value === "correction" ||
+      value === "photo" ||
+      value === "user"
+    );
   }
 }
 

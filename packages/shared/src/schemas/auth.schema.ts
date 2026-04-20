@@ -22,10 +22,7 @@ export const RegisterSchema = z.object({
   password: passwordSchema,
   displayName: displayNameSchema,
   communityProfileConsent: z.literal(true, {
-    errorMap: () => ({
-      message:
-        "Vous devez accepter les reglages communautaires pour creer un compte.",
-    }),
+    message: "Vous devez accepter les reglages communautaires pour creer un compte.",
   }),
 });
 
@@ -82,6 +79,7 @@ export const UpdateProfileSchema = z.object({
   showCommunityProfile: z.boolean().optional(),
   showCommunityContributions: z.boolean().optional(),
   showCommunityPhotos: z.boolean().optional(),
+  showPublicSearches: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;

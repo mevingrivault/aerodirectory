@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
+import type { StringValue } from "ms";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { AuthService } from "./auth.service";
@@ -19,9 +20,9 @@ import { PhotoModule } from "../photo/photo.module";
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>("JWT_SECRET"),
+        secret: config.getOrThrow<string>("JWT_SECRET"),
         signOptions: {
-          expiresIn: config.get<string>("JWT_EXPIRES_IN", "15m"),
+          expiresIn: (config.get("JWT_EXPIRES_IN") ?? "15m") as StringValue,
         },
       }),
     }),

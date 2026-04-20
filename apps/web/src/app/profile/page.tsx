@@ -210,7 +210,11 @@ export default function ProfilePage() {
   };
 
   const handlePrivacyChange = async (
-    field: "showCommunityProfile" | "showCommunityContributions" | "showCommunityPhotos",
+    field:
+      | "showCommunityProfile"
+      | "showCommunityContributions"
+      | "showCommunityPhotos"
+      | "showPublicSearches",
     value: boolean,
   ) => {
     setPrivacyLoading(field);
@@ -542,6 +546,26 @@ export default function ProfilePage() {
                 disabled={privacyLoading === "showCommunityPhotos"}
                 onChange={(event) =>
                   handlePrivacyChange("showCommunityPhotos", event.target.checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium">Rendre mes recherches récentes publiques</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Si cette option est active, les dernières recherches sauvegardées apparaissent sur votre profil public.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={user.showPublicSearches}
+                disabled={privacyLoading === "showPublicSearches"}
+                onChange={(event) =>
+                  handlePrivacyChange("showPublicSearches", event.target.checked)
                 }
               />
             </div>

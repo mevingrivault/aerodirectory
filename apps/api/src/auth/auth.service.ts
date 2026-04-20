@@ -3,21 +3,17 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import type { StringValue } from "ms";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
-import { authenticator } from "otplib";
-import { Authenticator } from "@otplib/core";
-import {
-  createDigest,
-  createRandomBytes,
-} from "@otplib/plugin-crypto";
-import {
-  keyDecoder,
-  keyEncoder,
-} from "@otplib/plugin-thirty-two";
+import { TOTP } from "otplib";
+import { NobleCryptoPlugin } from "@otplib/plugin-crypto-noble";
+import { ScureBase32Plugin } from "@otplib/plugin-base32-scure";
 import * as QRCode from "qrcode";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
@@ -29,6 +25,8 @@ import type {
   RegisterInput,
   LoginInput,
   AuthTokens,
+  Badge,
+  CommunityFollowListItem,
   CommunityPublicProfile,
   TotpSetupResponse,
   UserProfile,
@@ -39,16 +37,20 @@ import type {
   CheckEmailInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
+import { BADGES } from "@aerodirectory/shared";
 
-const windowedAuthenticator = new Authenticator({
-  createDigest,
-  createRandomBytes,
-  keyDecoder,
-  keyEncoder,
+const totp = new TOTP({
+  crypto: new NobleCryptoPlugin(),
+  base32: new ScureBase32Plugin(),
 });
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private static readonly COMMUNITY_RECENT_VISITS_LIMIT = 6;
+  private static readonly COMMUNITY_RECENT_SEARCHES_LIMIT = 5;
+  private static readonly COMMUNITY_FOLLOW_LIST_LIMIT = 12;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -59,14 +61,15 @@ export class AuthService {
     private readonly crypto: CryptoService,
   ) {}
 
-  private verifyTotpCode(secret: string, code: string): boolean {
+  private async verifyTotpCode(secret: string, code: string): Promise<boolean> {
     const configuredWindow = Number(this.config.get("TOTP_WINDOW"));
     const window =
       Number.isInteger(configuredWindow) && configuredWindow >= 0
         ? configuredWindow
         : 2;
-
-    return windowedAuthenticator.clone({ window }).check(code, secret);
+    const epochTolerance = window * 30;
+    const result = await totp.verify(code, { secret, epochTolerance });
+    return result.valid;
   }
 
   // ─── Registration ───────────────────────────────────────
@@ -149,6 +152,9 @@ export class AuthService {
     return { available: !existing };
   }
 
+  private static readonly MAX_FAILED_ATTEMPTS = 5;
+  private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
   async login(
     input: LoginInput,
     ip?: string,
@@ -166,15 +172,60 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
+    // Check lockout before password verification
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      throw new UnauthorizedException(
+        `Compte temporairement verrouillé. Réessayez dans ${Math.ceil(retryAfterSeconds / 60)} minute(s).`,
+      );
+    }
+
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
+      const newAttempts = user.failedLoginAttempts + 1;
+      const shouldLock = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS;
+      const lockedUntil = shouldLock
+        ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
+        : null;
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: newAttempts,
+          ...(lockedUntil !== null ? { lockedUntil } : {}),
+        },
+      });
+
       await this.audit.log({
         userId: user.id,
         action: "LOGIN_FAILED",
         ip,
         userAgent,
+        metadata: { attempt: newAttempts },
       });
+
+      if (shouldLock) {
+        await this.audit.log({
+          userId: user.id,
+          action: "ACCOUNT_LOCKED",
+          ip,
+          userAgent,
+          metadata: { lockedUntil: lockedUntil!.toISOString() },
+        });
+        throw new UnauthorizedException(
+          "Compte verrouillé après trop de tentatives échouées. Réessayez dans 15 minutes.",
+        );
+      }
+
       throw new UnauthorizedException("Invalid credentials");
+    }
+
+    // Reset lockout counters on successful password verification
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
     }
 
     if (user.status === "BANNED") {
@@ -222,7 +273,7 @@ export class AuthService {
       throw new BadRequestException("TOTP is already enabled");
     }
 
-    const secret = authenticator.generateSecret();
+    const secret = totp.generateSecret();
 
     // Chiffrement AES-256-GCM avant stockage
     await this.prisma.user.update({
@@ -230,11 +281,7 @@ export class AuthService {
       data: { totpSecret: this.crypto.encrypt(secret) },
     });
 
-    const otpauthUrl = authenticator.keyuri(
-      user.email,
-      "Navventura",
-      secret,
-    );
+    const otpauthUrl = totp.toURI({ label: user.email, issuer: "Navventura", secret });
     const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);
 
     return { secret, qrCodeUrl };
@@ -255,7 +302,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -289,7 +336,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -471,8 +518,8 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload),
       this.jwt.signAsync(payload, {
-        secret: this.config.get<string>("JWT_REFRESH_SECRET"),
-        expiresIn: this.config.get<string>("JWT_REFRESH_EXPIRES_IN", "7d"),
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+        expiresIn: (this.config.get("JWT_REFRESH_EXPIRES_IN") ?? "7d") as StringValue,
       }),
     ]);
 
@@ -533,6 +580,9 @@ export class AuthService {
         ...(input.showCommunityPhotos !== undefined
           ? { showCommunityPhotos: input.showCommunityPhotos }
           : {}),
+        ...(input.showPublicSearches !== undefined
+          ? { showPublicSearches: input.showPublicSearches }
+          : {}),
       },
       include: { homeAerodrome: { select: { id: true, name: true, icaoCode: true } } },
     });
@@ -592,31 +642,53 @@ export class AuthService {
       throw new UnauthorizedException("Mot de passe actuel incorrect");
     }
 
-    // Log AVANT suppression (userId encore valide)
+    // ── Étape 1 : anonymiser les logs existants AVANT toute suppression ──
+    // (le userId est encore valide ; on supprime l'email des metadata)
+    try {
+      await this.prisma.auditLog.updateMany({
+        where: {
+          userId,
+          metadata: { path: ["email"], equals: user.email },
+        },
+        data: { metadata: { anonymized: true } },
+      });
+    } catch (err) {
+      // Bloquer la suppression si on ne peut pas garantir l'anonymisation
+      this.logger.error(`Anonymisation des audit logs échouée pour userId=${userId}`, err);
+      throw new InternalServerErrorException(
+        "Impossible d'anonymiser les logs d'audit. La suppression du compte a été annulée.",
+      );
+    }
+
+    // ── Étape 2 : supprimer les fichiers S3 (RGPD Art. 17 — droit à l'effacement) ──
+    const failedKeys: string[] = [];
+    await Promise.all(
+      user.photos.map(async (p: { id: string; storedKey: string }) => {
+        try {
+          await this.storage.delete(p.storedKey);
+        } catch (err) {
+          this.logger.error(`Échec suppression S3 key=${p.storedKey} pour userId=${userId}`, err);
+          failedKeys.push(p.storedKey);
+        }
+      }),
+    );
+
+    if (failedKeys.length > 0) {
+      throw new InternalServerErrorException(
+        "Certaines photos n'ont pas pu être supprimées. La suppression du compte a été annulée.",
+      );
+    }
+
+    // ── Étape 3 : log COMPTE_DELETE (sans email en metadata) ──
     await this.audit.log({
       userId,
       action: "ACCOUNT_DELETE",
       ip,
       userAgent,
-      metadata: { email: user.email },
     });
 
-    // Suppression des objets S3 (photos) — best-effort, ne bloque pas la suppression
-    const s3Deletions = user.photos.map((p: { id: string; storedKey: string }) =>
-      this.storage.delete(p.storedKey).catch(() => undefined),
-    );
-    await Promise.all(s3Deletions);
-
-    // Suppression du compte (cascade DB)
+    // ── Étape 4 : suppression du compte (cascade DB) ──
     await this.prisma.user.delete({ where: { id: userId } });
-
-    // Anonymisation des audit logs restants (userId mis à null par SetNull, on retire l'email des metadata)
-    await this.prisma.auditLog
-      .updateMany({
-        where: { metadata: { path: ["email"], equals: user.email } },
-        data: { metadata: { anonymized: true } },
-      })
-      .catch(() => undefined);
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
@@ -699,6 +771,7 @@ export class AuthService {
         avatarKey: true,
         showCommunityContributions: true,
         showCommunityPhotos: true,
+        showPublicSearches: true,
         showCommunityProfile: true,
         createdAt: true,
         homeAerodrome: {
@@ -726,6 +799,8 @@ export class AuthService {
                 status: "READY",
               },
             },
+            followers: true,
+            following: true,
           },
         },
       },
@@ -735,6 +810,72 @@ export class AuthService {
       throw new NotFoundException("Profil communautaire introuvable.");
     }
 
+    const visits = await this.prisma.visit.findMany({
+      where: { userId },
+      select: {
+        status: true,
+        visitedAt: true,
+        aerodrome: {
+          select: {
+            id: true,
+            name: true,
+            icaoCode: true,
+            city: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+      orderBy: { visitedAt: "desc" },
+    });
+
+    const recentSearchRecords = user.showPublicSearches
+      ? await this.prisma.savedSearch.findMany({
+          where: { userId, isPublic: true },
+          orderBy: { updatedAt: "desc" },
+          take: AuthService.COMMUNITY_RECENT_SEARCHES_LIMIT,
+        })
+      : [];
+
+    const visibleVisits = visits.filter(
+      (
+        visit,
+      ): visit is typeof visit & { status: "VISITED" | "FAVORITE" } =>
+        visit.status === "VISITED" || visit.status === "FAVORITE",
+    );
+
+    const recentVisits = visibleVisits
+      .slice(0, AuthService.COMMUNITY_RECENT_VISITS_LIMIT)
+      .map((visit) => ({
+        id: `${visit.aerodrome.id}:${visit.visitedAt.toISOString()}`,
+        visitedAt: visit.visitedAt.toISOString(),
+        status: visit.status,
+        aerodrome: {
+          id: visit.aerodrome.id,
+          name: visit.aerodrome.name,
+          icaoCode: visit.aerodrome.icaoCode,
+          city: visit.aerodrome.city,
+        },
+      }));
+
+    const seenCount = visits.filter((visit) => visit.status === "SEEN").length;
+    const favoriteCount = visits.filter((visit) => visit.status === "FAVORITE").length;
+    const visitedEntries = visibleVisits;
+    const visitedCount = visitedEntries.length;
+    const estimatedDistanceNm = Math.round(
+      this.computeEstimatedDistanceNm(
+        [...visitedEntries].sort(
+          (left, right) => left.visitedAt.getTime() - right.visitedAt.getTime(),
+        ),
+      ),
+    );
+    const badges: Badge[] = BADGES.map((badge) => ({
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      earned: visitedCount >= badge.threshold,
+    }));
+
     return {
       id: user.id,
       displayName: user.displayName,
@@ -742,11 +883,174 @@ export class AuthService {
       avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
+      followersCount: user._count.followers,
+      followingCount: user._count.following,
       contributionStats: {
         comments: user._count.comments,
         corrections: user.showCommunityContributions ? user._count.corrections : 0,
         photos: user.showCommunityPhotos ? user._count.photos : 0,
       },
+      stats: {
+        visitedCount,
+        favoriteCount,
+        seenCount,
+        estimatedDistanceNm,
+      },
+      badges: badges.filter((badge) => badge.earned),
+      recentVisits,
+      recentSearches: recentSearchRecords.map((item) => ({
+        id: item.id,
+        name: item.name,
+        scope: item.scope as "search" | "planner",
+        isPublic: item.isPublic,
+        params: (item.params as Record<string, string>) ?? {},
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  async listFollowers(userId: string): Promise<CommunityFollowListItem[]> {
+    await this.ensureCommunityProfileVisible(userId);
+
+    const follows = await this.prisma.follow.findMany({
+      where: { followingId: userId },
+      orderBy: { createdAt: "desc" },
+      take: AuthService.COMMUNITY_FOLLOW_LIST_LIMIT,
+      select: {
+        follower: {
+          select: {
+            id: true,
+            displayName: true,
+            bio: true,
+            avatarKey: true,
+            showCommunityProfile: true,
+          },
+        },
+      },
+    });
+
+    return follows
+      .map((follow) => follow.follower)
+      .filter(
+        (follower): follower is NonNullable<typeof follower> =>
+          !!follower && follower.showCommunityProfile && !!follower.displayName,
+      )
+      .map((follower) => ({
+        id: follower.id,
+        displayName: follower.displayName!,
+        bio: follower.bio,
+        avatarUrl: this.storage.resolvePublicUrl(follower.avatarKey),
+      }));
+  }
+
+  async listFollowing(userId: string): Promise<CommunityFollowListItem[]> {
+    await this.ensureCommunityProfileVisible(userId);
+
+    const follows = await this.prisma.follow.findMany({
+      where: { followerId: userId },
+      orderBy: { createdAt: "desc" },
+      take: AuthService.COMMUNITY_FOLLOW_LIST_LIMIT,
+      select: {
+        following: {
+          select: {
+            id: true,
+            displayName: true,
+            bio: true,
+            avatarKey: true,
+            showCommunityProfile: true,
+          },
+        },
+      },
+    });
+
+    return follows
+      .map((follow) => follow.following)
+      .filter(
+        (following): following is NonNullable<typeof following> =>
+          !!following && following.showCommunityProfile && !!following.displayName,
+      )
+      .map((following) => ({
+        id: following.id,
+        displayName: following.displayName!,
+        bio: following.bio,
+        avatarUrl: this.storage.resolvePublicUrl(following.avatarKey),
+      }));
+  }
+
+  async getFollowStatus(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      return { isFollowing: false, canFollow: false };
+    }
+
+    await this.ensureCommunityProfileVisible(targetUserId);
+
+    const follow = await this.prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: currentUserId,
+          followingId: targetUserId,
+        },
+      },
+      select: { id: true },
+    });
+
+    return {
+      isFollowing: !!follow,
+      canFollow: true,
+    };
+  }
+
+  async followUser(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      throw new BadRequestException("Vous ne pouvez pas vous suivre vous-meme.");
+    }
+
+    await this.ensureCommunityProfileVisible(targetUserId);
+
+    await this.prisma.follow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId: currentUserId,
+          followingId: targetUserId,
+        },
+      },
+      create: {
+        followerId: currentUserId,
+        followingId: targetUserId,
+      },
+      update: {},
+    });
+
+    const followersCount = await this.prisma.follow.count({
+      where: { followingId: targetUserId },
+    });
+
+    return {
+      isFollowing: true,
+      followersCount,
+    };
+  }
+
+  async unfollowUser(currentUserId: string, targetUserId: string) {
+    if (currentUserId === targetUserId) {
+      throw new BadRequestException("Operation invalide.");
+    }
+
+    await this.prisma.follow.deleteMany({
+      where: {
+        followerId: currentUserId,
+        followingId: targetUserId,
+      },
+    });
+
+    const followersCount = await this.prisma.follow.count({
+      where: { followingId: targetUserId },
+    });
+
+    return {
+      isFollowing: false,
+      followersCount,
     };
   }
 
@@ -763,6 +1067,7 @@ export class AuthService {
     showCommunityProfile: boolean;
     showCommunityContributions: boolean;
     showCommunityPhotos: boolean;
+    showPublicSearches: boolean;
     createdAt: Date;
     homeAerodrome?: { id: string; name: string; icaoCode: string | null } | null;
   }): UserProfile {
@@ -779,9 +1084,70 @@ export class AuthService {
       showCommunityProfile: user.showCommunityProfile,
       showCommunityContributions: user.showCommunityContributions,
       showCommunityPhotos: user.showCommunityPhotos,
+      showPublicSearches: user.showPublicSearches,
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
     };
+  }
+
+  private async ensureCommunityProfileVisible(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        showCommunityProfile: true,
+      },
+    });
+
+    if (!user || !user.showCommunityProfile || !user.displayName) {
+      throw new NotFoundException("Profil communautaire introuvable.");
+    }
+
+    return user;
+  }
+
+  private computeEstimatedDistanceNm(
+    visits: Array<{
+      aerodrome: {
+        latitude: number;
+        longitude: number;
+      };
+    }>,
+  ): number {
+    let total = 0;
+
+    for (let index = 1; index < visits.length; index += 1) {
+      const previous = visits[index - 1]!.aerodrome;
+      const current = visits[index]!.aerodrome;
+      total += this.haversineNm(
+        previous.latitude,
+        previous.longitude,
+        current.latitude,
+        current.longitude,
+      );
+    }
+
+    return total;
+  }
+
+  private haversineNm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const earthRadiusNm = 3440.065;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusNm * c;
   }
 
   // ─── RGPD : export des données (Article 20) ────────────────
@@ -802,6 +1168,7 @@ export class AuthService {
         showCommunityProfile: true,
         showCommunityContributions: true,
         showCommunityPhotos: true,
+        showPublicSearches: true,
         createdAt: true,
         homeAerodromeId: true,
         visits: {
@@ -852,6 +1219,7 @@ export class AuthService {
         showCommunityProfile: user.showCommunityProfile,
         showCommunityContributions: user.showCommunityContributions,
         showCommunityPhotos: user.showCommunityPhotos,
+        showPublicSearches: user.showPublicSearches,
         createdAt: user.createdAt.toISOString(),
         homeAerodromeId: user.homeAerodromeId,
       },

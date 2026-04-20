@@ -154,6 +154,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 10, ttl: 60000 }, medium: { limit: 30, ttl: 3600000 } })
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
@@ -210,6 +211,47 @@ export class AuthController {
   async communityProfile(@Param("userId") userId: string) {
     const profile = await this.auth.getCommunityProfile(userId);
     return ok(profile);
+  }
+
+  @Public()
+  @Get("community/:userId/followers")
+  async communityFollowers(@Param("userId") userId: string) {
+    const followers = await this.auth.listFollowers(userId);
+    return ok(followers);
+  }
+
+  @Public()
+  @Get("community/:userId/following")
+  async communityFollowing(@Param("userId") userId: string) {
+    const following = await this.auth.listFollowing(userId);
+    return ok(following);
+  }
+
+  @Get("community/:userId/follow-status")
+  async communityFollowStatus(
+    @Param("userId") userId: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const status = await this.auth.getFollowStatus(user.sub, userId);
+    return ok(status);
+  }
+
+  @Post("community/:userId/follow")
+  async followCommunityUser(
+    @Param("userId") userId: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const result = await this.auth.followUser(user.sub, userId);
+    return ok(result);
+  }
+
+  @Delete("community/:userId/follow")
+  async unfollowCommunityUser(
+    @Param("userId") userId: string,
+    @CurrentUser() user: { sub: string },
+  ) {
+    const result = await this.auth.unfollowUser(user.sub, userId);
+    return ok(result);
   }
 
   @Put("profile")

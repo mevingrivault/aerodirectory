@@ -1,18 +1,24 @@
 FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates openssl && \
+    rm -rf /var/lib/apt/lists/* && \
+    corepack enable && corepack prepare pnpm@10.27.0 --activate
 
 FROM base AS fetch
 WORKDIR /app
 COPY pnpm-lock.yaml ./pnpm-workspace.yaml ./package.json ./
+COPY patches/ ./patches/
 RUN pnpm fetch
 
 FROM fetch AS builder
 WORKDIR /app
 
 COPY . .
-RUN pnpm install --frozen-lockfile --offline
+RUN pnpm install --frozen-lockfile --offline && \
+    find /app/node_modules/.pnpm -maxdepth 6 -path "*/altcha-lib/dist/cjs" -type d | \
+    while read d; do [ ! -f "$d/package.json" ] && printf '{"type":"commonjs"}\n' > "$d/package.json"; done; true
 
 RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/database build && \
@@ -23,9 +29,13 @@ FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends clamav gosu osmium-tool tzdata && \
+RUN set -eux; \
+    groupadd --system clamav || true; \
+    useradd --system --gid clamav --no-create-home --home-dir /var/lib/clamav clamav || true; \
+    apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates clamav gosu openssl osmium-tool tzdata && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules

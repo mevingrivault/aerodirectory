@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { createChallenge, verifySolution } from "altcha-lib";
+import { createChallenge, verifySolution } from "altcha-lib/v1";
 
 @Injectable()
 export class AltchaService {
@@ -31,7 +31,7 @@ export class AltchaService {
     return createChallenge({
       hmacKey: this.hmacKey,
       maxNumber: this.maxNumber,
-      expires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      expires: new Date(Date.now() + 10 * 60 * 1000),
     });
   }
 

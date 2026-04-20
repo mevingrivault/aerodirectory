@@ -16,6 +16,7 @@ import {
   AdminReportsQuerySchema,
   AdminCorrectionsQuerySchema,
   AdminMailEventsQuerySchema,
+  AdminContentAuditQuerySchema,
   AdminCommentsQuerySchema,
   AdminUsersQuerySchema,
   AdminImportOpenAirSchema,
@@ -31,6 +32,7 @@ import {
   type AdminReportsQueryInput,
   type AdminCorrectionsQueryInput,
   type AdminMailEventsQueryInput,
+  type AdminContentAuditQueryInput,
   type AdminCommentsQueryInput,
   type AdminUsersQueryInput,
   type AdminImportOpenAirInput,
@@ -200,6 +202,15 @@ export class AdminController {
     return paginated(data, total, query.page ?? 1, query.limit ?? 20);
   }
 
+  @Get("content-audit")
+  async contentAudit(
+    @Query(new ZodValidationPipe(AdminContentAuditQuerySchema))
+    query: AdminContentAuditQueryInput,
+  ) {
+    const { data, total } = await this.admin.listContentAuditLogs(query);
+    return paginated(data, total, query.page ?? 1, query.limit ?? 20);
+  }
+
   @Post("airspaces/import-openair")
   @HttpCode(HttpStatus.OK)
   async importOpenAir(
@@ -307,44 +318,6 @@ export class AdminController {
       req.headers["user-agent"],
     );
     return ok({ restored: true });
-  }
-
-  @Post("corrections/:correctionId/approve")
-  @HttpCode(HttpStatus.OK)
-  async approveCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.approveCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ approved: true });
-  }
-
-  @Post("corrections/:correctionId/reject")
-  @HttpCode(HttpStatus.OK)
-  async rejectCorrection(
-    @CurrentUser() user: { sub: string },
-    @Param("correctionId") correctionId: string,
-    @Body(new ZodValidationPipe(ReviewAdminCorrectionSchema))
-    body: ReviewAdminCorrectionInput,
-    @Req() req: FastifyRequest,
-  ) {
-    await this.admin.rejectCorrection(
-      user.sub,
-      correctionId,
-      body,
-      req.ip,
-      req.headers["user-agent"],
-    );
-    return ok({ rejected: true });
   }
 
   @Post("mail/test")

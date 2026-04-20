@@ -13,7 +13,7 @@ export const CorrectionCreateSchema = z.object({
 });
 
 export const ReportCreateSchema = z.object({
-  targetType: z.enum(["comment", "correction"]),
+  targetType: z.enum(["comment", "correction", "photo"]),
   targetId: z.string().cuid(),
   reason: z.string().min(1).max(1000).trim(),
 });

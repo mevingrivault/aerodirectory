@@ -27,6 +27,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get report() { return this.client.report; }
   get aircraftProfile() { return this.client.aircraftProfile; }
   get savedSearch() { return this.client.savedSearch; }
+  get follow() { return this.client.follow; }
   get aerodromeList() { return this.client.aerodromeList; }
   get aerodromeListItem() { return this.client.aerodromeListItem; }
   get notification() { return this.client.notification; }
@@ -36,6 +37,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get airspace() { return this.client.airspace; }
   get osmPoi() { return this.client.osmPoi; }
   get photo() { return this.client.photo; }
+  get aerodromeEvent() { return this.client.aerodromeEvent; }
 
   get $queryRaw() { return this.client.$queryRaw.bind(this.client); }
   get $executeRaw() { return this.client.$executeRaw.bind(this.client); }

@@ -40,12 +40,16 @@ import {
   Trash2,
   ImagePlus,
   Reply,
+  PencilLine,
+  CalendarDays,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
+import type { CorrectionItem, EventItem } from "@aerodirectory/shared";
+import { EVENT_TYPES } from "@aerodirectory/shared";
 
 interface PhotoEntry {
   id: string;
@@ -308,6 +312,13 @@ interface WeatherResult {
   } | null;
 }
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  CAFE_CROISSANT: "Café croissant",
+  OPEN_DAY: "Journée portes ouvertes",
+  AIRSHOW: "Meeting aérien",
+  OTHER: "Autre événement",
+};
+
 const TYPE_LABELS: Record<string, string> = {
   SMALL_AIRPORT: "Aérodrome",
   INTERNATIONAL_AIRPORT: "Aéroport International",
@@ -419,9 +430,27 @@ export default function AerodromeDetailPage() {
     message: string;
   } | null>(null);
 
+  const [eventForm, setEventForm] = useState<{
+    type: EventItem["type"];
+    title: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
+  const [eventAlert, setEventAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
   const { data: aerodromeRes, isLoading } = useQuery({
     queryKey: ["aerodrome", id],
     queryFn: () => apiClient.get<AerodromeDetail>(`/aerodromes/${id}`),
+  });
+
+  const { data: eventsRes, refetch: refetchEvents } = useQuery({
+    queryKey: ["events", id],
+    queryFn: () => apiClient.get<EventItem[]>(`/aerodromes/${id}/events`),
+    enabled: !!id,
   });
 
   const { data: commentsRes, refetch: refetchComments } = useQuery({
@@ -588,6 +617,7 @@ export default function AerodromeDetailPage() {
     if (photosRes?.data) setPhotos(photosRes.data);
   }, [photosRes]);
 
+  const events = eventsRes?.data ?? [];
   const comments = commentsRes?.data ?? [];
   const communityCorrections = ad?.corrections ?? [];
   const allNearby = (nearbyRes?.data ?? []).filter((n) => n.id !== id);
@@ -708,6 +738,44 @@ export default function AerodromeDetailPage() {
             ? error.message
             : "Impossible de signaler ce commentaire.",
       });
+    }
+  };
+
+  const handleSubmitEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventForm || !eventForm.title.trim() || !eventForm.startDate) return;
+    setEventAlert(null);
+    try {
+      const altcha = await solveAltcha();
+      await apiClient.post(
+        `/aerodromes/${id}/events`,
+        {
+          type: eventForm.type,
+          title: eventForm.title.trim(),
+          description: eventForm.description.trim() || undefined,
+          startDate: new Date(eventForm.startDate).toISOString(),
+          endDate: eventForm.endDate ? new Date(eventForm.endDate).toISOString() : undefined,
+        },
+        altcha ? { "x-altcha": altcha } : undefined,
+      );
+      setEventForm(null);
+      setEventAlert({ type: "success", message: "Merci ! Votre événement sera examiné avant publication." });
+      await refetchEvents();
+    } catch (error) {
+      setEventAlert({
+        type: "error",
+        message: error instanceof Error ? error.message : "Impossible de soumettre l'événement.",
+      });
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!window.confirm("Supprimer cet événement ?")) return;
+    try {
+      await apiClient.delete(`/aerodromes/${id}/events/${eventId}`);
+      await refetchEvents();
+    } catch {
+      // ignore
     }
   };
 
@@ -1097,173 +1165,6 @@ export default function AerodromeDetailPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
-              Elles complètent la fiche sans modifier la donnée importée.
-            </div>
-
-            {correctionActionAlert && (
-              <div
-                className={`rounded-md border p-3 text-sm ${
-                  correctionActionAlert.type === "success"
-                    ? "border-green-300 bg-green-50 text-green-800"
-                    : "border-red-300 bg-red-50 text-red-800"
-                }`}
-              >
-                {correctionActionAlert.message}
-              </div>
-            )}
-
-            {user ? (
-              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
-                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Type de contribution</label>
-                    <select
-                      value={correctionField}
-                      onChange={(event) =>
-                        setCorrectionField(
-                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
-                        )
-                      }
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Proposition</label>
-                    <textarea
-                      value={correctionValue}
-                      onChange={(event) => setCorrectionValue(event.target.value)}
-                      rows={3}
-                      maxLength={2000}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
-                    />
-                  </div>
-                </div>
-
-                {correctionField === "other" && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Champ concerné</label>
-                    <Input
-                      value={customCorrectionField}
-                      onChange={(event) => setCustomCorrectionField(event.target.value)}
-                      maxLength={100}
-                      placeholder="Ex. procédures locales, accès, horaires..."
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Contexte ou justification</label>
-                  <textarea
-                    value={correctionReason}
-                    onChange={(event) => setCorrectionReason(event.target.value)}
-                    rows={2}
-                    maxLength={1000}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Optionnel : source, précision locale, explication..."
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Votre proposition sera relue avant publication.
-                  </p>
-                  <Button
-                    type="submit"
-                    disabled={
-                      !correctionValue.trim() ||
-                      (correctionField === "other" && !customCorrectionField.trim())
-                    }
-                  >
-                    Proposer une contribution
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                <Link href="/login" className="text-primary hover:underline">
-                  Connectez-vous
-                </Link>{" "}
-                pour proposer une correction ou un enrichissement.
-              </p>
-            )}
-
-            {communityCorrections.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucune contribution communautaire publiée pour le moment.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {communityCorrections.map((correction) => (
-                  <div key={correction.id} className="rounded-lg border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {formatCommunityFieldLabel(correction.field)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                            par{" "}
-                            {correction.user.displayName ? (
-                              <Link
-                                href={`/community/${correction.user.id}`}
-                                className="hover:text-primary hover:underline"
-                              >
-                                {correction.user.displayName}
-                              </Link>
-                            ) : (
-                              "Membre"
-                            )}{" "}
-                            le{" "}
-                              {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
-                            </span>
-                        </div>
-                        {correction.currentValue && (
-                          <p className="text-xs text-muted-foreground">
-                            Référence officielle : {correction.currentValue}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
-                        {correction.reason && (
-                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                            Contexte : {correction.reason}
-                          </p>
-                        )}
-                      </div>
-
-                      {user && user.id !== correction.user.id && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReportCorrection(correction.id)}
-                        >
-                          Signaler
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </CardContent>
@@ -2064,6 +1965,365 @@ export default function AerodromeDetailPage() {
           </Card>
         )}
 
+
+        {/* Events */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <CalendarDays className="h-5 w-5" /> Événements à venir
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {eventAlert && (
+              <div
+                className={`mb-4 rounded-md border p-3 text-sm ${
+                  eventAlert.type === "success"
+                    ? "border-green-300 bg-green-50 text-green-800"
+                    : "border-red-300 bg-red-50 text-red-800"
+                }`}
+              >
+                {eventAlert.message}
+              </div>
+            )}
+
+            {events.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {events.map((ev) => (
+                  <div key={ev.id} className="rounded-md border p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 uppercase tracking-wide">
+                            {EVENT_TYPE_LABELS[ev.type]}
+                          </span>
+                          <span className="font-medium">{ev.title}</span>
+                        </div>
+                        {ev.description && (
+                          <p className="mt-1 text-muted-foreground">{ev.description}</p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(ev.startDate).toLocaleDateString("fr-FR", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                          {ev.endDate &&
+                            ev.endDate !== ev.startDate &&
+                            ` → ${new Date(ev.endDate).toLocaleDateString("fr-FR", { month: "long", day: "numeric" })}`}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-xs text-muted-foreground">
+                          {ev.user.displayName ?? "Membre"}
+                        </span>
+                        {user?.id === ev.user.id && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteEvent(ev.id)}
+                            className="h-6 px-1.5 text-xs text-muted-foreground"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {events.length === 0 && (
+              <p className="mb-4 text-sm text-muted-foreground">
+                Aucun événement à venir pour le moment.
+              </p>
+            )}
+
+            {user && eventForm === null && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setEventForm({
+                    type: "OTHER",
+                    title: "",
+                    description: "",
+                    startDate: "",
+                    endDate: "",
+                  })
+                }
+              >
+                <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
+                Ajouter un événement
+              </Button>
+            )}
+
+            {!user && (
+              <p className="text-sm text-muted-foreground">
+                <a href="/login" className="text-primary hover:underline">Connectez-vous</a> pour ajouter un événement.
+              </p>
+            )}
+
+            {user && eventForm !== null && (
+              <form onSubmit={handleSubmitEvent} className="mt-3 space-y-3 rounded-md border p-4">
+                <p className="text-sm font-medium">Nouvel événement</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Type <span className="text-destructive">*</span>
+                    </label>
+                    <select
+                      value={eventForm.type}
+                      onChange={(e) => setEventForm({ ...eventForm, type: e.target.value as EventItem["type"] })}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      required
+                    >
+                      {EVENT_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {EVENT_TYPE_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Intitulé <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      placeholder="Nom de l'événement"
+                      value={eventForm.title}
+                      onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                      maxLength={200}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Date de début <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      type="datetime-local"
+                      value={eventForm.startDate}
+                      onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Date de fin (optionnel)
+                    </label>
+                    <Input
+                      type="datetime-local"
+                      value={eventForm.endDate}
+                      onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Description (optionnel)
+                  </label>
+                  <textarea
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="Informations complémentaires, contact, lien…"
+                    value={eventForm.description}
+                    onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                    maxLength={2000}
+                    rows={2}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!eventForm.title.trim() || !eventForm.startDate}
+                  >
+                    Publier
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setEventForm(null); setEventAlert(null); }}
+                  >
+                    Annuler
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Les événements des nouveaux comptes sont soumis à modération avant publication.
+                </p>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
+              Elles complètent la fiche sans modifier la donnée importée.
+            </div>
+
+            {correctionActionAlert && (
+              <div
+                className={`rounded-md border p-3 text-sm ${
+                  correctionActionAlert.type === "success"
+                    ? "border-green-300 bg-green-50 text-green-800"
+                    : "border-red-300 bg-red-50 text-red-800"
+                }`}
+              >
+                {correctionActionAlert.message}
+              </div>
+            )}
+
+            {user ? (
+              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
+                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Type de contribution</label>
+                    <select
+                      value={correctionField}
+                      onChange={(event) =>
+                        setCorrectionField(
+                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
+                        )
+                      }
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Proposition</label>
+                    <textarea
+                      value={correctionValue}
+                      onChange={(event) => setCorrectionValue(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
+                    />
+                  </div>
+                </div>
+
+                {correctionField === "other" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Champ concerné</label>
+                    <Input
+                      value={customCorrectionField}
+                      onChange={(event) => setCustomCorrectionField(event.target.value)}
+                      maxLength={100}
+                      placeholder="Ex. procédures locales, accès, horaires..."
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Contexte ou justification</label>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Optionnel : source, précision locale, explication..."
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Votre proposition sera relue avant publication.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !correctionValue.trim() ||
+                      (correctionField === "other" && !customCorrectionField.trim())
+                    }
+                  >
+                    Proposer une contribution
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline">
+                  Connectez-vous
+                </Link>{" "}
+                pour proposer une correction ou un enrichissement.
+              </p>
+            )}
+
+            {communityCorrections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucune contribution communautaire publiée pour le moment.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {communityCorrections.map((correction) => (
+                  <div key={correction.id} className="rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {formatCommunityFieldLabel(correction.field)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            par{" "}
+                            {correction.user.displayName ? (
+                              <Link
+                                href={`/community/${correction.user.id}`}
+                                className="hover:text-primary hover:underline"
+                              >
+                                {correction.user.displayName}
+                              </Link>
+                            ) : (
+                              "Membre"
+                            )}{" "}
+                            le {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        </div>
+                        {correction.currentValue && (
+                          <p className="text-xs text-muted-foreground">
+                            Référence officielle : {correction.currentValue}
+                          </p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
+                        {correction.reason && (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            Contexte : {correction.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      {user && user.id !== correction.user.id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReportCorrection(correction.id)}
+                        >
+                          Signaler
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Photos */}
         <Card className="lg:col-span-2">

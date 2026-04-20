@@ -7,13 +7,19 @@ import {
 } from "@nestjs/common";
 import type {
   AerodromeSearchInput,
+  PublicSavedSearchListQueryInput,
   SavedSearchCreateInput,
+  SavedSearchVisibilityInput,
 } from "@aerodirectory/shared";
 import { Prisma } from "@aerodirectory/database";
+import { StorageService } from "../photo/storage.service";
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async listSavedSearches(userId: string, scope: "search" | "planner") {
     const saved = await this.prisma.savedSearch.findMany({
@@ -25,6 +31,7 @@ export class SearchService {
       id: item.id,
       name: item.name,
       scope: item.scope as "search" | "planner",
+      isPublic: item.isPublic,
       params: (item.params as Record<string, string>) ?? {},
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
@@ -44,6 +51,7 @@ export class SearchService {
         userId,
         name: input.name.trim(),
         scope: input.scope,
+        isPublic: input.isPublic ?? false,
         params: input.params,
       },
     });
@@ -52,10 +60,168 @@ export class SearchService {
       id: created.id,
       name: created.name,
       scope: created.scope as "search" | "planner",
+      isPublic: created.isPublic,
       params: (created.params as Record<string, string>) ?? {},
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     };
+  }
+
+  async updateSavedSearchVisibility(
+    userId: string,
+    id: string,
+    input: SavedSearchVisibilityInput,
+  ) {
+    const existing = await this.prisma.savedSearch.findUnique({
+      where: { id },
+      select: { id: true, userId: true, scope: true, name: true, params: true, createdAt: true, updatedAt: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Recherche sauvegardée introuvable");
+    }
+    if (existing.userId !== userId) {
+      throw new ForbiddenException("Accès refusé");
+    }
+
+    const updated = await this.prisma.savedSearch.update({
+      where: { id },
+      data: { isPublic: input.isPublic },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      scope: updated.scope as "search" | "planner",
+      isPublic: updated.isPublic,
+      params: (updated.params as Record<string, string>) ?? {},
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async listPublicSavedSearches(
+    userId: string,
+    query: PublicSavedSearchListQueryInput,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        avatarKey: true,
+        showCommunityProfile: true,
+        showPublicSearches: true,
+      },
+    });
+
+    if (!user || !user.showCommunityProfile || !user.showPublicSearches || !user.displayName) {
+      throw new NotFoundException("Historique public introuvable");
+    }
+
+    const saved = await this.prisma.savedSearch.findMany({
+      where: {
+        userId,
+        isPublic: true,
+        ...(query.scope ? { scope: query.scope } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 8,
+    });
+
+    return saved.map((item) => ({
+      id: item.id,
+      name: item.name,
+      scope: item.scope as "search" | "planner",
+      isPublic: item.isPublic,
+      params: (item.params as Record<string, string>) ?? {},
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+      user: {
+        id: user.id,
+        displayName: user.displayName!,
+        avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+      },
+    }));
+  }
+
+  async listSimilarPublicSearches(userId: string) {
+    const sourceSearches = await this.prisma.savedSearch.findMany({
+      where: { userId, isPublic: true },
+      select: {
+        scope: true,
+        params: true,
+      },
+      take: 8,
+    });
+
+    if (sourceSearches.length === 0) {
+      return [];
+    }
+
+    const candidates = await this.prisma.savedSearch.findMany({
+      where: {
+        userId: { not: userId },
+        isPublic: true,
+        user: {
+          showCommunityProfile: true,
+          showPublicSearches: true,
+          displayName: { not: null },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarKey: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 60,
+    });
+
+    const scored = candidates
+      .map((candidate) => {
+        const candidateParams = (candidate.params as Record<string, string>) ?? {};
+        const score = sourceSearches.reduce((bestScore, source) => {
+          if (source.scope !== candidate.scope) {
+            return bestScore;
+          }
+
+          const sourceParams = (source.params as Record<string, string>) ?? {};
+          let overlap = 0;
+
+          for (const [key, value] of Object.entries(candidateParams)) {
+            if (value && sourceParams[key] === value) {
+              overlap += 1;
+            }
+          }
+
+          return Math.max(bestScore, overlap);
+        }, 0);
+
+        return { candidate, score };
+      })
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || right.candidate.updatedAt.getTime() - left.candidate.updatedAt.getTime())
+      .slice(0, 6);
+
+    return scored.map(({ candidate }) => ({
+      id: candidate.id,
+      name: candidate.name,
+      scope: candidate.scope as "search" | "planner",
+      isPublic: candidate.isPublic,
+      params: (candidate.params as Record<string, string>) ?? {},
+      createdAt: candidate.createdAt.toISOString(),
+      updatedAt: candidate.updatedAt.toISOString(),
+      user: {
+        id: candidate.user.id,
+        displayName: candidate.user.displayName!,
+        avatarUrl: this.storage.resolvePublicUrl(candidate.user.avatarKey),
+      },
+    }));
   }
 
   async deleteSavedSearch(userId: string, id: string) {

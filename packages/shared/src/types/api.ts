@@ -102,8 +102,35 @@ export interface UserProfile {
   showCommunityProfile: boolean;
   showCommunityContributions: boolean;
   showCommunityPhotos: boolean;
+  showPublicSearches: boolean;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+}
+
+export interface CommunityFollowListItem {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+}
+
+export interface CommunityRecentVisitItem {
+  id: string;
+  visitedAt: string;
+  status: "VISITED" | "FAVORITE";
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+    city: string | null;
+  };
+}
+
+export interface CommunityProfileStats {
+  visitedCount: number;
+  favoriteCount: number;
+  seenCount: number;
+  estimatedDistanceNm: number;
 }
 
 export interface CommunityPublicProfile {
@@ -113,11 +140,17 @@ export interface CommunityPublicProfile {
   avatarUrl: string | null;
   createdAt: string;
   homeAerodrome: { id: string; name: string; icaoCode: string | null } | null;
+  followersCount: number;
+  followingCount: number;
   contributionStats: {
     comments: number;
     corrections: number;
     photos: number;
   };
+  stats: CommunityProfileStats;
+  badges: Badge[];
+  recentVisits: CommunityRecentVisitItem[];
+  recentSearches: SavedSearchItem[];
 }
 
 export interface AdminDashboardStats {
@@ -304,7 +337,7 @@ export interface AdminPhotoListItem {
 
 export interface AdminReportListItem {
   id: string;
-  targetType: "comment" | "correction";
+  targetType: "comment" | "correction" | "photo";
   targetId: string;
   reason: string;
   contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
@@ -326,7 +359,7 @@ export interface AdminReportListItem {
     email: string;
   };
   targetPreview: string | null;
-  targetStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" | null;
+  targetStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED" | "READY" | "SCANNING" | null;
 }
 
 export interface AdminMailEventItem {
@@ -339,13 +372,53 @@ export interface AdminMailEventItem {
   errorMessage: string | null;
 }
 
+export interface AdminContentAuditItem {
+  id: string;
+  createdAt: string;
+  actionType:
+    | "COMMENT_DELETE"
+    | "COMMENT_RESTORE"
+    | "CORRECTION_APPROVE"
+    | "CORRECTION_REJECT"
+    | "PHOTO_APPROVE"
+    | "PHOTO_REJECT"
+    | "REPORT_APPROVE"
+    | "REPORT_REJECT"
+    | "USER_BAN"
+    | "USER_UNBAN"
+    | "USER_DELETE";
+  targetType: "comment" | "correction" | "photo" | "user";
+  targetId: string;
+  targetSummary: string | null;
+  reason: string | null;
+  actor: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  } | null;
+}
+
 export interface SavedSearchItem {
   id: string;
   name: string;
   scope: "search" | "planner";
+  isPublic: boolean;
   params: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PublicSavedSearchItem extends SavedSearchItem {
+  user: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
 }
 
 export interface AerodromeListItem {
@@ -370,6 +443,59 @@ export interface AerodromeListSummary {
   updatedAt: string;
   items: AerodromeListItem[];
   _count: { items: number };
+}
+
+export interface AdminCorrectionListItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  } | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+}
+
+export interface CorrectionItem {
+  id: string;
+  field: string;
+  currentValue: string | null;
+  proposedValue: string;
+  reason: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
+}
+
+export interface EventItem {
+  id: string;
+  type: "CAFE_CROISSANT" | "OPEN_DAY" | "AIRSHOW" | "OTHER";
+  title: string;
+  description: string | null;
+  startDate: string;
+  endDate: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+  };
 }
 
 export interface NotificationItem {

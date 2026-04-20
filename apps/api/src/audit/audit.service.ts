@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditAction, Prisma } from "@aerodirectory/database";
 
@@ -36,6 +37,8 @@ function anonymizeIp(ip: string | undefined): string | undefined {
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async log(entry: AuditLogEntry): Promise<void> {
@@ -51,7 +54,7 @@ export class AuditService {
         },
       })
       .catch((err) => {
-        console.error("Failed to write audit log:", err);
+        this.logger.error("Failed to write audit log", err);
       });
   }
 
@@ -61,5 +64,23 @@ export class AuditService {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
+  }
+
+  // RGPD Art. 5(1)(e) — durée de conservation limitée à 3 ans
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async purgeExpiredLogs(): Promise<void> {
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 3);
+
+    try {
+      const { count } = await this.prisma.auditLog.deleteMany({
+        where: { createdAt: { lt: cutoff } },
+      });
+      if (count > 0) {
+        this.logger.log(`Purge RGPD : ${count} audit log(s) supprimé(s) (antérieurs au ${cutoff.toISOString()})`);
+      }
+    } catch (err) {
+      this.logger.error("Échec de la purge des audit logs expirés", err);
+    }
   }
 }

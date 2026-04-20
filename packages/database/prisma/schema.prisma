@@ -184,6 +184,19 @@ enum AuditAction {
   PHOTO_DELETE
   USER_BAN
   USER_UNBAN
+  ACCOUNT_LOCKED
+  CONTENT_MODERATED
+  EVENT_CREATE
+  EVENT_DELETE
+
+  @@schema("public")
+}
+
+enum EventType {
+  CAFE_CROISSANT
+  OPEN_DAY
+  AIRSHOW
+  OTHER
 
   @@schema("public")
 }
@@ -210,7 +223,10 @@ model User {
   showCommunityProfile       Boolean   @default(false)
   showCommunityContributions Boolean   @default(true)
   showCommunityPhotos        Boolean   @default(true)
+  showPublicSearches         Boolean   @default(false)
   homeAerodromeId     String?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -222,6 +238,8 @@ model User {
   reports          Report[]
   aircraftProfiles AircraftProfile[]
   savedSearches    SavedSearch[]
+  followers        Follow[]           @relation("UserFollowers")
+  following        Follow[]           @relation("UserFollowing")
   aerodromeLists   AerodromeList[]
   notifications    Notification[]
   auditLogs        AuditLog[]
@@ -231,10 +249,27 @@ model User {
   photos           Photo[]
   reviewedPhotos   Photo[]           @relation("PhotoReviewedBy")
   triggeredSyncRuns SyncRun[]        @relation("SyncRunTriggeredBy")
+  events           AerodromeEvent[]
 
   @@index([email])
   @@index([status])
   @@map("users")
+  @@schema("public")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
+  @@map("follows")
   @@schema("public")
 }
 
@@ -309,6 +344,7 @@ model Aerodrome {
   listItems   AerodromeListItem[]
   homeUsers   User[]       @relation("UserHomeAerodrome")
   photos      Photo[]
+  events      AerodromeEvent[]
 
   @@unique([source, sourceId])
   @@index([icaoCode])
@@ -450,7 +486,7 @@ model Report {
   id            String        @id @default(cuid())
   userId        String
   aerodromeId   String
-  targetType    String // "comment" | "correction"
+  targetType    String // "comment" | "correction" | "photo"
   targetId      String
   reason        String
   contentStatus ContentStatus @default(PENDING)
@@ -463,6 +499,29 @@ model Report {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@map("reports")
+  @@schema("public")
+}
+
+model AerodromeEvent {
+  id            String        @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  type          EventType
+  title         String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime?
+  contentStatus ContentStatus @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@index([aerodromeId, contentStatus, startDate])
+  @@map("aerodrome_events")
   @@schema("public")
 }
 
@@ -492,6 +551,7 @@ model SavedSearch {
   userId    String
   name      String
   scope     String   @default("search") // "search" | "planner"
+  isPublic  Boolean  @default(false)
   params    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

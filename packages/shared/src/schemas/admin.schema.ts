@@ -26,7 +26,7 @@ export const AdminPhotosQuerySchema = PaginationSchema.extend({
 export const AdminReportsQuerySchema = PaginationSchema.extend({
   search: z.string().trim().max(255).optional(),
   state: z.enum(["pending", "approved", "rejected", "all"]).optional(),
-  targetType: z.enum(["comment", "correction", "all"]).optional(),
+  targetType: z.enum(["comment", "correction", "photo", "all"]).optional(),
 });
 
 export const AdminMailEventsQuerySchema = PaginationSchema.extend({
@@ -34,6 +34,26 @@ export const AdminMailEventsQuerySchema = PaginationSchema.extend({
   status: z.enum(["sent", "failed", "all"]).optional(),
   template: z
     .enum(["password_reset", "email_verification", "sync_summary", "all"])
+    .optional(),
+});
+
+export const AdminContentAuditQuerySchema = PaginationSchema.extend({
+  targetType: z.enum(["comment", "correction", "photo", "user", "all"]).optional(),
+  actionType: z
+    .enum([
+      "COMMENT_DELETE",
+      "COMMENT_RESTORE",
+      "CORRECTION_APPROVE",
+      "CORRECTION_REJECT",
+      "PHOTO_APPROVE",
+      "PHOTO_REJECT",
+      "REPORT_APPROVE",
+      "REPORT_REJECT",
+      "USER_BAN",
+      "USER_UNBAN",
+      "USER_DELETE",
+      "all",
+    ])
     .optional(),
 });
 
@@ -82,6 +102,7 @@ export type AdminCorrectionsQueryInput = z.infer<typeof AdminCorrectionsQuerySch
 export type AdminPhotosQueryInput = z.infer<typeof AdminPhotosQuerySchema>;
 export type AdminReportsQueryInput = z.infer<typeof AdminReportsQuerySchema>;
 export type AdminMailEventsQueryInput = z.infer<typeof AdminMailEventsQuerySchema>;
+export type AdminContentAuditQueryInput = z.infer<typeof AdminContentAuditQuerySchema>;
 export type BanUserInput = z.infer<typeof BanUserSchema>;
 export type DeleteAdminUserInput = z.infer<typeof DeleteAdminUserSchema>;
 export type DeleteAdminCommentInput = z.infer<typeof DeleteAdminCommentSchema>;
