@@ -389,8 +389,8 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
 function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope: TripScope }) {
   const displayTime = tripScope === "round_trip" ? r.tripTimeHours : r.timeHours;
   const displayFuel = tripScope === "round_trip" ? r.tripFuelLiters : r.fuelUsedLiters;
-  const isUlm = r.aerodrome.aerodromeType === "ULTRALIGHT_FIELD";
-  const isHydro = r.aerodrome.aerodromeType === "SEAPLANE_BASE";
+  const isUlm = false;
+  const isHydro = false;
 
   return (
     <Link href={`/aerodrome/${r.aerodrome.id}`} style={{ textDecoration: "none" }}>
