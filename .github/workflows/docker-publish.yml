@@ -14,69 +14,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  plumber:
-    name: Plumber GitLab CI compliance
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-      PLUMBER_VERSION: v0.1.30
-      PLUMBER_GITLAB_URL: ${{ vars.PLUMBER_GITLAB_URL || 'https://gitlab.com' }}
-      PLUMBER_GITLAB_PROJECT: ${{ vars.PLUMBER_GITLAB_PROJECT }}
-      PLUMBER_CI_CONFIG_PATH: ${{ vars.PLUMBER_CI_CONFIG_PATH || '.gitlab-ci.yml' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Check Plumber configuration
-        id: plumber-config
-        shell: bash
-        run: |
-          if [[ -z "${GITLAB_TOKEN}" || -z "${PLUMBER_GITLAB_PROJECT}" ]]; then
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice::Plumber skipped. Set GITLAB_TOKEN and PLUMBER_GITLAB_PROJECT to enable GitLab CI compliance scanning."
-            exit 0
-          fi
-
-          echo "enabled=true" >> "${GITHUB_OUTPUT}"
-
-      - name: Install Plumber
-        if: steps.plumber-config.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          curl -fsSL \
-            -o plumber \
-            "https://github.com/getplumber/plumber/releases/download/${PLUMBER_VERSION}/plumber-linux-amd64"
-          sudo install -m 0755 plumber /usr/local/bin/plumber
-          plumber --version
-
-      - name: Generate default Plumber policy
-        if: steps.plumber-config.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          if [[ ! -f .plumber.yaml ]]; then
-            plumber config generate
-          fi
-
-      - name: Run Plumber compliance scan
-        if: steps.plumber-config.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          plumber analyze \
-            --gitlab-url "${PLUMBER_GITLAB_URL}" \
-            --project "${PLUMBER_GITLAB_PROJECT}" \
-            --ci-config-path "${PLUMBER_CI_CONFIG_PATH}" \
-            --output plumber-report.json
-
-      - name: Upload Plumber report
-        if: steps.plumber-config.outputs.enabled == 'true' && always()
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: plumber-report
-          path: plumber-report.json
-          if-no-files-found: ignore
-
   ci:
     name: CI checks (Prisma + build)
     runs-on: ubuntu-latest
