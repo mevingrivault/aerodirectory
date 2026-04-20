@@ -268,6 +268,19 @@ export class AerodromeService {
 
     return { data, total };
   }
+
+  async stats() {
+    const [total, ulm, seaplane] = await Promise.all([
+      this.prisma.aerodrome.count({ where: { countryCode: "FR" } }),
+      this.prisma.aerodrome.count({
+        where: { countryCode: "FR", aerodromeType: "ULTRALIGHT_FIELD" },
+      }),
+      this.prisma.aerodrome.count({
+        where: { countryCode: "FR", aerodromeType: "SEAPLANE_BASE" },
+      }),
+    ]);
+    return { total, ulmAndSeaplane: ulm + seaplane };
+  }
 }
 
 /** Haversine distance in km */

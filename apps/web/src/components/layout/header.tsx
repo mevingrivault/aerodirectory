@@ -219,15 +219,28 @@ export function Header() {
         </div>
       )}
 
-      <header className="sticky top-0 z-[100] isolate border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-[100] isolate" style={{ background: "rgba(253, 252, 249, .85)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--ink-200)" }}>
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link
           href="/"
-          className="flex items-center gap-2 font-bold text-xl shrink-0"
+          className="flex items-center gap-2 shrink-0"
           onClick={() => setMenuOpen(false)}
         >
-          <Plane className="h-6 w-6 text-primary" />
-          <span>Navventura</span>
+          <div style={{
+            width: 30, height: 30, borderRadius: 7,
+            background: "var(--ink-950)", color: "white",
+            display: "grid", placeItems: "center",
+            fontFamily: "var(--f-mono)", fontWeight: 600, fontSize: 15,
+            position: "relative", flexShrink: 0,
+          }}>
+            N
+            <span style={{
+              position: "absolute", right: -3, top: -3,
+              width: 9, height: 9, background: "var(--terrain-500)",
+              borderRadius: "50%", border: "2px solid var(--paper-50)",
+            }} />
+          </div>
+          <span style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: 20, letterSpacing: "-0.01em" }}>Navventura</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
@@ -346,13 +359,22 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link
-              href="/login"
-              className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              <LogIn className="h-4 w-4" />
-              Connexion
-            </Link>
+            <>
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 text-sm font-medium"
+                style={{ color: "var(--ink-700)", padding: "6px 14px", borderRadius: 6, border: "1px solid transparent" }}
+              >
+                Connexion
+              </Link>
+              <Link
+                href="/register"
+                className="flex items-center gap-1.5 text-sm font-medium"
+                style={{ background: "var(--ink-950)", color: "white", padding: "6px 14px", borderRadius: 6, border: "1px solid transparent" }}
+              >
+                Créer un compte
+              </Link>
+            </>
           )}
         </div>
 

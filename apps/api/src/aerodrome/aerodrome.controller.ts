@@ -79,6 +79,13 @@ export class AerodromeController {
   }
 
   @Public()
+  @Get("stats")
+  async stats() {
+    const data = await this.aerodromes.stats();
+    return ok(data);
+  }
+
+  @Public()
   @Get(":id")
   async findById(@Param("id") id: string) {
     const aerodrome = await this.aerodromes.findById(id);
