@@ -404,7 +404,7 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
             {r.aerodrome.icaoCode && (
               <span className="badge badge-oaci">{r.aerodrome.icaoCode}</span>
             )}
-            {r.aerodrome.status === "OPEN" && <span className="badge badge-vfr">Ouvert</span>}
+            <span className="badge badge-vfr">Ouvert</span>
             {r.aerodrome.city && <span className="result-city">{r.aerodrome.city}</span>}
           </div>
           <div className="result-line">
