@@ -21,9 +21,9 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
 
-  const corsOrigins = config.get<string>("CORS_ORIGINS", "http://localhost:3000");
+  const corsOrigins = resolveCorsOrigins(config);
   await app.register(fastifyCors, {
-    origin: corsOrigins.split(",").map((o: string) => o.trim()),
+    origin: corsOrigins,
     credentials: true,
   });
 
@@ -65,3 +65,28 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+function resolveCorsOrigins(config: ConfigService): string[] {
+  const configuredOrigins = config
+    .get<string>("CORS_ORIGINS", "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const origins = new Set(configuredOrigins);
+  const appUrl = config.get<string>("APP_URL", "").trim();
+
+  if (appUrl) {
+    origins.add(appUrl);
+  }
+
+  if (process.env["NODE_ENV"] === "production") {
+    origins.add("https://navventura.fr");
+    origins.add("https://www.navventura.fr");
+  } else {
+    origins.add("http://localhost:3000");
+    origins.add("http://127.0.0.1:3000");
+  }
+
+  return Array.from(origins);
+}
