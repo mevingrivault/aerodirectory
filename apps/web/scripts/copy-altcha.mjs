@@ -30,9 +30,12 @@ function findPackageDir(resolvedPath) {
 }
 
 const resolved = [];
+const browserEntrypoints = [];
 
 if (typeof import.meta.resolve === "function") {
-  resolved.push(fileURLToPath(import.meta.resolve("altcha")));
+  const importEntrypoint = fileURLToPath(import.meta.resolve("altcha"));
+  resolved.push(importEntrypoint);
+  browserEntrypoints.push(importEntrypoint);
 }
 
 resolved.push(require.resolve("altcha"));
@@ -50,7 +53,9 @@ for (const resolvedPath of resolved) {
     );
   }
 
-  candidates.push(resolvedPath);
+  if (browserEntrypoints.includes(resolvedPath)) {
+    candidates.push(resolvedPath);
+  }
 }
 
 const source = candidates.find((candidate) => fs.existsSync(candidate));

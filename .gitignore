@@ -35,6 +35,7 @@ coverage/
 
 # Generated
 packages/database/src/generated/
+tmp-design/
 
 # Large data files (OSM imports — not needed in repo)
 data/*.pbf
