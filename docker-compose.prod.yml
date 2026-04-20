@@ -100,6 +100,13 @@ services:
   api:
     image: ghcr.io/${GITHUB_REPO}/aerodirectory-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /tmp/navventura-uploads "$${SYNC_DATA_DIR:-/data/sync}"
+        chown -R apiuser:nodejs /tmp/navventura-uploads "$${SYNC_DATA_DIR:-/data/sync}"
+        exec gosu apiuser node apps/api/dist/main
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,7 +167,7 @@ services:
       SYNC_RETRY_BACKOFF_MINUTES: ${SYNC_RETRY_BACKOFF_MINUTES:-15,30,60}
       SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
       SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
-      RUN_MIGRATIONS: "true"
+      RUN_MIGRATIONS: "false"
     volumes:
       - clamav_db:/var/lib/clamav:ro
     networks:
@@ -170,6 +177,13 @@ services:
   sync-worker:
     image: ghcr.io/${GITHUB_REPO}/aerodirectory-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /tmp/navventura-uploads "$${SYNC_DATA_DIR:-/data/sync}"
+        chown -R apiuser:nodejs /tmp/navventura-uploads "$${SYNC_DATA_DIR:-/data/sync}"
+        exec gosu apiuser node apps/api/dist/main
     depends_on:
       postgres:
         condition: service_healthy
