@@ -281,6 +281,23 @@ export class AerodromeService {
     ]);
     return { total, ulmAndSeaplane: ulm + seaplane };
   }
+
+  async featured(limit = 3) {
+    return this.prisma.aerodrome.findMany({
+      where: {
+        countryCode: "FR",
+        status: "OPEN",
+        hasRestaurant: true,
+        icaoCode: { not: null },
+      },
+      orderBy: { visits: { _count: "desc" } },
+      take: limit,
+      include: {
+        runways: { select: { length: true }, orderBy: { length: "desc" }, take: 1 },
+        fuels: { select: { type: true, available: true }, where: { available: true } },
+      },
+    });
+  }
 }
 
 /** Haversine distance in km */
