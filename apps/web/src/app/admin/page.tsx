@@ -26,6 +26,7 @@ import type {
   AdminSyncStatusResponse,
 } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
+import { API_BASE } from "@/lib/public-env";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
 };
 
 export default function AdminPage() {
-  const apiBase = process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:4000/api/v1";
+  const apiBase = API_BASE;
   const { user, loading } = useAuth();
   const router = useRouter();
   const [triggeringSource, setTriggeringSource] = useState<AdminSyncRunItem["source"] | null>(null);

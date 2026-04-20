@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { API_BASE } from "@/lib/public-env";
 import { Button } from "@/components/ui/button";
 import {
   AlertCircle,
@@ -75,7 +76,7 @@ export function PhotoUpload({
 
   const getPhotoUrl = useCallback(
     (photoId: string) =>
-      `${process.env["NEXT_PUBLIC_API_URL"] || "/api/v1"}/aerodromes/${aerodromeId}/photos/${photoId}/file`,
+      `${API_BASE}/aerodromes/${aerodromeId}/photos/${photoId}/file`,
     [aerodromeId],
   );
 

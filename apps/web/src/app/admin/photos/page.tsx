@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check, ImagePlus, X } from "lucide-react";
 import type { AdminPhotoListItem } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
+import { API_BASE } from "@/lib/public-env";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -156,7 +157,7 @@ export default function AdminPhotosPage() {
             <div key={photo.id} className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[280px_1fr]">
               <div className="overflow-hidden rounded-lg border bg-muted aspect-video">
                 <img
-                  src={`${process.env["NEXT_PUBLIC_API_URL"] || "/api/v1"}/admin/photos/${photo.id}/file`}
+                  src={`${API_BASE}/admin/photos/${photo.id}/file`}
                   alt={`Photo proposée par ${photo.user.displayName || photo.user.email}`}
                   className="h-full w-full object-cover"
                   loading="lazy"

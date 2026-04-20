@@ -1,6 +1,5 @@
 import type { ApiResponse, ApiErrorResponse } from "@aerodirectory/shared";
-
-const API_BASE = process.env["NEXT_PUBLIC_API_URL"] || "http://localhost:4000/api/v1";
+import { API_BASE } from "./public-env";
 
 class ApiClient {
   private async request<T>(

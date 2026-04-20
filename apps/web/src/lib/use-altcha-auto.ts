@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { API_BASE } from "./public-env";
 
 /**
  * Resolves an ALTCHA challenge automatically in a Web Worker — invisible to the user.
@@ -14,9 +15,7 @@ import { useCallback } from "react";
  *   await apiClient.post("/...", body, { "x-altcha": payload });
  */
 
-const CHALLENGE_URL =
-  (process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000/api/v1") +
-  "/altcha/challenge";
+const CHALLENGE_URL = `${API_BASE}/altcha/challenge`;
 const CHALLENGE_TIMEOUT_MS = 8_000;
 const SOLVE_TIMEOUT_MS = 8_000;
 

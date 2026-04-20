@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
+import { API_BASE } from "@/lib/public-env";
 
 export interface AltchaHandle {
   getPayload(): string | null;
@@ -23,9 +24,7 @@ interface AltchaWidgetProps {
 
 type AltchaElement = HTMLElement & { value?: string; reset?: () => void };
 
-const CHALLENGE_URL =
-  (process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000/api/v1") +
-  "/altcha/challenge";
+const CHALLENGE_URL = `${API_BASE}/altcha/challenge`;
 
 const FR_STRINGS = JSON.stringify({
   label: "Je ne suis pas un robot",
