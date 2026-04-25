@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DISCLAIMER, FUEL_LABELS } from "@aerodirectory/shared";
+import { FUEL_LABELS } from "@aerodirectory/shared";
 import {
   Plane,
   MapPin,
@@ -42,6 +42,14 @@ import {
   Reply,
   PencilLine,
   CalendarDays,
+  ChevronRight,
+  CheckCircle2,
+  Share2,
+  Printer,
+  Flag,
+  Info,
+  Send,
+  Download,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
@@ -957,55 +965,192 @@ export default function AerodromeDetailPage() {
     { icon: Moon, label: "Vols de nuit", active: ad.nightOperations },
   ];
 
+  const visitedCount = ad._count?.visits ?? 0;
+  const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
+  const isFavorite = currentVisitStatus === "FAVORITE";
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Back link */}
-      <Link
-        href="/search"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour à la recherche
-      </Link>
+    <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
+      {/* BREADCRUMB */}
+      <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-4 text-[13px] text-[var(--ink-500)] sm:px-6 lg:px-8">
+        <Link href="/search" className="text-[var(--ink-700)] hover:text-[var(--ink-950)]">
+          Recherche
+        </Link>
+        <ChevronRight className="h-3 w-3 opacity-50" strokeWidth={2} />
+        <span className="truncate">
+          {ad.name}
+          {ad.icaoCode ? ` (${ad.icaoCode})` : ""}
+        </span>
+      </nav>
 
-      {/* Header */}
-      <div className="mb-8">
-        {/* Titre + badges */}
-        <div className="flex items-start gap-3 mb-2">
-          <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{ad.name}</h1>
-          {ad.icaoCode && (
-            <Badge variant="secondary" className="mt-1 shrink-0">
-              {ad.icaoCode}
-            </Badge>
+      {/* HERO */}
+      <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="relative aspect-[16/7] min-h-[280px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:rounded-[20px] sm:min-h-[360px]">
+          {/* Faux-aero map background */}
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `
+                radial-gradient(ellipse 60% 35% at 30% 60%, oklch(0.85 0.05 130) 0%, oklch(0.82 0.06 130) 60%, transparent 65%),
+                radial-gradient(ellipse 25% 18% at 65% 45%, oklch(0.85 0.05 130) 0%, oklch(0.82 0.06 130) 60%, transparent 65%),
+                linear-gradient(180deg, oklch(0.88 0.04 230) 0%, oklch(0.82 0.06 220) 100%)
+              `,
+            }}
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `
+                  linear-gradient(0deg, transparent 49%, rgba(255,255,255,.08) 50%, transparent 51%),
+                  linear-gradient(90deg, transparent 49%, rgba(255,255,255,.08) 50%, transparent 51%)
+                `,
+                backgroundSize: "80px 80px",
+              }}
+            />
+          </div>
+
+          {/* Runway overlay */}
+          {ad.runways[0] && (
+            <>
+              <div
+                className="absolute h-[14px] w-[220px] rounded-[2px] bg-[var(--ink-950)]"
+                style={{
+                  left: "38%",
+                  top: "56%",
+                  transform: `rotate(${(ad.runways[0].trueHeading ?? 65) - 90}deg)`,
+                  boxShadow: "0 0 0 2px white, 0 6px 24px rgba(0,0,0,.25)",
+                }}
+              />
+              <div
+                className="pointer-events-none absolute rounded-[3px] bg-[rgba(0,0,0,.6)] px-1.5 py-0.5 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-white"
+                style={{ left: "38%", top: "56%", transform: "translate(80px, -40px)" }}
+              >
+                RWY {ad.runways[0].identifier} · {ad.runways[0].length} m
+              </div>
+            </>
           )}
-        </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          <Badge variant={ad.status === "OPEN" ? "success" : "warning"}>
-            {STATUS_LABELS[ad.status] ?? ad.status}
-          </Badge>
-          <Badge variant="outline">
-            {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
-          </Badge>
-        </div>
 
-        {/* Localisation */}
-        <p className="text-muted-foreground flex items-center gap-1 text-sm">
-          <MapPin className="h-4 w-4 shrink-0" />
-          {[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}
-          {ad.elevation != null && ` — ${ad.elevation} ft`}
-        </p>
-        <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-          {ad.latitude.toFixed(4)}°N, {ad.longitude.toFixed(4)}°E
-        </p>
-        {ad.source && (
-          <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-            Source : {ad.source}
-            {ad.lastSyncedAt &&
-              ` — Dernière synchro : ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}
-          </p>
-        )}
+          {/* Compass rose */}
+          <div
+            className="absolute bottom-4 right-4 grid h-14 w-14 place-items-center rounded-full border border-[var(--ink-200)] bg-white/90 font-[var(--f-mono)] text-[11px] font-bold text-[var(--ink-950)] shadow-[0_1px_2px_rgba(20,30,50,.06)]"
+            aria-hidden
+          >
+            <span className="absolute left-1/2 top-1 h-0 w-0 -translate-x-1/2 border-x-[4px] border-x-transparent border-b-[10px] border-b-[oklch(0.55_0.18_25)]" />
+            N
+          </div>
 
-        {/* Boutons d'action */}
-        <div className="mt-4 flex flex-wrap gap-2">
+          {/* Overlay (badges + name + stats + CTAs) */}
+          <div
+            className="absolute inset-x-0 bottom-0 grid items-end gap-5 p-5 sm:grid-cols-[1fr_auto] sm:p-7"
+            style={{ background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,.96) 70%)" }}
+          >
+            <div className="min-w-0">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                {ad.icaoCode && (
+                  <span className="inline-flex h-[22px] items-center rounded border border-[var(--ink-300)] bg-[var(--paper-100)] px-2 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-[var(--ink-950)]">
+                    {ad.icaoCode}
+                  </span>
+                )}
+                <span className="inline-flex h-[22px] items-center rounded bg-[var(--horizon-100)] px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--horizon-900)]">
+                  {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+                </span>
+                <span
+                  className={`inline-flex h-[22px] items-center gap-1 rounded px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                    ad.status === "OPEN"
+                      ? "bg-[oklch(0.96_0.05_130)] text-[var(--terrain-800)]"
+                      : "bg-[oklch(0.96_0.05_25)] text-[oklch(0.45_0.15_25)]"
+                  }`}
+                >
+                  {STATUS_LABELS[ad.status] ?? ad.status}
+                </span>
+                {ad.ppr && (
+                  <span className="inline-flex h-[22px] items-center rounded bg-[var(--brass-100)] px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--brass-700)]">
+                    PPR
+                  </span>
+                )}
+                {visitedCount > 0 && (
+                  <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] px-2.5 text-[12px] font-semibold text-[var(--brass-700)]">
+                    <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />
+                    Visité {visitedCount > 1 ? `${visitedCount} fois` : ""}
+                  </span>
+                )}
+              </div>
+              <h1 className="m-0 font-[var(--f-serif)] text-[clamp(24px,4vw,44px)] font-medium leading-[1.05] tracking-[-0.02em]">
+                {ad.name}
+              </h1>
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px] text-[var(--ink-700)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
+                  {[ad.city, ad.department, ad.region].filter(Boolean).join(" · ") || "—"}
+                </span>
+                {ad.elevation != null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Plane className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
+                    Élévation <strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong>
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 font-[var(--f-mono)] text-[12px]">
+                  {ad.latitude.toFixed(4)}°N · {ad.longitude.toFixed(4)}°E
+                </span>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Link
+                href={`/planner?to=${ad.id}`}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[oklch(0.10_0.02_250)]"
+              >
+                <Send className="h-4 w-4" strokeWidth={1.6} />
+                Planifier un vol
+              </Link>
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => handleVisit("VISITED")}
+                  disabled={isVisitUpdating}
+                  className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                    isVisited
+                      ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                      : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                  }`}
+                >
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
+                  {isVisited ? "Aérodex ✓" : "Aérodex"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
+
+      {/* STATUS BANNER */}
+      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[oklch(0.85_0.07_130)] bg-[oklch(0.96_0.05_130)] px-3.5 py-2.5 text-[13px] text-[var(--terrain-800)]">
+        <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+        <span>
+          <strong className="font-semibold">
+            {ad.status === "OPEN" ? "Aérodrome ouvert" : STATUS_LABELS[ad.status] ?? ad.status}
+          </strong>
+          {ad.source ? (
+            <>
+              {" "}
+              · Source <span className="font-[var(--f-mono)]">{ad.source}</span>
+              {ad.lastSyncedAt && (
+                <>
+                  {" "}
+                  · MAJ {new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}
+                </>
+              )}
+            </>
+          ) : null}
+        </span>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+      <main className="min-w-0">
+
+      {/* Old action buttons row (kept for VAC/basulm/visit/favorite/lists) */}
+      <div className="mb-6 flex flex-wrap gap-2">{/* keep prior actions */}
           {/* VAC link */}
           {ad.icaoCode && (() => {
             const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
@@ -1099,15 +1244,9 @@ export default function AerodromeDetailPage() {
             </Button>
           </div>
         )}
-      </div>
 
       {/* Weather */}
       <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
-
-      {/* Disclaimer */}
-      <div className="mb-6 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
-        {DISCLAIMER}
-      </div>
 
       <AerodromeLocationMap
         aerodromeId={ad.id}
@@ -2402,6 +2541,170 @@ export default function AerodromeDetailPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+      </main>
+
+      {/* ASIDE (sticky on desktop) */}
+      <aside className="flex flex-col gap-3.5 lg:sticky lg:top-4">
+        {/* Actions card */}
+        <div className="rounded-xl border border-[var(--ink-200)] bg-white p-4">
+          <div className="mb-3 flex items-center gap-1.5 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+            <CheckCircle2 className="h-3 w-3" strokeWidth={1.8} />
+            Mes actions
+          </div>
+          <div className="flex flex-col gap-2">
+            <Link
+              href={`/planner?to=${ad.id}`}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[oklch(0.10_0.02_250)]"
+            >
+              <Send className="h-4 w-4" strokeWidth={1.6} />
+              Planifier un vol
+            </Link>
+            {user && (
+              <button
+                type="button"
+                onClick={() => handleVisit("VISITED")}
+                disabled={isVisitUpdating}
+                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                  isVisited
+                    ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                    : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                }`}
+              >
+                <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
+                {isVisited ? "Retiré de l'Aérodex" : "Ajouter à mon Aérodex"}
+              </button>
+            )}
+            {user && (
+              <button
+                type="button"
+                onClick={() => handleVisit("FAVORITE")}
+                disabled={isVisitUpdating}
+                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                  isFavorite
+                    ? "border-[var(--brass-500)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                    : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                }`}
+              >
+                <Heart
+                  className="h-4 w-4"
+                  strokeWidth={1.6}
+                  fill={isFavorite ? "currentColor" : "none"}
+                />
+                {isFavorite ? "Favori" : "Marquer favori"}
+              </button>
+            )}
+            {ad.icaoCode && (() => {
+              const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
+              if (!pattern) return null;
+              const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
+              return (
+                <a
+                  href={vacUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
+                >
+                  <FileText className="h-4 w-4" strokeWidth={1.6} />
+                  Voir la VAC officielle
+                </a>
+              );
+            })()}
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof navigator !== "undefined" && navigator.share) {
+                    navigator.share({ title: ad.name, url: window.location.href }).catch(() => {});
+                  } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard.writeText(window.location.href).catch(() => {});
+                  }
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
+                aria-label="Partager"
+              >
+                <Share2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </button>
+              <button
+                type="button"
+                onClick={() => typeof window !== "undefined" && window.print()}
+                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
+                aria-label="Imprimer"
+              >
+                <Printer className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </button>
+              <a
+                href="#sec-corrections"
+                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
+                aria-label="Signaler une info"
+              >
+                <Flag className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* VAC dark card */}
+        {ad.icaoCode && process.env.NEXT_PUBLIC_VAC_URL_PATTERN && (
+          <div className="rounded-xl border border-[var(--ink-950)] bg-[var(--ink-950)] p-4 text-white">
+            <div className="mb-2.5 flex items-center gap-1.5 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[oklch(0.78_0.04_250)]">
+              <FileText className="h-3 w-3" strokeWidth={1.8} />
+              Documentation VAC
+            </div>
+            <div className="font-[var(--f-serif)] text-[17px] font-medium">
+              VAC {ad.icaoCode}
+            </div>
+            <div className="mb-3 mt-1 text-[12px] text-[oklch(0.78_0.04_250)]">
+              PDF officiel SIA
+            </div>
+            <a
+              href={(process.env.NEXT_PUBLIC_VAC_URL_PATTERN ?? "").replace("{OACI-CODE}", ad.icaoCode)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-opacity hover:opacity-90"
+            >
+              <Download className="h-4 w-4" strokeWidth={1.6} />
+              Télécharger la VAC
+            </a>
+          </div>
+        )}
+      </aside>
+      </div>
+
+      {/* Footer notice */}
+      <div className="mt-7 flex items-center gap-2.5 rounded-md border border-[oklch(0.90_0.05_85)] bg-[oklch(0.97_0.04_85)] px-4 py-3 text-[12px] text-[var(--ink-700)]">
+        <Info className="h-3.5 w-3.5 shrink-0 text-[var(--ink-500)]" strokeWidth={1.8} />
+        <span>
+          Les informations affichées sont indicatives et ne sauraient se substituer à la VAC en vigueur. Consultez les NOTAMs avant chaque vol.
+        </span>
+      </div>
+
+      </div>
+
+      {/* MOBILE bottom action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-[var(--ink-200)] bg-[rgba(253,252,249,.96)] px-4 py-2.5 backdrop-blur lg:hidden">
+        <Link
+          href={`/planner?to=${ad.id}`}
+          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white"
+        >
+          <Send className="h-4 w-4" strokeWidth={1.6} />
+          Planifier
+        </Link>
+        {user && (
+          <button
+            type="button"
+            onClick={() => handleVisit("VISITED")}
+            disabled={isVisitUpdating}
+            className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium disabled:opacity-60 ${
+              isVisited
+                ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                : "border-[var(--ink-300)] bg-white text-[var(--ink-950)]"
+            }`}
+          >
+            <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
+            Aérodex
+          </button>
+        )}
       </div>
     </div>
   );
