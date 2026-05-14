@@ -50,6 +50,7 @@ import {
   Info,
   Send,
   Download,
+  Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
@@ -1001,7 +1002,7 @@ export default function AerodromeDetailPage() {
 
       {/* HERO */}
       <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="relative aspect-[16/7] min-h-[280px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:rounded-[20px] sm:min-h-[360px]">
+        <div className="relative aspect-[4/3] min-h-[280px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:aspect-[16/7] sm:rounded-[20px] sm:min-h-[360px]">
           {/* Faux-aero map background */}
           <div
             className="absolute inset-0"
@@ -1057,7 +1058,7 @@ export default function AerodromeDetailPage() {
 
           {/* Overlay (badges + name + stats + CTAs) */}
           <div
-            className="absolute inset-x-0 bottom-0 grid items-end gap-5 p-5 sm:grid-cols-[1fr_auto] sm:p-7"
+            className="absolute inset-x-0 bottom-0 grid items-end gap-5 p-4 sm:grid-cols-[1fr_auto] sm:p-7"
             style={{ background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,.96) 70%)" }}
           >
             <div className="min-w-0">
@@ -1094,7 +1095,7 @@ export default function AerodromeDetailPage() {
               <h1 className="m-0 font-[var(--f-serif)] text-[clamp(24px,4vw,44px)] font-medium leading-[1.05] tracking-[-0.02em]">
                 {ad.name}
               </h1>
-              <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px] text-[var(--ink-700)]">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--ink-700)] sm:mt-2.5 sm:gap-x-3.5 sm:gap-y-1.5 sm:text-[13px]">
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
                   {[ad.city, ad.department, ad.region].filter(Boolean).join(" · ") || "—"}
@@ -1102,7 +1103,7 @@ export default function AerodromeDetailPage() {
                 {ad.elevation != null && (
                   <span className="inline-flex items-center gap-1.5">
                     <Plane className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
-                    Élévation <strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong>
+                    <span><span className="hidden sm:inline">Élévation </span><strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong></span>
                   </span>
                 )}
                 <span className="hidden items-center gap-1.5 font-[var(--f-mono)] text-[12px] sm:inline-flex">
@@ -1161,39 +1162,42 @@ export default function AerodromeDetailPage() {
       <main className="min-w-0">
 
         {user && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">Listes perso :</span>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+              Listes
+            </span>
             {userLists.map((list) => {
               const active = isInList(list);
               return (
-                <Button
+                <button
                   key={list.id}
-                  size="sm"
-                  variant="outline"
-                  className={active ? "border-primary bg-primary/10 text-primary" : ""}
+                  type="button"
                   onClick={() => {
-                    if (active) {
-                      removeFromListMutation.mutate(list.id);
-                    } else {
-                      addToListMutation.mutate(list.id);
-                    }
+                    if (active) removeFromListMutation.mutate(list.id);
+                    else addToListMutation.mutate(list.id);
                   }}
                   disabled={addToListMutation.isPending || removeFromListMutation.isPending}
+                  className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium transition-colors disabled:opacity-60 ${
+                    active
+                      ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
+                      : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
+                  }`}
                 >
+                  {active && <Check className="h-3 w-3" strokeWidth={2.5} />}
                   {list.name}
-                </Button>
+                </button>
               );
             })}
-            <Button
-              size="sm"
-              variant="ghost"
+            <button
+              type="button"
               onClick={() => {
                 setNewListName("");
                 setNewListDialogOpen(true);
               }}
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-[var(--ink-300)] bg-transparent px-2.5 text-[12px] font-medium text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
             >
               + Nouvelle liste
-            </Button>
+            </button>
           </div>
         )}
 
