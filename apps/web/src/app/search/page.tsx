@@ -390,10 +390,11 @@ export default function SearchPage() {
           </div>
 
           {/* Type filters */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="mr-1 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:mr-1">
               Type
             </span>
+            <div className="-mx-3.5 flex gap-2 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
             {TYPE_FILTERS.map((def) => {
               const active = activeTypeKey === def.key;
               return (
@@ -401,7 +402,7 @@ export default function SearchPage() {
                   key={def.key}
                   type="button"
                   onClick={() => setTypeFilter(def)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
                     active
                       ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
                       : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
@@ -414,13 +415,15 @@ export default function SearchPage() {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Commodity filters */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="mr-1 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:mr-1">
               Commodités
             </span>
+            <div className="-mx-3.5 flex gap-2 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
             {(
               [
                 { key: "hasRestaurant", label: "Restaurant", icon: Utensils, val: "true" },
@@ -440,7 +443,7 @@ export default function SearchPage() {
                   key={`${key}-${val}`}
                   type="button"
                   onClick={() => toggleFilter(key, val)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
                     active
                       ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
                       : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
@@ -451,6 +454,7 @@ export default function SearchPage() {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Options row */}
@@ -536,9 +540,9 @@ export default function SearchPage() {
               </button>
             )}
 
-            <span className="flex-1" />
+            <span className="hidden flex-1 sm:block" />
 
-            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+            <span className="ml-auto font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:ml-0">
               Tri
             </span>
             <select

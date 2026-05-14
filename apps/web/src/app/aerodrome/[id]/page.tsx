@@ -970,7 +970,7 @@ export default function AerodromeDetailPage() {
   const isFavorite = currentVisitStatus === "FAVORITE";
 
   return (
-    <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
+    <div className="min-h-[70vh] overflow-x-hidden bg-[var(--paper-50)] text-[var(--ink-950)]">
       {/* BREADCRUMB */}
       <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-4 text-[13px] text-[var(--ink-500)] sm:px-6 lg:px-8">
         <Link href="/search" className="text-[var(--ink-700)] hover:text-[var(--ink-950)]">
@@ -1125,87 +1125,25 @@ export default function AerodromeDetailPage() {
       <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
 
       {/* STATUS BANNER */}
-      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[oklch(0.85_0.07_130)] bg-[oklch(0.96_0.05_130)] px-3.5 py-2.5 text-[13px] text-[var(--terrain-800)]">
-        <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-        <span>
+      <div className="mb-5 flex items-start gap-3 rounded-md border border-[oklch(0.85_0.07_130)] bg-[oklch(0.96_0.05_130)] px-3.5 py-2.5 text-[13px] text-[var(--terrain-800)]">
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.8} />
+        <div className="min-w-0 flex-1">
           <strong className="font-semibold">
             {ad.status === "OPEN" ? "Aérodrome ouvert" : STATUS_LABELS[ad.status] ?? ad.status}
           </strong>
-          {ad.source ? (
-            <>
-              {" "}
-              · Source <span className="font-[var(--f-mono)]">{ad.source}</span>
+          {ad.source && (
+            <span className="ml-2 text-[var(--ink-700)]">
+              Source <span className="font-[var(--f-mono)]">{ad.source}</span>
               {ad.lastSyncedAt && (
-                <>
-                  {" "}
-                  · MAJ {new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}
-                </>
+                <> · MAJ {new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}</>
               )}
-            </>
-          ) : null}
-        </span>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <main className="min-w-0">
-
-      {/* Old action buttons row (kept for VAC/basulm/visit/favorite/lists) */}
-      <div className="mb-6 flex flex-wrap gap-2">{/* keep prior actions */}
-          {/* VAC link */}
-          {ad.icaoCode && (() => {
-            const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
-            if (!pattern) return null;
-            const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
-            return (
-              <a href={vacUrl} target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="outline">
-                  <FileText className="mr-1 h-4 w-4" /> Carte VAC
-                </Button>
-              </a>
-            );
-          })()}
-
-          {/* Fiche basulm (ULM) */}
-          {ad.altIdentifier && (
-            <a
-              href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button size="sm" variant="outline">
-                <FileText className="mr-1 h-4 w-4" /> Fiche basulm
-              </Button>
-            </a>
-          )}
-
-          {/* Visit buttons (authenticated only) */}
-          {user && (() => {
-            const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
-            const isFavorite = currentVisitStatus === "FAVORITE";
-            return (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isVisitUpdating}
-                  className={isVisited ? "border-green-500 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700" : ""}
-                  onClick={() => handleVisit("VISITED")}
-                >
-                  <Star className="mr-1 h-4 w-4" fill={isVisited ? "currentColor" : "none"} /> Visité
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isVisitUpdating}
-                  className={isFavorite ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 hover:text-yellow-700" : ""}
-                  onClick={() => handleVisit("FAVORITE")}
-                >
-                  <Heart className="mr-1 h-4 w-4" fill={isFavorite ? "currentColor" : "none"} /> Favori
-                </Button>
-              </>
-            );
-          })()}
-        </div>
 
         {user && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2610,6 +2548,17 @@ export default function AerodromeDetailPage() {
                 </a>
               );
             })()}
+            {ad.altIdentifier && (
+              <a
+                href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
+              >
+                <FileText className="h-4 w-4" strokeWidth={1.6} />
+                Fiche basulm
+              </a>
+            )}
             <div className="mt-1 grid grid-cols-3 gap-1.5">
               <button
                 type="button"

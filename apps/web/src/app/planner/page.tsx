@@ -580,8 +580,13 @@ export default function PlannerPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
 
-  // ── Mobile drawer ──
+  // ── Mobile drawer ── open by default on mobile so users see the form first
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 960px)").matches) {
+      setSidebarOpen(true);
+    }
+  }, []);
 
   // ── Queries ──
   const { data: profilesRes } = useQuery({
@@ -1442,7 +1447,11 @@ export default function PlannerPage() {
           }
           .planner-sidebar.open { transform: translateX(0); }
           .planner-fab { display: inline-flex !important; }
+          .planner-fab.is-hidden { display: none !important; }
           .planner-sidebar-mobile-head { display: flex; }
+          .planner-sidebar .planner-input,
+          .planner-sidebar .planner-saved-select,
+          .planner-sidebar select { background: white; }
           .result-row { grid-template-columns: 32px 1fr auto; padding: 12px 14px; }
           .planner-results-head { flex-direction: column; align-items: flex-start; gap: 10px; }
           .planner-results-tools { width: 100%; }
@@ -1469,7 +1478,7 @@ export default function PlannerPage() {
       />
 
       {/* Mobile FAB */}
-      <button className="planner-fab" onClick={() => setSidebarOpen(true)} style={{ display: sidebarOpen ? "none" : undefined }}>
+      <button className={cn("planner-fab", sidebarOpen && "is-hidden")} onClick={() => setSidebarOpen(true)}>
         <IcoFilter />
         Filtres
         {activeFilterCount > 0 && (
