@@ -580,13 +580,8 @@ export default function PlannerPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
 
-  // ── Mobile drawer ── open by default on mobile so users see the form first
+  // ── Sidebar/drawer state (only used on desktop now; mobile renders inline) ──
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 960px)").matches) {
-      setSidebarOpen(true);
-    }
-  }, []);
 
   // ── Queries ──
   const { data: profilesRes } = useQuery({
@@ -1431,24 +1426,22 @@ export default function PlannerPage() {
           .planner-layout { grid-template-columns: 290px 1fr; gap: 20px; }
         }
         @media (max-width: 960px) {
-          .planner-page-wrap { padding: 20px 16px 88px !important; }
-          .planner-page-title { font-size: 28px !important; }
-          .planner-page-sub { margin-left: 0 !important; font-size: 14px !important; }
+          .planner-page-wrap { padding: 20px 16px 32px !important; }
+          .planner-page-title { font-size: 24px !important; }
+          .planner-page-sub { margin-left: 0 !important; font-size: 13px !important; }
           .planner-page-title-ico { width: 32px !important; height: 32px !important; }
-          .planner-layout { grid-template-columns: 1fr; }
+          .planner-layout { grid-template-columns: 1fr; gap: 16px; }
+          /* Sidebar rendered inline on mobile/tablet — no overlay, no FAB */
           .planner-sidebar {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
-            background: var(--paper-50);
-            z-index: 150; padding: 20px 16px 48px; overflow-y: auto; overflow-x: hidden;
+            display: flex !important;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
             box-sizing: border-box;
-            transform: translateX(-100%);
-            transition: transform .25s cubic-bezier(.2,.8,.2,1);
-            -webkit-overflow-scrolling: touch;
           }
-          .planner-sidebar.open { transform: translateX(0); }
-          .planner-fab { display: inline-flex !important; }
-          .planner-fab.is-hidden { display: none !important; }
-          .planner-sidebar-mobile-head { display: flex; }
+          .planner-scrim { display: none !important; }
+          .planner-fab { display: none !important; }
+          .planner-sidebar-mobile-head { display: none !important; }
           .planner-sidebar .planner-input,
           .planner-sidebar .planner-saved-select,
           .planner-sidebar select { background: white; }
@@ -1457,8 +1450,9 @@ export default function PlannerPage() {
           .planner-results-tools { width: 100%; }
         }
         @media (max-width: 640px) {
-          .planner-page-wrap { padding: 16px 12px 88px !important; }
+          .planner-page-wrap { padding: 16px 12px 24px !important; }
           .planner-page-title { font-size: 22px !important; gap: 10px !important; }
+          .planner-page-sub { display: none !important; }
           .result-row { grid-template-columns: 1fr; gap: 6px; padding: 12px; }
           .result-ico { display: none; }
           .result-chevron { display: none; }
@@ -2106,7 +2100,7 @@ export default function PlannerPage() {
                       <IcoNav />
                     </div>
                     <p style={{ fontSize: 14, color: "var(--ink-700)", margin: 0 }}>
-                      Configurez votre départ, votre aéronef et la contrainte, puis lancez la recherche.
+                      Remplissez le formulaire ci-dessus puis lancez la recherche pour voir les destinations.
                     </p>
                   </div>
                 ) : sortedResults.length === 0 ? (

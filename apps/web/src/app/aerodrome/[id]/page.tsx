@@ -352,6 +352,20 @@ const SURFACE_LABELS: Record<number, string> = {
   5: "Eau",
 };
 
+const SURFACE_NAME_LABELS: Record<string, string> = {
+  GRASS: "Herbe",
+  ASPHALT: "Asphalte",
+  CONCRETE: "Béton",
+  DIRT: "Terre",
+  GRAVEL: "Gravier",
+  WATER: "Eau",
+  SAND: "Sable",
+  SNOW: "Neige",
+  ICE: "Glace",
+  UNPAVED: "Non revêtu",
+  PAVED: "Revêtu",
+};
+
 // openAIP runway operations codes
 const RUNWAY_OPERATIONS_LABELS: Record<number, string> = {
   0: "VFR de jour",
@@ -437,6 +451,8 @@ export default function AerodromeDetailPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [newListDialogOpen, setNewListDialogOpen] = useState(false);
+  const [newListName, setNewListName] = useState("");
 
   const [eventForm, setEventForm] = useState<{
     type: EventItem["type"];
@@ -1089,12 +1105,12 @@ export default function AerodromeDetailPage() {
                     Élévation <strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong>
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1.5 font-[var(--f-mono)] text-[12px]">
+                <span className="hidden items-center gap-1.5 font-[var(--f-mono)] text-[12px] sm:inline-flex">
                   {ad.latitude.toFixed(4)}°N · {ad.longitude.toFixed(4)}°E
                 </span>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
+            <div className="hidden shrink-0 flex-wrap gap-2 sm:flex">
               <Link
                 href={`/planner?to=${ad.id}`}
                 className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[oklch(0.10_0.02_250)]"
@@ -1103,19 +1119,34 @@ export default function AerodromeDetailPage() {
                 Planifier un vol
               </Link>
               {user && (
-                <button
-                  type="button"
-                  onClick={() => handleVisit("VISITED")}
-                  disabled={isVisitUpdating}
-                  className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
-                    isVisited
-                      ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                      : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-                  }`}
-                >
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
-                  {isVisited ? "Aérodex ✓" : "Aérodex"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleVisit("VISITED")}
+                    disabled={isVisitUpdating}
+                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                      isVisited
+                        ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                        : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
+                    {isVisited ? "Aérodex ✓" : "Aérodex"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleVisit("FAVORITE")}
+                    disabled={isVisitUpdating}
+                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                      isFavorite
+                        ? "border-[var(--brass-500)] bg-[var(--brass-100)] text-[var(--brass-700)]"
+                        : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                    }`}
+                  >
+                    <Heart className="h-4 w-4" strokeWidth={1.6} fill={isFavorite ? "currentColor" : "none"} />
+                    {isFavorite ? "Favori" : "Favori"}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1124,23 +1155,7 @@ export default function AerodromeDetailPage() {
 
       <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
 
-      {/* STATUS BANNER */}
-      <div className="mb-5 flex items-start gap-3 rounded-md border border-[oklch(0.85_0.07_130)] bg-[oklch(0.96_0.05_130)] px-3.5 py-2.5 text-[13px] text-[var(--terrain-800)]">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.8} />
-        <div className="min-w-0 flex-1">
-          <strong className="font-semibold">
-            {ad.status === "OPEN" ? "Aérodrome ouvert" : STATUS_LABELS[ad.status] ?? ad.status}
-          </strong>
-          {ad.source && (
-            <span className="ml-2 text-[var(--ink-700)]">
-              Source <span className="font-[var(--f-mono)]">{ad.source}</span>
-              {ad.lastSyncedAt && (
-                <> · MAJ {new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}</>
-              )}
-            </span>
-          )}
-        </div>
-      </div>
+      {/* Status banner removed — info already in hero badges; source/MAJ kept in footer notice */}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <main className="min-w-0">
@@ -1173,9 +1188,8 @@ export default function AerodromeDetailPage() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                const name = window.prompt("Nom de la nouvelle liste");
-                if (!name || !name.trim()) return;
-                createListMutation.mutate(name.trim());
+                setNewListName("");
+                setNewListDialogOpen(true);
               }}
             >
               + Nouvelle liste
@@ -1270,7 +1284,7 @@ export default function AerodromeDetailPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">{r.surface}</Badge>
+                      <Badge variant="outline">{SURFACE_NAME_LABELS[r.surface] ?? r.surface}</Badge>
                       {r.mainRunway && <Badge variant="secondary">Principale</Badge>}
                       {r.lighting && <Badge variant="secondary">Balisée</Badge>}
                     </div>
@@ -2482,117 +2496,8 @@ export default function AerodromeDetailPage() {
       </div>
       </main>
 
-      {/* ASIDE (sticky on desktop) */}
+      {/* ASIDE (sticky on desktop) — secondary docs only; main actions live in hero / bottom bar */}
       <aside className="flex flex-col gap-3.5 lg:sticky lg:top-4">
-        {/* Actions card */}
-        <div className="rounded-xl border border-[var(--ink-200)] bg-white p-4">
-          <div className="mb-3 flex items-center gap-1.5 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
-            <CheckCircle2 className="h-3 w-3" strokeWidth={1.8} />
-            Mes actions
-          </div>
-          <div className="flex flex-col gap-2">
-            <Link
-              href={`/planner?to=${ad.id}`}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[oklch(0.10_0.02_250)]"
-            >
-              <Send className="h-4 w-4" strokeWidth={1.6} />
-              Planifier un vol
-            </Link>
-            {user && (
-              <button
-                type="button"
-                onClick={() => handleVisit("VISITED")}
-                disabled={isVisitUpdating}
-                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
-                  isVisited
-                    ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                    : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-                }`}
-              >
-                <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
-                {isVisited ? "Retiré de l'Aérodex" : "Ajouter à mon Aérodex"}
-              </button>
-            )}
-            {user && (
-              <button
-                type="button"
-                onClick={() => handleVisit("FAVORITE")}
-                disabled={isVisitUpdating}
-                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
-                  isFavorite
-                    ? "border-[var(--brass-500)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                    : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-                }`}
-              >
-                <Heart
-                  className="h-4 w-4"
-                  strokeWidth={1.6}
-                  fill={isFavorite ? "currentColor" : "none"}
-                />
-                {isFavorite ? "Favori" : "Marquer favori"}
-              </button>
-            )}
-            {ad.icaoCode && (() => {
-              const pattern = process.env.NEXT_PUBLIC_VAC_URL_PATTERN;
-              if (!pattern) return null;
-              const vacUrl = pattern.replace("{OACI-CODE}", ad.icaoCode);
-              return (
-                <a
-                  href={vacUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
-                >
-                  <FileText className="h-4 w-4" strokeWidth={1.6} />
-                  Voir la VAC officielle
-                </a>
-              );
-            })()}
-            {ad.altIdentifier && (
-              <a
-                href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
-              >
-                <FileText className="h-4 w-4" strokeWidth={1.6} />
-                Fiche basulm
-              </a>
-            )}
-            <div className="mt-1 grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof navigator !== "undefined" && navigator.share) {
-                    navigator.share({ title: ad.name, url: window.location.href }).catch(() => {});
-                  } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    navigator.clipboard.writeText(window.location.href).catch(() => {});
-                  }
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
-                aria-label="Partager"
-              >
-                <Share2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-              </button>
-              <button
-                type="button"
-                onClick={() => typeof window !== "undefined" && window.print()}
-                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
-                aria-label="Imprimer"
-              >
-                <Printer className="h-3.5 w-3.5" strokeWidth={1.8} />
-              </button>
-              <a
-                href="#sec-corrections"
-                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)]"
-                aria-label="Signaler une info"
-              >
-                <Flag className="h-3.5 w-3.5" strokeWidth={1.8} />
-              </a>
-            </div>
-          </div>
-        </div>
-
         {/* VAC dark card */}
         {ad.icaoCode && process.env.NEXT_PUBLIC_VAC_URL_PATTERN && (
           <div className="rounded-xl border border-[var(--ink-950)] bg-[var(--ink-950)] p-4 text-white">
@@ -2617,6 +2522,48 @@ export default function AerodromeDetailPage() {
             </a>
           </div>
         )}
+        {ad.altIdentifier && (
+          <a
+            href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+          >
+            <FileText className="h-4 w-4" strokeWidth={1.6} />
+            Fiche basulm
+          </a>
+        )}
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof navigator !== "undefined" && navigator.share) {
+                navigator.share({ title: ad.name, url: window.location.href }).catch(() => {});
+              } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href).catch(() => {});
+              }
+            }}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+            aria-label="Partager"
+          >
+            <Share2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            onClick={() => typeof window !== "undefined" && window.print()}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+            aria-label="Imprimer"
+          >
+            <Printer className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </button>
+          <a
+            href="#sec-corrections"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+            aria-label="Signaler une info"
+          >
+            <Flag className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </a>
+        </div>
       </aside>
       </div>
 
@@ -2655,6 +2602,68 @@ export default function AerodromeDetailPage() {
           </button>
         )}
       </div>
+
+      {/* New list dialog */}
+      {newListDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => setNewListDialogOpen(false)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="m-0 font-[var(--f-serif)] text-[20px] font-medium text-[var(--ink-950)]">
+              Nouvelle liste
+            </h2>
+            <p className="mt-1 text-[13px] text-[var(--ink-700)]">
+              Créez une liste pour organiser vos aérodromes favoris.
+            </p>
+            <label className="mt-4 block font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+              Nom
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const n = newListName.trim();
+                  if (!n) return;
+                  createListMutation.mutate(n);
+                  setNewListDialogOpen(false);
+                }
+                if (e.key === "Escape") setNewListDialogOpen(false);
+              }}
+              placeholder="Ex. Week-ends d'été"
+              className="mt-1.5 h-11 w-full rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 text-[14px] text-[var(--ink-950)] placeholder:text-[var(--ink-500)] focus:border-[var(--horizon-700)] focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-[var(--horizon-100)]"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setNewListDialogOpen(false)}
+                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const n = newListName.trim();
+                  if (!n) return;
+                  createListMutation.mutate(n);
+                  setNewListDialogOpen(false);
+                }}
+                disabled={!newListName.trim() || createListMutation.isPending}
+                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white hover:bg-[oklch(0.10_0.02_250)] disabled:opacity-60"
+              >
+                Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -23,7 +23,6 @@ import {
   Globe,
   GlobeLock,
   X,
-  Map as MapIcon,
   Check,
 } from "lucide-react";
 import { AerodromeTypeIcon } from "@/components/ui/aerodrome-type-icon";
@@ -109,6 +108,10 @@ export default function SearchPage() {
   const [userLng, setUserLng] = useState<number | null>(null);
   const [selectedSavedSearchId, setSelectedSavedSearchId] = useState("");
   const [sortBy, setSortBy] = useState<string>("name");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [savePublic, setSavePublic] = useState(false);
 
   const searchParams: Record<string, string> = {
     page: page.toString(),
@@ -278,16 +281,20 @@ export default function SearchPage() {
   };
 
   const handleSaveCurrentSearch = () => {
-    const name = window.prompt("Nom de la recherche sauvegardée");
-    if (!name || !name.trim()) return;
-    const isPublic = window.confirm(
-      "Rendre cette recherche publique sur votre profil si les recherches publiques sont activées ?",
-    );
+    setSaveName("");
+    setSavePublic(false);
+    setSaveDialogOpen(true);
+  };
 
+  const confirmSaveSearch = () => {
+    const name = saveName.trim();
+    if (!name) return;
     const params: Record<string, string> = { ...searchParams };
     if (!query) delete params["q"];
-
-    saveSearchMutation.mutate({ name: name.trim(), params, isPublic });
+    saveSearchMutation.mutate(
+      { name, params, isPublic: savePublic },
+      { onSuccess: () => setSaveDialogOpen(false) },
+    );
   };
 
   const activeTypeKey = filters.aerodromeType ?? "all";
@@ -310,42 +317,34 @@ export default function SearchPage() {
     <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
       <div className="mx-auto max-w-[1400px] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         {/* Title */}
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="m-0 flex items-center gap-3 font-[var(--f-serif)] text-[28px] font-medium leading-[1.05] tracking-[-0.015em] sm:text-[32px] lg:text-[38px]">
-              <span className="grid h-9 w-9 place-items-center rounded-md bg-[var(--horizon-100)] text-[var(--horizon-700)] sm:h-10 sm:w-10">
-                <Search className="h-5 w-5" strokeWidth={1.6} />
+        <div className="mb-4 flex items-start justify-between gap-4 sm:mb-6">
+          <div className="min-w-0">
+            <h1 className="m-0 flex items-center gap-2.5 font-[var(--f-serif)] text-[22px] font-medium leading-[1.05] tracking-[-0.015em] sm:gap-3 sm:text-[32px] lg:text-[38px]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--horizon-100)] text-[var(--horizon-700)] sm:h-10 sm:w-10">
+                <Search className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.6} />
               </span>
               Recherche
             </h1>
-            <p className="mt-1.5 max-w-[560px] pl-12 text-[13px] text-[var(--ink-700)] sm:text-sm">
+            <p className="mt-1.5 hidden max-w-[560px] pl-12 text-[13px] text-[var(--ink-700)] sm:block sm:text-sm">
               Explore les terrains de France métropolitaine et d'outre-mer. Filtre par type, équipements et commodités.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              href="/map"
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-[13px] font-medium text-[var(--ink-700)] transition-colors hover:bg-[var(--paper-100)] hover:text-[var(--ink-950)]"
+          {user && (
+            <button
+              type="button"
+              onClick={handleSaveCurrentSearch}
+              disabled={saveSearchMutation.isPending}
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-2.5 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)] disabled:opacity-60 sm:h-10 sm:px-3"
+              aria-label="Sauvegarder la recherche"
             >
-              <MapIcon className="h-4 w-4" strokeWidth={1.6} />
-              <span className="hidden sm:inline">Vue carte</span>
-            </Link>
-            {user && (
-              <button
-                type="button"
-                onClick={handleSaveCurrentSearch}
-                disabled={saveSearchMutation.isPending}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-3 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)] disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" strokeWidth={1.6} />
-                <span className="hidden sm:inline">Sauvegarder</span>
-              </button>
-            )}
-          </div>
+              <Save className="h-4 w-4" strokeWidth={1.6} />
+              <span className="hidden sm:inline">Sauvegarder</span>
+            </button>
+          )}
         </div>
 
         {/* Search bar + filters card */}
-        <div className="mb-4 rounded-xl border border-[var(--ink-200)] bg-white p-3.5 sm:p-4">
+        <div className="mb-4 rounded-xl border border-[var(--ink-200)] bg-white p-3 sm:p-4">
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_auto]">
             <div className="relative">
               <Search
@@ -388,6 +387,31 @@ export default function SearchPage() {
               {useLocation ? "À proximité (actif)" : "À proximité"}
             </button>
           </div>
+
+          {/* Mobile filters toggle */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="mt-3 flex w-full items-center justify-between rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-2 text-[13px] font-medium text-[var(--ink-950)] sm:hidden"
+            aria-expanded={filtersOpen}
+          >
+            <span className="inline-flex items-center gap-2">
+              <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Filtres
+              {activeFilterCount > 0 && (
+                <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[var(--ink-950)] px-1.5 text-[11px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </span>
+            <ChevronRight
+              className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-90" : ""}`}
+              strokeWidth={1.8}
+            />
+          </button>
+
+          {/* Filters wrapper — collapsible on mobile */}
+          <div className={filtersOpen ? "block" : "hidden sm:block"}>
 
           {/* Type filters */}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -567,6 +591,7 @@ export default function SearchPage() {
               {useLocation && <option value="distance">Distance ↑</option>}
             </select>
           </div>
+          </div>
         </div>
 
         {/* Results head */}
@@ -637,6 +662,67 @@ export default function SearchPage() {
           </div>
         )}
       </div>
+
+      {/* Save search dialog */}
+      {saveDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => setSaveDialogOpen(false)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="m-0 font-[var(--f-serif)] text-[20px] font-medium text-[var(--ink-950)]">
+              Sauvegarder la recherche
+            </h2>
+            <p className="mt-1 text-[13px] text-[var(--ink-700)]">
+              Donnez un nom à cette recherche pour la retrouver facilement.
+            </p>
+            <label className="mt-4 block font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+              Nom
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmSaveSearch();
+                if (e.key === "Escape") setSaveDialogOpen(false);
+              }}
+              placeholder="Ex. Aérodromes avec restaurant"
+              className="mt-1.5 h-11 w-full rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 text-[14px] text-[var(--ink-950)] placeholder:text-[var(--ink-500)] focus:border-[var(--horizon-700)] focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-[var(--horizon-100)]"
+            />
+            <label className="mt-3 flex items-start gap-2.5 text-[13px] text-[var(--ink-700)]">
+              <input
+                type="checkbox"
+                checked={savePublic}
+                onChange={(e) => setSavePublic(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span>Rendre publique sur mon profil (si les recherches publiques sont activées).</span>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveDialogOpen(false)}
+                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmSaveSearch}
+                disabled={!saveName.trim() || saveSearchMutation.isPending}
+                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white hover:bg-[oklch(0.10_0.02_250)] disabled:opacity-60"
+              >
+                Sauvegarder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
