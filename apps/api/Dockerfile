@@ -2,6 +2,7 @@ FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends ca-certificates openssl && \
     rm -rf /var/lib/apt/lists/* && \
     corepack enable && corepack prepare pnpm@10.27.0 --activate
@@ -35,6 +36,7 @@ RUN set -eux; \
     groupadd --system clamav || true; \
     useradd --system --gid clamav --no-create-home --home-dir /var/lib/clamav clamav || true; \
     apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends ca-certificates clamav gosu openssl osmium-tool tzdata && \
     rm -rf /var/lib/apt/lists/*
 
