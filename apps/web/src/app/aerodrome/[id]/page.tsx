@@ -1039,8 +1039,7 @@ export default function AerodromeDetailPage() {
                 }}
               />
               <div
-                className="pointer-events-none absolute rounded-[3px] bg-[rgba(0,0,0,.6)] px-1.5 py-0.5 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-white"
-                style={{ left: "38%", top: "56%", transform: "translate(80px, -40px)" }}
+                className="pointer-events-none absolute right-3 top-3 max-w-[48%] truncate rounded-[3px] bg-[rgba(0,0,0,.6)] px-1.5 py-0.5 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-white"
               >
                 RWY {ad.runways[0].identifier} · {ad.runways[0].length} m
               </div>
@@ -1096,14 +1095,14 @@ export default function AerodromeDetailPage() {
                 {ad.name}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--ink-700)] sm:mt-2.5 sm:gap-x-3.5 sm:gap-y-1.5 sm:text-[13px]">
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
-                  {[ad.city, ad.department, ad.region].filter(Boolean).join(" · ") || "—"}
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--ink-500)]" strokeWidth={1.6} />
+                  <span className="truncate">{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ") || "—"}</span>
                 </span>
                 {ad.elevation != null && (
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex shrink-0 items-center gap-1.5">
                     <Plane className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
-                    <span><span className="hidden sm:inline">Élévation </span><strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong></span>
+                    <strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong>
                   </span>
                 )}
                 <span className="hidden items-center gap-1.5 font-[var(--f-mono)] text-[12px] sm:inline-flex">
@@ -1162,42 +1161,42 @@ export default function AerodromeDetailPage() {
       <main className="min-w-0">
 
         {user && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
-              Listes
-            </span>
-            {userLists.map((list) => {
-              const active = isInList(list);
-              return (
-                <button
-                  key={list.id}
-                  type="button"
-                  onClick={() => {
-                    if (active) removeFromListMutation.mutate(list.id);
-                    else addToListMutation.mutate(list.id);
-                  }}
-                  disabled={addToListMutation.isPending || removeFromListMutation.isPending}
-                  className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium transition-colors disabled:opacity-60 ${
-                    active
-                      ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-                      : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
-                  }`}
-                >
-                  {active && <Check className="h-3 w-3" strokeWidth={2.5} />}
-                  {list.name}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => {
-                setNewListName("");
-                setNewListDialogOpen(true);
-              }}
-              className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-[var(--ink-300)] bg-transparent px-2.5 text-[12px] font-medium text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
-            >
-              + Nouvelle liste
-            </button>
+          <div className="mb-4 rounded-xl border border-[var(--ink-200)] bg-white px-3 py-2.5">
+            <p className="mb-2 text-[11px] font-semibold text-[var(--ink-400)] uppercase tracking-[0.08em]">Mes listes</p>
+            <div className="flex flex-wrap gap-1.5">
+              {userLists.map((list) => {
+                const active = isInList(list);
+                return (
+                  <button
+                    key={list.id}
+                    type="button"
+                    onClick={() => {
+                      if (active) removeFromListMutation.mutate(list.id);
+                      else addToListMutation.mutate(list.id);
+                    }}
+                    disabled={addToListMutation.isPending || removeFromListMutation.isPending}
+                    className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors disabled:opacity-60 ${
+                      active
+                        ? "bg-[var(--ink-950)] text-white"
+                        : "bg-[var(--paper-100)] text-[var(--ink-700)] hover:bg-[var(--ink-100)] hover:text-[var(--ink-950)]"
+                    }`}
+                  >
+                    {active && <Check className="h-3 w-3" strokeWidth={2.5} />}
+                    {list.name}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  setNewListName("");
+                  setNewListDialogOpen(true);
+                }}
+                className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--paper-100)] px-3 text-[12px] font-medium text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-100)] hover:text-[var(--ink-950)]"
+              >
+                <span className="text-[14px] leading-none">+</span> Nouvelle liste
+              </button>
+            </div>
           </div>
         )}
 
@@ -2569,14 +2568,6 @@ export default function AerodromeDetailPage() {
           </a>
         </div>
       </aside>
-      </div>
-
-      {/* Footer notice */}
-      <div className="mt-7 flex items-center gap-2.5 rounded-md border border-[oklch(0.90_0.05_85)] bg-[oklch(0.97_0.04_85)] px-4 py-3 text-[12px] text-[var(--ink-700)]">
-        <Info className="h-3.5 w-3.5 shrink-0 text-[var(--ink-500)]" strokeWidth={1.8} />
-        <span>
-          Les informations affichées sont indicatives et ne sauraient se substituer à la VAC en vigueur. Consultez les NOTAMs avant chaque vol.
-        </span>
       </div>
 
       </div>
