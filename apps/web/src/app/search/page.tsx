@@ -18,7 +18,7 @@ import {
   Save,
   Bookmark,
   Lock,
-  Wind,
+  Umbrella,
   Moon,
   Globe,
   GlobeLock,
@@ -458,7 +458,7 @@ export default function SearchPage() {
                 { key: "fuel", label: "SP98", icon: Fuel, val: "SP98" },
                 { key: "nightOperations", label: "Vol de nuit", icon: Moon, val: "true" },
                 { key: "ppr", label: "PPR", icon: Lock, val: "true" },
-                { key: "skydiveActivity", label: "Parachutage", icon: Wind, val: "true" },
+                { key: "skydiveActivity", label: "Parachutage", icon: Umbrella, val: "true" },
               ] as const
             ).map(({ key, label, icon: Icon, val }) => {
               const active = filters[key] === val;

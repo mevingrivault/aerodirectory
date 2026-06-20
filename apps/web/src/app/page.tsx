@@ -52,8 +52,16 @@ function fuelLabel(type: string) {
   return map[type] ?? type;
 }
 
+const fallbackFeatured: FeaturedAerodrome[] = [
+  { id: "f1", name: "Aérodrome du Sud", icaoCode: "LFxx", elevation: 290, department: "Centre", hasRestaurant: true, hasAccommodation: false, hasTransport: false, hasBikes: true, runways: [{ length: 1100 }], fuels: [{ type: "AVGAS_100LL" }] },
+  { id: "f2", name: "Aérodrome du Centre", icaoCode: "LFyy", elevation: 410, department: "Cher", hasRestaurant: true, hasAccommodation: true, hasTransport: true, hasBikes: false, runways: [{ length: 950 }], fuels: [] },
+  { id: "f3", name: "Aérodrome du Nord", icaoCode: "LFzz", elevation: 340, department: "Deux-Sèvres", hasRestaurant: true, hasAccommodation: false, hasTransport: false, hasBikes: false, runways: [{ length: 720 }], fuels: [] },
+];
+
 export default async function HomePage() {
   const [stats, featured] = await Promise.all([fetchStats(), fetchFeatured()]);
+  const visibleFeatured = featured.length > 0 ? featured : fallbackFeatured;
+  const heroAerodrome = visibleFeatured[0];
 
   return (
     <div style={{ fontFamily: "var(--f-sans)", color: "var(--ink-950)", background: "var(--paper-50)" }}>
@@ -132,7 +140,7 @@ export default async function HomePage() {
                 background: "var(--vfr-500)", boxShadow: "0 0 0 3px var(--vfr-100)",
                 display: "inline-block", animation: "nv-pulse 2.4s ease-in-out infinite",
               }} />
-              <span>Conditions VFR sur <span style={{ fontFamily: "var(--f-mono)", fontWeight: 600, fontSize: 11, color: "var(--ink-950)" }}>LFFV</span> · Vent <span style={{ fontFamily: "var(--f-mono)", fontWeight: 600, fontSize: 11, color: "var(--ink-950)" }}>30° 13kt</span> · QNH <span style={{ fontFamily: "var(--f-mono)", fontWeight: 600, fontSize: 11, color: "var(--ink-950)" }}>1022</span></span>
+              <span>Conditions VFR sur <span style={{ fontFamily: "var(--f-mono)", fontWeight: 600, fontSize: 11, color: "var(--ink-950)" }}>{heroAerodrome?.icaoCode ?? "votre terrain"}</span></span>
             </div>
 
             <h1 className="nv-hero-title">
@@ -185,7 +193,7 @@ export default async function HomePage() {
               <rect width="500" height="600" fill="url(#grid)"/>
               <rect width="500" height="600" fill="url(#grid-strong)"/>
               <circle cx="260" cy="290" r="140" fill="none" stroke="oklch(0.45 0.15 280)" strokeWidth="1.2" strokeDasharray="4 4" opacity="0.55"/>
-              <text x="150" y="165" fontFamily="JetBrains Mono" fontSize="9" fill="oklch(0.45 0.15 280)" opacity="0.75" letterSpacing="1">CTR LFFV · SFC-2500</text>
+              <text x="150" y="165" fontFamily="JetBrains Mono" fontSize="9" fill="oklch(0.45 0.15 280)" opacity="0.75" letterSpacing="1">AÉRODROME · ESPACE AÉRIEN</text>
               <path d="M 60 460 Q 180 380 260 290 T 440 120" fill="none" stroke="oklch(0.42 0.12 250)" strokeWidth="1.8" strokeDasharray="6 4"/>
               <circle cx="60" cy="460" r="4" fill="oklch(0.42 0.12 250)"/>
               <circle cx="440" cy="120" r="4" fill="oklch(0.42 0.12 250)"/>
@@ -202,12 +210,12 @@ export default async function HomePage() {
                 <rect x="118" y="198" width="5" height="6"/>
                 <rect x="126" y="202" width="4" height="5"/>
               </g>
-              <text x="108" y="225" fontFamily="Inter" fontSize="9" fontWeight="600" fill="oklch(0.35 0.05 40)">VIERZON</text>
+              <text x="108" y="225" fontFamily="Inter" fontSize="9" fontWeight="600" fill="oklch(0.35 0.05 40)">POINT A</text>
               <g fill="oklch(0.55 0.08 40)" opacity="0.7">
                 <rect x="380" y="440" width="5" height="5"/>
                 <rect x="388" y="438" width="4" height="6"/>
               </g>
-              <text x="374" y="465" fontFamily="Inter" fontSize="9" fontWeight="600" fill="oklch(0.35 0.05 40)">MÉREAU</text>
+              <text x="374" y="465" fontFamily="Inter" fontSize="9" fontWeight="600" fill="oklch(0.35 0.05 40)">POINT B</text>
             </svg>
 
             <div style={{ position: "absolute", top: 16, left: 16, right: 16, display: "flex", justifyContent: "space-between", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-500)", letterSpacing: "0.1em", pointerEvents: "none" }}>
@@ -241,7 +249,7 @@ export default async function HomePage() {
               display: "inline-flex", alignItems: "center", gap: 6,
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--vfr-500)", display: "inline-block" }} />
-              LFFV · VIERZON MÉREAU
+              {heroAerodrome?.icaoCode ?? "—"} · {heroAerodrome?.name}
             </div>
 
             <div style={{
@@ -251,9 +259,11 @@ export default async function HomePage() {
               display: "flex", flexDirection: "column", gap: 12,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink-950)" }}>Vierzon Méreau</span>
-                  <span style={{ fontFamily: "var(--f-mono)", fontWeight: 500, fontSize: 11, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, padding: "2px 8px", letterSpacing: "0.08em" }}>LFFV</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink-950)" }}>{heroAerodrome?.name ?? "Terrain mis en avant"}</span>
+                  {heroAerodrome?.icaoCode && (
+                    <span style={{ fontFamily: "var(--f-mono)", fontWeight: 500, fontSize: 11, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, padding: "2px 8px", letterSpacing: "0.08em" }}>{heroAerodrome.icaoCode}</span>
+                  )}
                 </div>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 22, padding: "0 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", background: "var(--vfr-100)", color: "var(--vfr-700)" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--vfr-500)", display: "inline-block" }} />VFR
@@ -261,10 +271,10 @@ export default async function HomePage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
                 {[
-                  { label: "Distance", val: "48.2", unit: "NM" },
-                  { label: "Durée", val: "27", unit: "min" },
-                  { label: "Budget", val: "46,50", unit: "€" },
-                  { label: "Piste", val: "1150", unit: "m" },
+                  { label: "Altitude", val: heroAerodrome?.elevation != null ? heroAerodrome.elevation.toString() : "—", unit: "ft" },
+                  { label: "Piste", val: heroAerodrome?.runways[0]?.length != null ? heroAerodrome.runways[0].length.toString() : "—", unit: "m" },
+                  { label: "Restaurant", val: heroAerodrome?.hasRestaurant ? "Oui" : "Non", unit: "" },
+                  { label: "Transport", val: heroAerodrome?.hasTransport ? "Oui" : "Non", unit: "" },
                 ].map((s, i) => (
                   <div key={s.label} style={{ padding: "0 14px", borderRight: i < 3 ? "1px solid var(--ink-200)" : "none", ...(i === 0 ? { paddingLeft: 0 } : {}), ...(i === 3 ? { paddingRight: 0 } : {}), display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-500)" }}>{s.label}</span>
@@ -334,14 +344,7 @@ export default async function HomePage() {
                 Aérodromes · France
               </span>
 
-              {(featured.length > 0
-                ? featured
-                : [
-                    { id: "f1", name: "Romorantin Pruniers", icaoCode: "LFYR", elevation: 289, department: "Loir-et-Cher", hasRestaurant: true, hasAccommodation: false, hasTransport: false, hasBikes: true, runways: [{ length: 1100 }], fuels: [{ type: "AVGAS_100LL" }] },
-                    { id: "f2", name: "Vierzon Méreau", icaoCode: "LFFV", elevation: 407, department: "Cher", hasRestaurant: true, hasAccommodation: true, hasTransport: true, hasBikes: false, runways: [{ length: 800 }], fuels: [] },
-                    { id: "f3", name: "Thouars", icaoCode: "LFCT", elevation: 341, department: "Deux-Sèvres", hasRestaurant: true, hasAccommodation: false, hasTransport: false, hasBikes: false, runways: [{ length: 700 }], fuels: [] },
-                  ] as FeaturedAerodrome[]
-              ).map((ad, idx) => (
+              {visibleFeatured.map((ad, idx) => (
                 <Link key={ad.id} href={`/aerodrome/${ad.id}`} style={{
                   background: "white", border: "1px solid var(--ink-200)", borderRadius: 12,
                   padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10,
@@ -485,7 +488,7 @@ export default async function HomePage() {
                       {[...Array(4)].map((_, i) => <svg key={i} width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>)}
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                     </span>
-                    <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--f-mono)" }}>LFFV · il y a 3 jours</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--f-mono)" }}>Pilote · il y a quelques jours</span>
                   </div>
                   <div style={{ fontSize: 13, color: "var(--ink-700)", lineHeight: 1.55 }}>Super accueil au club, restaurant ouvert midi et soir le week-end, QFU 09 parfait par vent d&apos;ouest.</div>
                 </div>
@@ -506,8 +509,8 @@ export default async function HomePage() {
               <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 8, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginTop: "auto" }}>
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--terrain-800)", color: "white", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>MG</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-950)" }}>Mévin a ajouté une photo sur <span style={{ fontFamily: "var(--f-mono)", fontSize: 12 }}>LFCT Thouars</span></div>
-                  <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2 }}>il y a 2 heures · en attente de validation</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-950)" }}>Un pilote a ajouté une photo sur le terrain.</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2 }}>il y a quelques heures · en attente de validation</div>
                 </div>
                 <span style={{ display: "inline-flex", padding: "4px 10px", border: "1px solid var(--ink-300)", background: "var(--paper-50)", color: "var(--ink-700)", borderRadius: 999, fontSize: 11, fontWeight: 600, flexShrink: 0 }}>+1</span>
               </div>

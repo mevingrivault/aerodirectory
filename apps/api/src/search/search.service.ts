@@ -353,7 +353,18 @@ export class SearchService {
         include: {
           runways: true,
           fuels: { where: { available: true } },
-          _count: { select: { visits: true, comments: true } },
+          _count: {
+            select: {
+              visits: true,
+              comments: {
+                where: {
+                  deletedAt: null,
+                  contentStatus: "APPROVED",
+                  user: { showCommunityContributions: true },
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.aerodrome.count({ where }),

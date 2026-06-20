@@ -1002,153 +1002,114 @@ export default function AerodromeDetailPage() {
 
       {/* HERO */}
       <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="relative aspect-[4/3] min-h-[280px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:aspect-[16/7] sm:rounded-[20px] sm:min-h-[360px]">
-          {/* Faux-aero map background */}
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `
-                radial-gradient(ellipse 60% 35% at 30% 60%, oklch(0.85 0.05 130) 0%, oklch(0.82 0.06 130) 60%, transparent 65%),
-                radial-gradient(ellipse 25% 18% at 65% 45%, oklch(0.85 0.05 130) 0%, oklch(0.82 0.06 130) 60%, transparent 65%),
-                linear-gradient(180deg, oklch(0.88 0.04 230) 0%, oklch(0.82 0.06 220) 100%)
-              `,
-            }}
-          >
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(0deg, transparent 49%, rgba(255,255,255,.08) 50%, transparent 51%),
-                  linear-gradient(90deg, transparent 49%, rgba(255,255,255,.08) 50%, transparent 51%)
-                `,
-                backgroundSize: "80px 80px",
-              }}
-            />
-          </div>
-
-          {/* Runway overlay */}
-          {ad.runways[0] && (
-            <>
-              <div
-                className="absolute h-[14px] w-[220px] rounded-[2px] bg-[var(--ink-950)]"
-                style={{
-                  left: "38%",
-                  top: "56%",
-                  transform: `rotate(${(ad.runways[0].trueHeading ?? 65) - 90}deg)`,
-                  boxShadow: "0 0 0 2px white, 0 6px 24px rgba(0,0,0,.25)",
-                }}
-              />
-              <div
-                className="pointer-events-none absolute right-3 top-3 max-w-[48%] truncate rounded-[3px] bg-[rgba(0,0,0,.6)] px-1.5 py-0.5 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-white"
-              >
-                RWY {ad.runways[0].identifier} · {ad.runways[0].length} m
-              </div>
-            </>
-          )}
-
-          {/* Compass rose */}
-          <div
-            className="absolute bottom-4 right-4 grid h-14 w-14 place-items-center rounded-full border border-[var(--ink-200)] bg-white/90 font-[var(--f-mono)] text-[11px] font-bold text-[var(--ink-950)] shadow-[0_1px_2px_rgba(20,30,50,.06)]"
-            aria-hidden
-          >
-            <span className="absolute left-1/2 top-1 h-0 w-0 -translate-x-1/2 border-x-[4px] border-x-transparent border-b-[10px] border-b-[oklch(0.55_0.18_25)]" />
-            N
-          </div>
-
-          {/* Overlay (badges + name + stats + CTAs) */}
-          <div
-            className="absolute inset-x-0 bottom-0 grid items-end gap-5 p-4 sm:grid-cols-[1fr_auto] sm:p-7"
-            style={{ background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,.96) 70%)" }}
-          >
-            <div className="min-w-0">
-              <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                {ad.icaoCode && (
-                  <span className="inline-flex h-[22px] items-center rounded border border-[var(--ink-300)] bg-[var(--paper-100)] px-2 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-[var(--ink-950)]">
-                    {ad.icaoCode}
-                  </span>
-                )}
-                <span className="inline-flex h-[22px] items-center rounded bg-[var(--horizon-100)] px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--horizon-900)]">
-                  {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+        <div className="relative grid gap-6 overflow-hidden rounded-[28px] border border-[var(--ink-200)] bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(17,24,39,0.95)_100%)] p-6 sm:grid-cols-[1.35fr_0.85fr] sm:p-8">
+          <div className="relative z-10 flex flex-col justify-between gap-6">
+            <div className="flex flex-wrap items-center gap-2">
+              {ad.icaoCode && (
+                <span className="inline-flex h-9 items-center rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                  {ad.icaoCode}
                 </span>
-                <span
-                  className={`inline-flex h-[22px] items-center gap-1 rounded px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                    ad.status === "OPEN"
-                      ? "bg-[oklch(0.96_0.05_130)] text-[var(--terrain-800)]"
-                      : "bg-[oklch(0.96_0.05_25)] text-[oklch(0.45_0.15_25)]"
-                  }`}
-                >
-                  {STATUS_LABELS[ad.status] ?? ad.status}
+              )}
+              <span className="inline-flex h-9 items-center rounded-full bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
+              </span>
+              <span className="inline-flex h-9 items-center rounded-full bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                {STATUS_LABELS[ad.status] ?? ad.status}
+              </span>
+              {ad.ppr && (
+                <span className="inline-flex h-9 items-center rounded-full bg-yellow-100 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-yellow-900">
+                  PPR
                 </span>
-                {ad.ppr && (
-                  <span className="inline-flex h-[22px] items-center rounded bg-[var(--brass-100)] px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--brass-700)]">
-                    PPR
-                  </span>
-                )}
-                {visitedCount > 0 && (
-                  <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] px-2.5 text-[12px] font-semibold text-[var(--brass-700)]">
-                    <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />
-                    Visité {visitedCount > 1 ? `${visitedCount} fois` : ""}
-                  </span>
-                )}
-              </div>
-              <h1 className="m-0 font-[var(--f-serif)] text-[clamp(24px,4vw,44px)] font-medium leading-[1.05] tracking-[-0.02em]">
+              )}
+            </div>
+
+            <div>
+              <h1 className="m-0 max-w-[14ch] text-[clamp(2.25rem,4vw,3.75rem)] leading-[0.96] tracking-[-0.04em] text-white">
                 {ad.name}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--ink-700)] sm:mt-2.5 sm:gap-x-3.5 sm:gap-y-1.5 sm:text-[13px]">
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--ink-500)]" strokeWidth={1.6} />
-                  <span className="truncate">{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ") || "—"}</span>
-                </span>
-                {ad.elevation != null && (
-                  <span className="inline-flex shrink-0 items-center gap-1.5">
-                    <Plane className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
-                    <strong className="font-semibold text-[var(--ink-950)]">{ad.elevation} ft</strong>
-                  </span>
-                )}
-                <span className="hidden items-center gap-1.5 font-[var(--f-mono)] text-[12px] sm:inline-flex">
-                  {ad.latitude.toFixed(4)}°N · {ad.longitude.toFixed(4)}°E
-                </span>
+              <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 sm:text-lg">
+                {ad.description ?? "Description non disponible pour le moment."}
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+                <p className="text-[1.15rem] font-semibold">{visitedCount}</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Visites</p>
+              </div>
+              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+                <p className="text-[1.15rem] font-semibold">{ad._count.comments ?? 0}</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Avis</p>
+              </div>
+              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+                <p className="text-[1.15rem] font-semibold">{ad.runways.length}</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Pistes</p>
               </div>
             </div>
-            <div className="hidden shrink-0 flex-wrap gap-2 sm:flex">
+
+            <div className="flex flex-wrap gap-3 pt-2">
               <Link
                 href={`/planner?to=${ad.id}`}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[oklch(0.10_0.02_250)]"
+                className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
               >
                 <Send className="h-4 w-4" strokeWidth={1.6} />
                 Planifier un vol
               </Link>
               {user && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleVisit("VISITED")}
-                    disabled={isVisitUpdating}
-                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
-                      isVisited
-                        ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                        : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-                    }`}
-                  >
-                    <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
-                    {isVisited ? "Aérodex ✓" : "Aérodex"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleVisit("FAVORITE")}
-                    disabled={isVisitUpdating}
-                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-[13px] font-medium transition-colors disabled:opacity-60 ${
-                      isFavorite
-                        ? "border-[var(--brass-500)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                        : "border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-                    }`}
-                  >
-                    <Heart className="h-4 w-4" strokeWidth={1.6} fill={isFavorite ? "currentColor" : "none"} />
-                    {isFavorite ? "Favori" : "Favori"}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => handleVisit("VISITED")}
+                  disabled={isVisitUpdating}
+                  className="inline-flex h-12 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
+                >
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
+                  {isVisited ? "Aérodex ✓" : "Ajouter à l'Aérodex"}
+                </button>
               )}
             </div>
+          </div>
+
+          <aside className="hidden rounded-[28px] border border-white/10 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:grid">
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Position</p>
+                <p className="mt-4 text-sm font-semibold text-slate-950">{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ")}</p>
+                <p className="mt-2 text-sm text-slate-600">{ad.latitude.toFixed(4)}°N · {ad.longitude.toFixed(4)}°E</p>
+                {ad.elevation != null && (
+                  <p className="mt-2 text-sm text-slate-600">Altitude {ad.elevation} ft</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Statistiques</p>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl bg-slate-100 p-4">
+                    <p className="text-sm font-semibold text-slate-950">{visitedCount}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Visites</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-100 p-4">
+                    <p className="text-sm font-semibold text-slate-950">{ad._count.comments ?? 0}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Avis</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-100 p-4">
+                    <p className="text-sm font-semibold text-slate-950">{ad.runways.length}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Pistes</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <div className="pointer-events-none absolute inset-0">
+            <div
+              className="absolute inset-x-0 top-0 h-full"
+              style={{
+                backgroundImage: "radial-gradient(circle at 20% 20%, rgba(59,130,246,0.16), transparent 28%)",
+              }}
+            />
+            <div
+              className="absolute left-10 top-24 h-72 w-72 rounded-full border border-white/10 opacity-40"
+            />
           </div>
         </div>
       </section>
@@ -1200,6 +1161,24 @@ export default function AerodromeDetailPage() {
           </div>
         )}
 
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-lg">Description</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-6 text-[var(--ink-700)]">
+            {ad.description ?? "Aucune description disponible pour le moment."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {amenities.filter((a) => a.active).map((a) => (
+              <Badge key={a.label} variant="outline">
+                {a.label}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Weather */}
       <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
 
@@ -1216,7 +1195,7 @@ export default function AerodromeDetailPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5" /> Informations aéronautiques
+              <FileText className="h-5 w-5" /> Informations générales
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -2501,41 +2480,107 @@ export default function AerodromeDetailPage() {
 
       {/* ASIDE (sticky on desktop) — secondary docs only; main actions live in hero / bottom bar */}
       <aside className="flex flex-col gap-3.5 lg:sticky lg:top-4">
-        {/* VAC dark card */}
-        {ad.icaoCode && process.env.NEXT_PUBLIC_VAC_URL_PATTERN && (
-          <div className="rounded-xl border border-[var(--ink-950)] bg-[var(--ink-950)] p-4 text-white">
-            <div className="mb-2.5 flex items-center gap-1.5 font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[oklch(0.78_0.04_250)]">
-              <FileText className="h-3 w-3" strokeWidth={1.8} />
-              Documentation VAC
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Contact rapide</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {ad.aipLink ? (
+              <a
+                href={ad.aipLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
+              >
+                <span>AIP</span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : (
+              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
+                AIP non disponible
+              </div>
+            )}
+            {ad.vacLink ? (
+              <a
+                href={ad.vacLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
+              >
+                <span>VAC</span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : (
+              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
+                VAC non disponible
+              </div>
+            )}
+            {ad.websiteUrl ? (
+              <a
+                href={ad.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
+              >
+                <span>Site web</span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : (
+              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
+                Site web non disponible
+              </div>
+            )}
+            {ad.source && (
+              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-700)]">
+                Source : {ad.source}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Commodités</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {amenities.map((a) => (
+                <span
+                  key={a.label}
+                  className={`inline-flex items-center rounded-full px-3 py-2 text-sm font-medium ${
+                    a.active
+                      ? "bg-[var(--horizon-100)] text-[var(--horizon-900)]"
+                      : "bg-[var(--paper-100)] text-[var(--ink-500)]"
+                  }`}
+                >
+                  <a.icon className="mr-2 h-4 w-4" />
+                  {a.label}
+                </span>
+              ))}
             </div>
-            <div className="font-[var(--f-serif)] text-[17px] font-medium">
-              VAC {ad.icaoCode}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">À proximité</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-[var(--ink-700)]">
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
+              <span>Restaurants</span>
+              <span>{restaurantFromNearby ? "Oui" : "Non"}</span>
             </div>
-            <div className="mb-3 mt-1 text-[12px] text-[oklch(0.78_0.04_250)]">
-              PDF officiel SIA
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
+              <span>Transports</span>
+              <span>{transportFromNearby ? "Oui" : "Non"}</span>
             </div>
-            <a
-              href={(process.env.NEXT_PUBLIC_VAC_URL_PATTERN ?? "").replace("{OACI-CODE}", ad.icaoCode)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] transition-opacity hover:opacity-90"
-            >
-              <Download className="h-4 w-4" strokeWidth={1.6} />
-              Télécharger la VAC
-            </a>
-          </div>
-        )}
-        {ad.altIdentifier && (
-          <a
-            href={`https://basulm.ffplum.fr/PDF/${encodeURIComponent(ad.altIdentifier)}.pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-          >
-            <FileText className="h-4 w-4" strokeWidth={1.6} />
-            Fiche basulm
-          </a>
-        )}
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
+              <span>Hébergement</span>
+              <span>{accommodationFromNearby ? "Oui" : "Non"}</span>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"

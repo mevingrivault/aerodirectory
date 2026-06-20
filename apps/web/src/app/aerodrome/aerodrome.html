@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fiche aérodrome — Exemple HTML</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, system-ui, sans-serif;
+      color: #111827;
+      background: #f3f4f6;
+      line-height: 1.5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: #f3f4f6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      width: min(1200px, 100%);
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    .breadcrumb {
+      font-size: 0.88rem;
+      color: #6b7280;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb span,
+    .breadcrumb a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+      color: #f9fafb;
+      padding: 30px;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      min-height: 380px;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 30%, rgba(190, 242, 100, 0.14), transparent 32%),
+        radial-gradient(circle at 80% 30%, rgba(59, 130, 246, 0.14), transparent 24%);
+      pointer-events: none;
+    }
+
+    .hero-content,
+    .hero-aside {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-title {
+      margin: 0;
+      font-size: clamp(2.25rem, 4vw, 3.75rem);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      max-width: 760px;
+    }
+
+    .hero-meta {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: #d1d5db;
+      font-size: 0.95rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-radius: 999px;
+      padding: 0.7rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #f9fafb;
+    }
+
+    .hero-subtitle {
+      margin-top: 20px;
+      font-size: 1rem;
+      max-width: 680px;
+      color: #d1d5db;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .button,
+    .button-secondary {
+      border: none;
+      cursor: pointer;
+      border-radius: 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .button:hover,
+    .button-secondary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .button {
+      background: #fbbf24;
+      color: #111827;
+    }
+
+    .button-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f9fafb;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .hero-aside {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+      justify-items: stretch;
+    }
+
+    .hero-card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 22px;
+      min-width: 0;
+    }
+
+    .hero-card h3 {
+      margin: 0 0 12px;
+      color: #f9fafb;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .hero-card p {
+      margin: 0;
+      color: #d1d5db;
+      font-size: 0.96rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .stat {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat p {
+      margin: 0;
+      color: #f9fafb;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .stat small {
+      color: #d1d5db;
+      font-size: 0.78rem;
+    }
+
+    .grid-two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+      gap: 24px;
+      margin-top: 32px;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 28px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 22px 24px 0;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 1.18rem;
+      color: #111827;
+    }
+
+    .card-body {
+      padding: 0 24px 24px;
+    }
+
+    .section-title {
+      margin: 0 0 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 18px 0 0;
+    }
+
+    .chip {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      font-size: 0.9rem;
+      color: #374151;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .overview-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .overview-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      font-size: 0.95rem;
+    }
+
+    .overview-item strong {
+      color: #111827;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 14px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.95rem;
+    }
+
+    th {
+      color: #6b7280;
+      font-weight: 700;
+    }
+
+    .sidebar-section {
+      display: grid;
+      gap: 18px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .sidebar-card {
+      padding: 22px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .sidebar-card h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #111827;
+    }
+
+    .sidebar-info {
+      font-size: 0.95rem;
+      color: #4b5563;
+      display: grid;
+      gap: 10px;
+    }
+
+    .sidebar-info span {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sidebar-info strong {
+      color: #111827;
+    }
+
+    .map-placeholder {
+      border-radius: 20px;
+      min-height: 220px;
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      display: grid;
+      place-items: center;
+      color: #1d4ed8;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid #bfdbfe;
+    }
+
+    .section-block {
+      margin-top: 26px;
+    }
+
+    .section-block h3 {
+      margin: 0 0 14px;
+    }
+
+    .service-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .service-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      font-size: 0.95rem;
+      color: #374151;
+    }
+
+    .service-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    .comment-card,
+    .event-card {
+      border-radius: 20px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    .comment-meta,
+    .event-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: #6b7280;
+      font-size: 0.88rem;
+      margin-bottom: 10px;
+    }
+
+    .comment-card p,
+    .event-card p {
+      margin: 0;
+      color: #374151;
+      font-size: 0.96rem;
+    }
+
+    .section-footer {
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+
+    @media (max-width: 960px) {
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .hero-aside {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .service-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero {
+        padding: 24px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 16px 12px 32px;
+      }
+
+      .breadcrumb {
+        font-size: 0.82rem;
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .overview-item,
+      .chip,
+      .button,
+      .button-secondary {
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="breadcrumb">
+      <a href="/search">Recherche</a>
+      <span>›</span>
+      <span>La Rochelle Île de Ré</span>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-meta">
+          <span class="badge">LFBH</span>
+          <span class="badge">Aérodrome</span>
+          <span class="badge">OUVERT</span>
+          <span class="badge">PPR</span>
+        </div>
+
+        <h1 class="hero-title">La Rochelle Île de Ré</h1>
+        <p class="hero-subtitle">
+          Aérodrome de référence pour la côte Atlantique, avec services carburant, restaurant et vols de nuit.
+        </p>
+
+        <div class="hero-actions">
+          <button class="button">Planifier un vol</button>
+          <button class="button-secondary">Ajouter à mes favoris</button>
+        </div>
+      </div>
+
+      <aside class="hero-aside">
+        <div class="hero-card">
+          <h3>Statistiques clés</h3>
+          <div class="stats-grid">
+            <div class="stat">
+              <p>1 245</p>
+              <small>visites</small>
+            </div>
+            <div class="stat">
+              <p>12</p>
+              <small>avis</small>
+            </div>
+            <div class="stat">
+              <p>3</p>
+              <small>pistes</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-card">
+          <h3>Position</h3>
+          <p>Charente-Maritime · Nouvelle-Aquitaine</p>
+          <p>46.1640°N · 1.1950°W</p>
+        </div>
+      </aside>
+    </section>
+
+    <div class="grid-two-col">
+      <main>
+        <article class="card">
+          <div class="card-header">
+            <h2>Description</h2>
+          </div>
+          <div class="card-body">
+            <p>
+              La Rochelle Île de Ré est un aérodrome actif offrant plusieurs services pour pilotes privés et professionnels.
+              Situé à proximité immédiate de La Rochelle, il bénéficie d'une bonne connectivité routière et d'un accès facile à la côte.
+            </p>
+
+            <div class="chips">
+              <span class="chip">Restaurant</span>
+              <span class="chip">Carburant</span>
+              <span class="chip">Vols de nuit</span>
+              <span class="chip">Transport</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Informations générales</h2>
+          </div>
+          <div class="card-body overview-list">
+            <div class="overview-item">
+              <span>Type</span>
+              <strong>Aérodrome</strong>
+            </div>
+            <div class="overview-item">
+              <span>Statut</span>
+              <strong>OUVERT</strong>
+            </div>
+            <div class="overview-item">
+              <span>PPR</span>
+              <strong>Oui</strong>
+            </div>
+            <div class="overview-item">
+              <span>Altitude</span>
+              <strong>72 ft</strong>
+            </div>
+            <div class="overview-item">
+              <span>Ville</span>
+              <strong>La Rochelle</strong>
+            </div>
+            <div class="overview-item">
+              <span>Région</span>
+              <strong>Nouvelle-Aquitaine</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Pistes</h2>
+          </div>
+          <div class="card-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Identifier</th>
+                  <th>Longueur</th>
+                  <th>Surface</th>
+                  <th>Éclairage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>11/29</td>
+                  <td>1 250 m</td>
+                  <td>Asphalte</td>
+                  <td>Oui</td>
+                </tr>
+                <tr>
+                  <td>05/23</td>
+                  <td>950 m</td>
+                  <td>Herbe</td>
+                  <td>Non</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Carburants</h2>
+          </div>
+          <div class="card-body">
+            <div class="service-grid">
+              <div class="service-card">
+                <strong>AVGAS 100LL</strong>
+                Disponible · Libre-service
+              </div>
+              <div class="service-card">
+                <strong>Jet A-1</strong>
+                Disponible · Paiement CB
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Fréquences</h2>
+          </div>
+          <div class="card-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Fréquence</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>TWR</td>
+                  <td>119.10 MHz</td>
+                  <td>Ouvert 08:00–18:00</td>
+                </tr>
+                <tr>
+                  <td>AFIS</td>
+                  <td>123.45 MHz</td>
+                  <td>Horaire réduit</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Météo</h2>
+          </div>
+          <div class="card-body service-grid">
+            <div class="service-card">
+              <strong>Vent</strong>
+              210° / 18 kt
+            </div>
+            <div class="service-card">
+              <strong>Visibilité</strong>
+              10 km
+            </div>
+            <div class="service-card">
+              <strong>Température</strong>
+              15 °C
+            </div>
+            <div class="service-card">
+              <strong>Pression</strong>
+              1014 hPa
+            </div>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Événements à venir</h2>
+          </div>
+          <div class="card-body">
+            <div class="event-card">
+              <div class="event-meta">
+                <span>Meeting aérien</span>
+                <span>12 juin</span>
+              </div>
+              <p>Journée découverte du pilotage et visites des installations.</p>
+            </div>
+            <div class="event-card">
+              <div class="event-meta">
+                <span>Café croissant</span>
+                <span>18 juin</span>
+              </div>
+              <p>Petit-déjeuner pilote et échange autour des derniers plans de vol.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card section-block">
+          <div class="card-header">
+            <h2>Commentaires</h2>
+          </div>
+          <div class="card-body">
+            <div class="comment-card">
+              <div class="comment-meta">
+                <span>Camille</span>
+                <span>2 jours</span>
+              </div>
+              <p>Très bel aérodrome, restaurant ouvert et personnel accueillant.</p>
+            </div>
+            <div class="comment-card">
+              <div class="comment-meta">
+                <span>Julien</span>
+                <span>1 semaine</span>
+              </div>
+              <p>Pistes en bon état et bonne couverture carburant. Attention au vent de travers.</p>
+            </div>
+          </div>
+        </article>
+      </main>
+
+      <aside class="sidebar-section">
+        <section class="card sidebar-card">
+          <h3>Contact rapide</h3>
+          <div class="sidebar-info">
+            <span><strong>AIP</strong><span>Disponible</span></span>
+            <span><strong>VAC</strong><span>Disponible</span></span>
+            <span><strong>Site web</strong><span>lafolle.com</span></span>
+            <span><strong>Source</strong><span>OpenAIP</span></span>
+          </div>
+        </section>
+
+        <section class="card sidebar-card">
+          <h3>Commodités</h3>
+          <div class="chips">
+            <span class="chip">Restaurant</span>
+            <span class="chip">Transport</span>
+            <span class="chip">Wifi</span>
+            <span class="chip">Maintenance</span>
+          </div>
+        </section>
+
+        <section class="card sidebar-card">
+          <h3>Carte</h3>
+          <div class="map-placeholder">Carte</div>
+        </section>
+
+        <section class="card sidebar-card">
+          <h3>À proximité</h3>
+          <div class="sidebar-info">
+            <span><strong>Restaurant</strong><span>1,2 km</span></span>
+            <span><strong>Gare</strong><span>3,4 km</span></span>
+            <span><strong>Hôtel</strong><span>2,1 km</span></span>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>
