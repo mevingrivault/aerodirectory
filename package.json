@@ -48,7 +48,8 @@
       "hono": "4.12.25"
     },
     "patchedDependencies": {
-      "altcha-lib@2.0.2": "patches/altcha-lib@2.0.2.patch"
+      "altcha-lib@2.0.2": "patches/altcha-lib@2.0.2.patch",
+      "@prisma/dev@0.24.3": "patches/@prisma__dev@0.24.3.patch"
     }
   }
 }
