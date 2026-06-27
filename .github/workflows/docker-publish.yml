@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -37,6 +38,19 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Scan dependencies for CVEs
+        uses: OWASP/cve-lite-cli@v1
+        with:
+          verbose: "true"
+          fail-on: high
+          sarif: "true"
+
+      - name: Upload CVE scan results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: ${{ github.workspace }}
 
       - name: Generate Prisma client
         run: pnpm --filter @aerodirectory/database prisma:generate

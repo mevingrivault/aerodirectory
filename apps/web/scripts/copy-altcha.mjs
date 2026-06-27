@@ -30,12 +30,9 @@ function findPackageDir(resolvedPath) {
 }
 
 const resolved = [];
-const browserEntrypoints = [];
 
 if (typeof import.meta.resolve === "function") {
-  const importEntrypoint = fileURLToPath(import.meta.resolve("altcha"));
-  resolved.push(importEntrypoint);
-  browserEntrypoints.push(importEntrypoint);
+  resolved.push(fileURLToPath(import.meta.resolve("altcha")));
 }
 
 resolved.push(require.resolve("altcha"));
@@ -47,14 +44,11 @@ for (const resolvedPath of resolved) {
 
   if (packageDir) {
     candidates.push(
+      path.join(packageDir, "dist", "external", "altcha.js"),
       path.join(packageDir, "dist", "altcha.js"),
       path.join(packageDir, "dist", "altcha.min.js"),
       path.join(packageDir, "dist_external", "altcha.js"),
     );
-  }
-
-  if (browserEntrypoints.includes(resolvedPath)) {
-    candidates.push(resolvedPath);
   }
 }
 
