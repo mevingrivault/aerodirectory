@@ -40,17 +40,28 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Scan dependencies for CVEs
+        id: cve-scan
         uses: OWASP/cve-lite-cli@v1
         with:
           verbose: "true"
           fail-on: high
           sarif: "true"
 
+      - name: Upload CVE report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cve-lite-report-${{ github.sha }}
+          path: '**/*.sarif'
+          if-no-files-found: warn
+
       - name: Upload CVE scan results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v4
         if: always()
+        continue-on-error: true
         with:
           sarif_file: ${{ github.workspace }}
+          category: cve-lite-cli
 
       - name: Generate Prisma client
         run: pnpm --filter @aerodirectory/database prisma:generate
@@ -181,3 +192,28 @@ jobs:
             ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+      - name: Scan Web image with Trivy (CRITICAL/HIGH, blocking)
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
+          timeout: '10m'
+          trivyignores: .trivyignore
+
+      - name: Scan Web image with Trivy (MEDIUM/LOW, non-blocking)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          scanners: 'vuln'
+          severity: 'MEDIUM,LOW'
+          timeout: '10m'
+          trivyignores: .trivyignore
