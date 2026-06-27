@@ -117,6 +117,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install latest Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin latest
+
       - name: Build & push API image
         uses: docker/build-push-action@v7
         with:
@@ -130,29 +133,27 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Scan API image with Trivy (CRITICAL/HIGH, blocking)
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: '${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: 'vuln'
-          severity: 'CRITICAL,HIGH'
-          timeout: '10m'
-          trivyignores: .trivyignore
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --timeout 10m \
+            --ignorefile .trivyignore \
+            "${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}"
 
       - name: Scan API image with Trivy (MEDIUM/LOW, non-blocking)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: '${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: 'vuln'
-          severity: 'MEDIUM,LOW'
-          timeout: '10m'
-          trivyignores: .trivyignore
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --scanners vuln \
+            --severity MEDIUM,LOW \
+            --timeout 10m \
+            --ignorefile .trivyignore \
+            "${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}"
 
   build-web:
     name: Build Web
@@ -177,6 +178,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install latest Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin latest
+
       - name: Build & push Web image
         uses: docker/build-push-action@v7
         with:
@@ -194,26 +198,24 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
       - name: Scan Web image with Trivy (CRITICAL/HIGH, blocking)
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: 'vuln'
-          severity: 'CRITICAL,HIGH'
-          timeout: '10m'
-          trivyignores: .trivyignore
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --timeout 10m \
+            --ignorefile .trivyignore \
+            "${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}"
 
       - name: Scan Web image with Trivy (MEDIUM/LOW, non-blocking)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: '${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: 'vuln'
-          severity: 'MEDIUM,LOW'
-          timeout: '10m'
-          trivyignores: .trivyignore
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --scanners vuln \
+            --severity MEDIUM,LOW \
+            --timeout 10m \
+            --ignorefile .trivyignore \
+            "${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}"

@@ -34,3 +34,6 @@ GHSA-vvjj-xcjg-gr5g
 
 # zlib@1.3.1-r2 — buffer overflow in untgz CLI utility (not libz used by Node.js)
 CVE-2026-22184
+
+# undici@6.26.0 — DoS via unbounded WebSocket memory growth (npm bundled only, overridden to 8.5.0 in pnpm)
+CVE-2026-12151
