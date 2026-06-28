@@ -1014,15 +1014,15 @@ export default function AerodromeDetailPage() {
     <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
 
       {/* BREADCRUMB */}
-      <nav style={{ maxWidth: 1400, margin: "0 auto", padding: "14px 32px 0", fontSize: 13, color: "var(--ink-500)", display: "flex", alignItems: "center", gap: 8 }}>
+      <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-3.5 text-[13px] text-[var(--ink-500)] sm:px-6 lg:px-8">
         <Link href="/search" style={{ color: "var(--ink-700)" }}>Recherche</Link>
         <ChevronRight className="h-3 w-3 opacity-50" strokeWidth={2} />
-        <span>{ad.name}{ad.icaoCode ? ` (${ad.icaoCode})` : ""}</span>
+        <span className="truncate">{ad.name}{ad.icaoCode ? ` (${ad.icaoCode})` : ""}</span>
       </nav>
 
       {/* HERO — carte aéronautique CSS */}
-      <section style={{ maxWidth: 1400, margin: "12px auto 0", padding: "0 32px" }}>
-        <div style={{ position: "relative", overflow: "hidden", borderRadius: 20, border: "1px solid var(--ink-200)", background: "var(--horizon-50)", aspectRatio: "16/7", minHeight: 360 }}>
+      <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="relative aspect-[16/10] min-h-[260px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:aspect-[16/8] sm:rounded-2xl md:aspect-[16/7] md:min-h-[360px]">
           {/* Gradient map */}
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 38% 30% at 46% 52%, oklch(0.86 0.045 128) 0%, oklch(0.83 0.05 128) 52%, transparent 74%), radial-gradient(ellipse 50% 40% at 46% 52%, oklch(0.90 0.035 210) 0%, oklch(0.90 0.035 210) 56%, transparent 78%), linear-gradient(170deg, oklch(0.93 0.03 215) 0%, oklch(0.88 0.045 220) 45%, oklch(0.83 0.06 225) 100%)" }} />
           {/* Runway overlay */}
@@ -1030,8 +1030,8 @@ export default function AerodromeDetailPage() {
           {/* Compass rose */}
           <div style={{ position: "absolute", bottom: 16, right: 16, width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,.92)", border: "1px solid var(--ink-200)", display: "grid", placeItems: "center", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-950)" }}>N</div>
           {/* Overlay */}
-          <div style={{ position: "absolute", inset: "auto 0 0 0", padding: "28px 28px 24px", background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,.96) 70%)", display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "end" }}>
-            <div>
+          <div className="absolute inset-x-0 bottom-0 grid grid-cols-1 items-end gap-3 bg-[linear-gradient(180deg,transparent_0%,rgba(255,255,255,.96)_70%)] p-4 sm:gap-5 sm:p-6 md:grid-cols-[1fr_auto] md:p-7">
+            <div className="min-w-0">
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
                 {ad.icaoCode && <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, letterSpacing: "0.08em" }}>{ad.icaoCode}</span>}
                 <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: "var(--horizon-100)", color: "var(--horizon-900)" }}>{TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}</span>
@@ -1045,7 +1045,7 @@ export default function AerodromeDetailPage() {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{visitedCount}</strong> visites · <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{ad._count.comments ?? 0}</strong> avis</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <div className="hidden shrink-0 gap-2 md:flex">
               <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", borderRadius: 8, background: "var(--ink-950)", color: "white", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><Send className="h-4 w-4" /> Planifier</Link>
               {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Aérodex"}</button>}
             </div>
@@ -1054,10 +1054,10 @@ export default function AerodromeDetailPage() {
       </section>
 
       {/* PAGE */}
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px 64px" }}>
+      <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
 
         {/* TABS */}
-        <div role="tablist" style={{ position: "sticky", top: 64, zIndex: 20, background: "var(--paper-50)", borderBottom: "1px solid var(--ink-200)", margin: "0 -32px 24px", padding: "0 32px", display: "flex", gap: 4, overflowX: "auto", scrollbarWidth: "none" }}>
+        <div role="tablist" className="sticky top-16 z-20 -mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-[var(--ink-200)] bg-[var(--paper-50)] px-4 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           {([
             { key: "infos",      label: "Infos" },
             { key: "pistes",     label: "Pistes & Frq",    count: ad.runways.length + ad.frequencies.length },
@@ -1080,16 +1080,16 @@ export default function AerodromeDetailPage() {
         </div>
 
         {/* LAYOUT */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 32, alignItems: "start" }}>
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
 
           {/* ── MAIN ── */}
-          <main>
+          <main className="min-w-0">
 
             {/* TAB: INFOS */}
             {activeTab === "infos" && (
               <div>
                 <section style={{ marginBottom: 20 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                     {/* Identité */}
                     <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
                       <div style={asideH}><Info className="h-3 w-3" /> Identité</div>
@@ -1158,7 +1158,7 @@ export default function AerodromeDetailPage() {
                       <h2 style={sectionH2}>Pistes</h2>
                       {ad.vacLink && <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={sectionAction}>Voir VAC <ExternalLink className="h-3 w-3" /></a>}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       {ad.runways.map((r) => (
                         <article key={r.id} style={{ border: "1px solid var(--ink-200)", borderRadius: 8, padding: 16, background: "var(--paper-100)" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -1223,7 +1223,7 @@ export default function AerodromeDetailPage() {
                       <div style={sectionMark}><Wrench className="h-3.5 w-3.5" /></div>
                       <h2 style={sectionH2}>Services au sol</h2>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       {ad.handlingFacilities.length > 0 && (
                         <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
                           <div style={asideH}>Handling</div>
@@ -1274,7 +1274,7 @@ export default function AerodromeDetailPage() {
                         )}
                       </>
                     ) : (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                         {ad.fuels.map((f) => (
                           <div key={f.id} style={{ padding: 12, background: f.available ? "var(--brass-100)" : "var(--paper-100)", border: `1px solid ${f.available ? "oklch(0.85 0.06 75)" : "var(--ink-200)"}`, borderRadius: 6, display: "flex", alignItems: "center", gap: 10 }}>
                             <div style={{ width: 32, height: 32, background: "white", borderRadius: 6, display: "grid", placeItems: "center", color: f.available ? "var(--brass-700)" : "var(--ink-400)" }}><Fuel className="h-4 w-4" /></div>
@@ -1556,7 +1556,7 @@ export default function AerodromeDetailPage() {
           </main>
 
           {/* ── ASIDE ── */}
-          <aside style={{ position: "sticky", top: 116, display: "flex", flexDirection: "column", gap: 14 }}>
+          <aside className="flex flex-col gap-3.5 lg:sticky lg:top-[116px]">
 
             {/* Actions */}
             <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 18 }}>
