@@ -53,6 +53,7 @@ import {
   Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import type { CSSProperties } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
@@ -466,6 +467,9 @@ export default function AerodromeDetailPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"infos" | "pistes" | "services" | "commodites" | "meteo" | "avis" | "photos">("infos");
+  const [activeAmenTab, setActiveAmenTab] = useState<"all" | "resto" | "hotel" | "transport" | "bike">("all");
 
   const { data: aerodromeRes, isLoading } = useQuery({
     queryKey: ["aerodrome", id],
@@ -986,1720 +990,692 @@ export default function AerodromeDetailPage() {
   const isVisited = currentVisitStatus === "VISITED" || currentVisitStatus === "FAVORITE";
   const isFavorite = currentVisitStatus === "FAVORITE";
 
+  // ── Style constants (reused across JSX) ────────────────────────────────────
+  const dtS: CSSProperties = { fontSize: 13, color: "var(--ink-700)", padding: "10px 0", borderBottom: "1px dashed var(--ink-200)" };
+  const ddS: CSSProperties = { fontSize: 13, color: "var(--ink-950)", margin: 0, padding: "10px 0", borderBottom: "1px dashed var(--ink-200)", textAlign: "right", fontWeight: 500 };
+  const sectionMark: CSSProperties = { width: 28, height: 28, borderRadius: 6, background: "var(--horizon-100)", color: "var(--horizon-700)", display: "grid", placeItems: "center" };
+  const sectionH2: CSSProperties = { fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: 22, letterSpacing: "-0.01em", margin: 0, flex: 1 };
+  const sectionAction: CSSProperties = { fontSize: 12, color: "var(--ink-700)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 };
+  const asideH: CSSProperties = { fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--ink-500)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 };
+  const particWarn: CSSProperties = { display: "grid", gridTemplateColumns: "24px 1fr", gap: 12, padding: 12, background: "oklch(0.97 0.04 75)", border: "1px solid oklch(0.88 0.06 75)", borderRadius: 6 };
+  const particInfo: CSSProperties = { display: "grid", gridTemplateColumns: "24px 1fr", gap: 12, padding: 12, background: "var(--horizon-50)", border: "1px solid oklch(0.88 0.04 250)", borderRadius: 6 };
+  const particNeutral: CSSProperties = { display: "grid", gridTemplateColumns: "24px 1fr", gap: 12, padding: 12, background: "var(--paper-100)", border: "1px solid var(--ink-200)", borderRadius: 6 };
+  const particP: CSSProperties = { margin: 0, fontSize: 13, color: "var(--ink-800)", lineHeight: 1.5 };
+  const rwyTag: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 8px", fontSize: 11, fontWeight: 500, background: "white", border: "1px solid var(--ink-200)", borderRadius: 4, color: "var(--ink-700)" };
+  const rwyTagOk: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 8px", fontSize: 11, fontWeight: 500, background: "oklch(0.96 0.04 130)", border: "1px solid oklch(0.86 0.06 130)", borderRadius: 4, color: "var(--terrain-800)" };
+  const rwyStatL: CSSProperties = { fontSize: 10, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2 };
+  const labelS: CSSProperties = { fontSize: 12, color: "var(--ink-700)", display: "block", marginBottom: 4 };
+  const inputS: CSSProperties = { width: "100%", borderRadius: 6, border: "1px solid var(--ink-200)", padding: "8px 12px", fontSize: 14, fontFamily: "inherit", background: "var(--paper-50)", color: "var(--ink-950)", boxSizing: "border-box", outline: "none" };
+  const selectS: CSSProperties = { width: "100%", borderRadius: 6, border: "1px solid var(--ink-200)", padding: "8px 12px", fontSize: 14, fontFamily: "inherit", background: "var(--paper-50)", color: "var(--ink-950)" };
+  const contactLabel: CSSProperties = { fontSize: 11, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--f-mono)", fontWeight: 600 };
+  const contactValue: CSSProperties = { fontSize: 13, color: "var(--ink-950)", marginTop: 2 };
+
   return (
-    <div className="min-h-[70vh] overflow-x-hidden bg-[var(--paper-50)] text-[var(--ink-950)]">
+    <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
+
       {/* BREADCRUMB */}
-      <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-4 text-[13px] text-[var(--ink-500)] sm:px-6 lg:px-8">
-        <Link href="/search" className="text-[var(--ink-700)] hover:text-[var(--ink-950)]">
-          Recherche
-        </Link>
+      <nav style={{ maxWidth: 1400, margin: "0 auto", padding: "14px 32px 0", fontSize: 13, color: "var(--ink-500)", display: "flex", alignItems: "center", gap: 8 }}>
+        <Link href="/search" style={{ color: "var(--ink-700)" }}>Recherche</Link>
         <ChevronRight className="h-3 w-3 opacity-50" strokeWidth={2} />
-        <span className="truncate">
-          {ad.name}
-          {ad.icaoCode ? ` (${ad.icaoCode})` : ""}
-        </span>
+        <span>{ad.name}{ad.icaoCode ? ` (${ad.icaoCode})` : ""}</span>
       </nav>
 
-      {/* HERO */}
-      <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="relative grid gap-6 overflow-hidden rounded-[28px] border border-[var(--ink-200)] bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(17,24,39,0.95)_100%)] p-6 sm:grid-cols-[1.35fr_0.85fr] sm:p-8">
-          <div className="relative z-10 flex flex-col justify-between gap-6">
-            <div className="flex flex-wrap items-center gap-2">
-              {ad.icaoCode && (
-                <span className="inline-flex h-9 items-center rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
-                  {ad.icaoCode}
-                </span>
-              )}
-              <span className="inline-flex h-9 items-center rounded-full bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
-                {TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}
-              </span>
-              <span className="inline-flex h-9 items-center rounded-full bg-white/10 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
-                {STATUS_LABELS[ad.status] ?? ad.status}
-              </span>
-              {ad.ppr && (
-                <span className="inline-flex h-9 items-center rounded-full bg-yellow-100 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-yellow-900">
-                  PPR
-                </span>
-              )}
-            </div>
-
+      {/* HERO — carte aéronautique CSS */}
+      <section style={{ maxWidth: 1400, margin: "12px auto 0", padding: "0 32px" }}>
+        <div style={{ position: "relative", overflow: "hidden", borderRadius: 20, border: "1px solid var(--ink-200)", background: "var(--horizon-50)", aspectRatio: "16/7", minHeight: 360 }}>
+          {/* Gradient map */}
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 38% 30% at 46% 52%, oklch(0.86 0.045 128) 0%, oklch(0.83 0.05 128) 52%, transparent 74%), radial-gradient(ellipse 50% 40% at 46% 52%, oklch(0.90 0.035 210) 0%, oklch(0.90 0.035 210) 56%, transparent 78%), linear-gradient(170deg, oklch(0.93 0.03 215) 0%, oklch(0.88 0.045 220) 45%, oklch(0.83 0.06 225) 100%)" }} />
+          {/* Runway overlay */}
+          <div style={{ position: "absolute", left: "38%", top: "56%", width: 220, height: 14, background: "var(--ink-950)", transform: "rotate(-65deg)", boxShadow: "0 0 0 2px white, 0 6px 24px rgba(0,0,0,.25)", borderRadius: 2 }} />
+          {/* Compass rose */}
+          <div style={{ position: "absolute", bottom: 16, right: 16, width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,.92)", border: "1px solid var(--ink-200)", display: "grid", placeItems: "center", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-950)" }}>N</div>
+          {/* Overlay */}
+          <div style={{ position: "absolute", inset: "auto 0 0 0", padding: "28px 28px 24px", background: "linear-gradient(180deg, transparent 0%, rgba(255,255,255,.96) 70%)", display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "end" }}>
             <div>
-              <h1 className="m-0 max-w-[14ch] text-[clamp(2.25rem,4vw,3.75rem)] leading-[0.96] tracking-[-0.04em] text-white">
-                {ad.name}
-              </h1>
-              <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 sm:text-lg">
-                {ad.description ?? "Description non disponible pour le moment."}
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-                <p className="text-[1.15rem] font-semibold">{visitedCount}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Visites</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                {ad.icaoCode && <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, letterSpacing: "0.08em" }}>{ad.icaoCode}</span>}
+                <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: "var(--horizon-100)", color: "var(--horizon-900)" }}>{TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: ad.status === "OPEN" ? "oklch(0.94 0.05 130)" : "oklch(0.94 0.05 25)", color: ad.status === "OPEN" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)" }}>{STATUS_LABELS[ad.status] ?? ad.status}</span>
+                {isVisited && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 24, padding: "0 10px", background: "var(--brass-100)", color: "var(--brass-700)", border: "1px solid oklch(0.85 0.06 75)", borderRadius: 999, fontSize: 12, fontWeight: 600 }}><CheckCircle2 className="h-3 w-3" /> {isFavorite ? "Favori" : "Visité"}</span>}
               </div>
-              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-                <p className="text-[1.15rem] font-semibold">{ad._count.comments ?? 0}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Avis</p>
-              </div>
-              <div className="rounded-[20px] bg-white/10 p-4 text-sm text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-                <p className="text-[1.15rem] font-semibold">{ad.runways.length}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-300">Pistes</p>
+              <h1 style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: "clamp(28px,4vw,44px)", lineHeight: 1.05, letterSpacing: "-0.02em", margin: 0 }}>{ad.name}</h1>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, marginTop: 10, fontSize: 13, color: "var(--ink-700)" }}>
+                {[ad.city, ad.department, ad.region].filter(Boolean).length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><MapPin className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ")}</span>}
+                {ad.elevation != null && <span>Élévation <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{ad.elevation} ft</strong></span>}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{visitedCount}</strong> visites · <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{ad._count.comments ?? 0}</strong> avis</span>
               </div>
             </div>
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              <Link
-                href={`/planner?to=${ad.id}`}
-                className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-              >
-                <Send className="h-4 w-4" strokeWidth={1.6} />
-                Planifier un vol
-              </Link>
-              {user && (
-                <button
-                  type="button"
-                  onClick={() => handleVisit("VISITED")}
-                  disabled={isVisitUpdating}
-                  className="inline-flex h-12 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-                >
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
-                  {isVisited ? "Aérodex ✓" : "Ajouter à l'Aérodex"}
-                </button>
-              )}
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", borderRadius: 8, background: "var(--ink-950)", color: "white", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><Send className="h-4 w-4" /> Planifier</Link>
+              {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Aérodex"}</button>}
             </div>
-          </div>
-
-          <aside className="hidden rounded-[28px] border border-white/10 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:grid">
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Position</p>
-                <p className="mt-4 text-sm font-semibold text-slate-950">{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ")}</p>
-                <p className="mt-2 text-sm text-slate-600">{ad.latitude.toFixed(4)}°N · {ad.longitude.toFixed(4)}°E</p>
-                {ad.elevation != null && (
-                  <p className="mt-2 text-sm text-slate-600">Altitude {ad.elevation} ft</p>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Statistiques</p>
-                <div className="mt-4 grid gap-3">
-                  <div className="rounded-2xl bg-slate-100 p-4">
-                    <p className="text-sm font-semibold text-slate-950">{visitedCount}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Visites</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-100 p-4">
-                    <p className="text-sm font-semibold text-slate-950">{ad._count.comments ?? 0}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Avis</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-100 p-4">
-                    <p className="text-sm font-semibold text-slate-950">{ad.runways.length}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Pistes</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          <div className="pointer-events-none absolute inset-0">
-            <div
-              className="absolute inset-x-0 top-0 h-full"
-              style={{
-                backgroundImage: "radial-gradient(circle at 20% 20%, rgba(59,130,246,0.16), transparent 28%)",
-              }}
-            />
-            <div
-              className="absolute left-10 top-24 h-72 w-72 rounded-full border border-white/10 opacity-40"
-            />
           </div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
+      {/* PAGE */}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px 64px" }}>
 
-      {/* Status banner removed — info already in hero badges; source/MAJ kept in footer notice */}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-      <main className="min-w-0">
-
-        {user && (
-          <div className="mb-4 rounded-xl border border-[var(--ink-200)] bg-white px-3 py-2.5">
-            <p className="mb-2 text-[11px] font-semibold text-[var(--ink-400)] uppercase tracking-[0.08em]">Mes listes</p>
-            <div className="flex flex-wrap gap-1.5">
-              {userLists.map((list) => {
-                const active = isInList(list);
-                return (
-                  <button
-                    key={list.id}
-                    type="button"
-                    onClick={() => {
-                      if (active) removeFromListMutation.mutate(list.id);
-                      else addToListMutation.mutate(list.id);
-                    }}
-                    disabled={addToListMutation.isPending || removeFromListMutation.isPending}
-                    className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors disabled:opacity-60 ${
-                      active
-                        ? "bg-[var(--ink-950)] text-white"
-                        : "bg-[var(--paper-100)] text-[var(--ink-700)] hover:bg-[var(--ink-100)] hover:text-[var(--ink-950)]"
-                    }`}
-                  >
-                    {active && <Check className="h-3 w-3" strokeWidth={2.5} />}
-                    {list.name}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => {
-                  setNewListName("");
-                  setNewListDialogOpen(true);
-                }}
-                className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--paper-100)] px-3 text-[12px] font-medium text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-100)] hover:text-[var(--ink-950)]"
-              >
-                <span className="text-[14px] leading-none">+</span> Nouvelle liste
-              </button>
-            </div>
-          </div>
-        )}
-
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-lg">Description</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm leading-6 text-[var(--ink-700)]">
-            {ad.description ?? "Aucune description disponible pour le moment."}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {amenities.filter((a) => a.active).map((a) => (
-              <Badge key={a.label} variant="outline">
-                {a.label}
-              </Badge>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Weather */}
-      <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
-
-      <AerodromeLocationMap
-        aerodromeId={ad.id}
-        name={ad.name}
-        icaoCode={ad.icaoCode}
-        latitude={ad.latitude}
-        longitude={ad.longitude}
-        elevation={ad.elevation}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5" /> Informations générales
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {ad.icaoCode && <Badge variant="outline">ICAO {ad.icaoCode}</Badge>}
-              {ad.iataCode && <Badge variant="outline">IATA {ad.iataCode}</Badge>}
-              {ad.altIdentifier && <Badge variant="outline">Alt. {ad.altIdentifier}</Badge>}
-              {ad.ppr && <Badge variant="secondary">PPR requis</Badge>}
-              {ad.privateUse && <Badge variant="secondary">Usage privé</Badge>}
-              {ad.skydiveActivity && <Badge variant="secondary">Activité parachutage</Badge>}
-              {ad.winchOnly && <Badge variant="secondary">Treuil uniquement</Badge>}
-              {ad.magneticDeclination != null && (
-                <Badge variant="outline">Déclinaison {formatDeclination(ad.magneticDeclination)}</Badge>
-              )}
-            </div>
-
-            {(ad.handlingFacilities.length > 0 || ad.passengerFacilities.length > 0) && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {ad.handlingFacilities.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Handling</p>
-                    <div className="flex flex-wrap gap-2">
-                      {ad.handlingFacilities.map((code) => (
-                        <Badge key={`handling-${code}`} variant="outline">
-                          {HANDLING_LABELS[code] ?? `Code ${code}`}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {ad.passengerFacilities.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Services passagers</p>
-                    <div className="flex flex-wrap gap-2">
-                      {ad.passengerFacilities.map((code) => (
-                        <Badge key={`passenger-${code}`} variant="outline">
-                          {PASSENGER_LABELS[code] ?? `Code ${code}`}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Runways */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plane className="h-5 w-5" /> Pistes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {ad.runways.length === 0 ? (
-              <p className="text-muted-foreground">Aucune donnée de piste disponible.</p>
-            ) : (
-              <div className="space-y-3">
-                {ad.runways.map((r) => (
-                  <div key={r.id} className="rounded-md border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <span className="font-mono font-bold">{r.identifier}</span>
-                        <span className="ml-2 text-muted-foreground">
-                        {r.length}m × {r.width ?? "?"}m
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">{SURFACE_NAME_LABELS[r.surface] ?? r.surface}</Badge>
-                      {r.mainRunway && <Badge variant="secondary">Principale</Badge>}
-                      {r.lighting && <Badge variant="secondary">Balisée</Badge>}
-                    </div>
-                    {(r.trueHeading != null || r.operations != null || r.surfaceComposition.length > 0 || r.remarks) && (
-                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
-                        {r.trueHeading != null && <span>QFU vrai {r.trueHeading}°</span>}
-                        {r.operations != null && <span>{RUNWAY_OPERATIONS_LABELS[r.operations] ?? `Opérations code ${r.operations}`}</span>}
-                        {r.surfaceComposition.length > 0 && (
-                          <span>
-                            Composition {r.surfaceComposition.map((code) => SURFACE_LABELS[code] ?? formatOpenAipCode(code)).join(", ")}
-                          </span>
-                        )}
-                        {r.remarks && <span>{r.remarks}</span>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Frequencies */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Radio className="h-5 w-5" /> Fréquences
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {ad.frequencies.length === 0 ? (
-              <p className="text-muted-foreground">Aucune fréquence disponible.</p>
-            ) : (
-              <div className="space-y-2">
-                {ad.frequencies.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{f.type}</Badge>
-                      <span>{f.callsign}</span>
-                      {f.isPrimary && <Badge variant="secondary">Principale</Badge>}
-                      {f.notes && <span className="text-sm text-muted-foreground">{f.notes}</span>}
-                    </div>
-                    <span className="font-mono">{f.mhz.toFixed(3)} MHz</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Fuel */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Fuel className="h-5 w-5" /> Carburant
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {noFuel ? (
-              <div className="space-y-3">
-                <p className="text-muted-foreground">Aucune donnée carburant disponible.</p>
-                {(() => {
-                  const nearest = nearbyFuelRes?.data?.find((n) => n.id !== id);
-                  if (!nearest) return null;
-                  const fuels = nearest.fuels?.filter((f) => f.available).map((f) => FUEL_LABELS[f.type] ?? f.type).join(", ");
-                  return (
-                    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                      <p className="font-medium mb-1">Carburant le plus proche :</p>
-                      <Link
-                        href={`/aerodrome/${nearest.id}`}
-                        className="flex items-center justify-between hover:underline"
-                      >
-                        <span>
-                          {nearest.name}
-                          {nearest.icaoCode && <span className="ml-1 text-blue-600">({nearest.icaoCode})</span>}
-                          {fuels && <span className="ml-2 text-xs text-blue-600">{fuels}</span>}
-                        </span>
-                        <span className="font-medium shrink-0 ml-2">{fmtDist(nearest.distanceKm)}</span>
-                      </Link>
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {ad.fuels.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between">
-                    <span>
-                      {FUEL_LABELS[f.type] ?? f.type}
-                      {f.selfService && " (Libre-service)"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={f.available ? "success" : "destructive"}>
-                        {f.available ? "Disponible" : "Indisponible"}
-                      </Badge>
-                      {f.availabilityHours && (
-                        <span className="text-sm text-muted-foreground">
-                          {f.availabilityHours}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Amenities */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Services aux Pilotes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {amenities.map((a) => (
-                <div
-                  key={a.label}
-                  className={`flex items-center gap-2 rounded-md border p-2 ${
-                    a.active ? "bg-green-50 border-green-200" : "opacity-40"
-                  }`}
-                >
-                  <a.icon className="h-4 w-4" />
-                  <span className="text-sm">{a.label}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Nearby Aerodromes */}
-        {nearbyAerodromes.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Navigation className="h-5 w-5" /> Aérodromes à Proximité
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {nearbyAerodromes.map((n) => (
-                  <Link
-                    key={n.id}
-                    href={`/aerodrome/${n.id}`}
-                    className="flex items-center justify-between rounded-md border p-2 hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-sm">
-                      {n.name}
-                      {n.icaoCode && (
-                        <span className="ml-1 text-muted-foreground">({n.icaoCode})</span>
-                      )}
-                    </span>
-                    <span className="text-xs font-medium text-primary">
-                      {fmtDist(n.distanceKm)}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Nearby ULM */}
-        {nearbyUlm.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Navigation className="h-5 w-5" /> Bases ULM à Proximité
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {nearbyUlm.map((n) => (
-                  <Link
-                    key={n.id}
-                    href={`/aerodrome/${n.id}`}
-                    className="flex items-center justify-between rounded-md border p-2 hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-sm">{n.name}</span>
-                    <span className="text-xs font-medium text-primary">
-                      {fmtDist(n.distanceKm)}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Nearby Restaurants, Cafes & Bars */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Utensils className="h-5 w-5" /> Restaurants & cafés à proximité
-              </CardTitle>
-              {/* Radius selector */}
-              <div className="flex gap-1 text-xs">
-                {[1000, 3000, 5000].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => { setRestaurantRadius(r); setRestaurantLimit(5); }}
-                    className={`rounded px-2 py-1 border transition-colors ${
-                      restaurantRadius === r
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    {r / 1000} km
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {restaurantsLoading ? (
-              <p className="text-muted-foreground text-sm">Chargement...</p>
-            ) : restaurantsError ? (
-              <p className="text-muted-foreground text-sm">
-                Impossible de charger les établissements pour le moment.
-              </p>
-            ) : !(restaurantsRes?.data?.restaurants ?? []).filter((r) => r.distanceMeters <= restaurantRadius).length ? (
-              <p className="text-muted-foreground text-sm">
-                Aucun établissement trouvé dans un rayon de {restaurantRadius / 1000} km.
-              </p>
-            ) : (() => {
-              const filteredRestos = (restaurantsRes?.data?.restaurants ?? [])
-                .filter((r) => r.distanceMeters <= restaurantRadius);
-              const visibleRestos = filteredRestos.slice(0, restaurantLimit);
-              return (
-              <div className="space-y-2">
-                {visibleRestos
-                  .map((r) => {
-                  const dist =
-                    r.distanceMeters < 1000
-                      ? `${r.distanceMeters} m`
-                      : `${(r.distanceMeters / 1000).toFixed(1)} km`;
-                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}`;
-                  const addr = [r.address.street, r.address.postcode, r.address.city]
-                    .filter(Boolean)
-                    .join(", ");
-
-                  const AmenityIcon =
-                    r.amenity === "cafe" ? Coffee : r.amenity === "bar" ? Beer : Utensils;
-
-                  const amenityLabel =
-                    r.amenity === "cafe" ? "Café" : r.amenity === "bar" ? "Bar" : "Restaurant";
-
-                  return (
-                    <div
-                      key={r.id}
-                      className="rounded-md border p-3 flex items-start justify-between gap-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        {/* Name + type icon */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <AmenityIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="font-medium text-sm">{r.name}</span>
-                          {r.cuisine.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              {r.cuisine.join(", ")}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Address */}
-                        {addr && (
-                          <p className="text-xs text-muted-foreground mt-0.5 ml-5">{addr}</p>
-                        )}
-
-                        {/* Opening hours text */}
-                        {r.openingHours && (
-                          <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-                            {r.openingHours}
-                          </p>
-                        )}
-
-                        {/* Badges */}
-                        <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
-                          {/* Accessibility badge */}
-                          {r.accessibility === "walkable" ? (
-                            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                              À pied
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              Proche
-                            </span>
-                          )}
-                          {/* Open now badge */}
-                          {r.isOpenNow === true && (
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-                              Ouvert maintenant
-                            </span>
-                          )}
-                          {r.isOpenNow === false && (
-                            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-600">
-                              Fermé
-                            </span>
-                          )}
-                          {/* Amenity type badge (not shown for restaurant since it's obvious) */}
-                          {r.amenity !== "restaurant" && (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              {amenityLabel}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Right column: distance + OSM link */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-xs font-medium text-primary">{dist}</span>
-                        <a
-                          href={mapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-3 w-3" /> Google Maps
-                        </a>
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredRestos.length > restaurantLimit && (
-                  <button
-                    onClick={() => setRestaurantLimit((l) => l + 5)}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
-                  >
-                    Voir plus ({filteredRestos.length - restaurantLimit} restants)
-                  </button>
-                )}
-              </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* Nearby Public Transport */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Bus className="h-5 w-5" /> Transports à proximité
-              </CardTitle>
-              <div className="flex gap-1 text-xs">
-                {[1000, 3000, 5000].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => { setTransportRadius(r); setTransportLimit(5); setBikeLimit(5); }}
-                    className={`rounded px-2 py-1 border transition-colors ${
-                      transportRadius === r
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    {r / 1000} km
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {transportLoading ? (
-              <p className="text-muted-foreground text-sm">Chargement...</p>
-            ) : transportError ? (
-              <p className="text-muted-foreground text-sm">
-                Impossible de charger les transports pour le moment.
-              </p>
-            ) : (() => {
-              const allFiltered = (transportRes?.data?.transports ?? [])
-                .filter((s) => s.distanceMeters <= transportRadius && s.type !== "bike");
-              const filtered = allFiltered.slice(0, transportLimit);
-              if (!filtered.length) {
-                return (
-                  <p className="text-muted-foreground text-sm">
-                    Aucun transport trouvé dans un rayon de {transportRadius / 1000} km.
-                  </p>
-                );
-              }
-
-              const groups: { type: NearbyTransport["type"]; label: string; icon: React.ElementType }[] = [
-                { type: "train", label: "Train", icon: Train },
-                { type: "tram", label: "Tram", icon: Bus },
-                { type: "bus", label: "Bus", icon: Bus },
-                { type: "other", label: "Autres", icon: MapPin },
-              ];
-
-              return (
-                <>
-                <div className="space-y-4">
-                  {groups.map(({ type, label, icon: Icon }) => {
-                    const stops = filtered.filter((s) => s.type === type);
-                    if (!stops.length) return null;
-                    return (
-                      <div key={type}>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                          <Icon className="h-3.5 w-3.5" /> {label}
-                        </p>
-                        <div className="space-y-2">
-                          {stops.map((s) => {
-                            const dist =
-                              s.distanceMeters < 1000
-                                ? `${s.distanceMeters} m`
-                                : `${(s.distanceMeters / 1000).toFixed(1)} km`;
-                            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
-                            const primarySource = s.osmSources?.[0];
-                            const osmUrl = primarySource
-                              ? `https://www.openstreetmap.org/${primarySource.type}/${primarySource.id}`
-                              : null;
-                            const walkable = s.distanceMeters <= 1000;
-
-                            return (
-                              <div
-                                key={s.id}
-                                className="rounded-md border p-3 flex items-start justify-between gap-3"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    <span className="font-medium text-sm">{s.name}</span>
-                                    {s.ref && s.ref !== s.name && (
-                                      <span className="text-xs text-muted-foreground font-mono">
-                                        {s.ref}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {(s.network ?? s.operator) && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-                                      {[s.network, s.operator].filter(Boolean).join(" · ")}
-                                      {s.capacity && ` · ${s.capacity} vélos`}
-                                    </p>
-                                  )}
-
-                                  {s.routeRef && s.routeRef.length > 0 && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-                                      Lignes : {s.routeRef.join(", ")}
-                                    </p>
-                                  )}
-
-                                  <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
-                                    {walkable ? (
-                                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                                        À pied
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        Proche
-                                      </span>
-                                    )}
-                                    {s.subType === "station" && (
-                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        Gare
-                                      </span>
-                                    )}
-                                    {s.wheelchair === true && (
-                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        ♿ Accessible
-                                      </span>
-                                    )}
-                                    {s.shelter === true && (
-                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        🛑 Abri
-                                      </span>
-                                    )}
-                                    {s.lit === true && (
-                                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        💡 Éclairé
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-col items-end gap-1 shrink-0">
-                                  <span className="text-xs font-medium text-primary">{dist}</span>
-                                  <a
-                                    href={mapsUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                  >
-                                    <ExternalLink className="h-3 w-3" /> Google Maps
-                                  </a>
-                                  {osmUrl && (
-                                    <a
-                                      href={osmUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                    >
-                                      <ExternalLink className="h-3 w-3" /> OSM
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {allFiltered.length > transportLimit && (
-                  <button
-                    onClick={() => setTransportLimit((l) => l + 5)}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors mt-2"
-                  >
-                    Voir plus ({allFiltered.length - transportLimit} restants)
-                  </button>
-                )}
-              </>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* Nearby Bike Sharing */}
-        {(() => {
-          const allBikes = (transportRes?.data?.transports ?? [])
-            .filter((s) => s.type === "bike" && s.distanceMeters <= transportRadius);
-          if (!transportLoading && !transportError && allBikes.length === 0) return null;
-          const visibleBikes = allBikes.slice(0, bikeLimit);
-          return (
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Bike className="h-5 w-5" /> Vélos en libre service
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {transportLoading ? (
-                  <p className="text-muted-foreground text-sm">Chargement...</p>
-                ) : (
-                  <div className="space-y-2">
-                    {visibleBikes.map((s) => {
-                      const dist =
-                        s.distanceMeters < 1000
-                          ? `${s.distanceMeters} m`
-                          : `${(s.distanceMeters / 1000).toFixed(1)} km`;
-                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
-                      const walkable = s.distanceMeters <= 1000;
-                      return (
-                        <div
-                          key={s.id}
-                          className="rounded-md border p-3 flex items-start justify-between gap-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Bike className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              <span className="font-medium text-sm">{s.name}</span>
-                            </div>
-                            {(s.network ?? s.operator) && (
-                              <p className="text-xs text-muted-foreground mt-0.5 ml-5">
-                                {[s.network, s.operator].filter(Boolean).join(" · ")}
-                                {s.capacity ? ` · ${s.capacity} vélos` : ""}
-                              </p>
-                            )}
-                            <div className="flex gap-1.5 mt-1.5 ml-5 flex-wrap">
-                              {walkable ? (
-                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                                  À pied
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  Proche
-                                </span>
-                              )}
-                              {s.wheelchair === true && (
-                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  ♿ Accessible
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="text-xs font-medium text-primary">{dist}</span>
-                            <a
-                              href={mapsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                            >
-                              <ExternalLink className="h-3 w-3" /> Google Maps
-                            </a>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {allBikes.length > bikeLimit && (
-                      <button
-                        onClick={() => setBikeLimit((l) => l + 5)}
-                        className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
-                      >
-                        Voir plus ({allBikes.length - bikeLimit} restants)
-                      </button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })()}
-
-        {/* Nearby Accommodation */}
-        {(() => {
-          const allAccommodations = accommodationRes?.data?.accommodations ?? [];
-          if (!accommodationLoading && !accommodationError && allAccommodations.length === 0) return null;
-
-          const groups: { category: NearbyAccommodation["category"]; label: string; icon: string }[] = [
-            { category: "camping", label: "Camping", icon: "⛺" },
-            { category: "hotel", label: "Hôtels", icon: "🏨" },
-            { category: "chambre_hotes", label: "Chambres d'hôtes & Gîtes", icon: "🏡" },
-          ];
-
-          return (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Home className="h-5 w-5" /> Hébergements à proximité
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {accommodationLoading && (
-                  <p className="text-sm text-muted-foreground">Chargement...</p>
-                )}
-                {accommodationError && (
-                  <p className="text-sm text-muted-foreground">Impossible de charger les hébergements.</p>
-                )}
-                {!accommodationLoading && !accommodationError && allAccommodations.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Aucun hébergement trouvé dans un rayon de 10 km.</p>
-                )}
-                {groups.map(({ category, label, icon }) => {
-                  const items = allAccommodations
-                    .filter((a) => a.category === category)
-                    .slice(0, accommodationLimit);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={category}>
-                      <p className="text-sm font-semibold text-muted-foreground mb-2">
-                        {icon} {label}
-                      </p>
-                      <div className="space-y-2">
-                        {items.map((a) => {
-                          const dist =
-                            a.distanceMeters < 1000
-                              ? `${a.distanceMeters} m`
-                              : `${(a.distanceMeters / 1000).toFixed(1)} km`;
-                          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lon}`;
-                          return (
-                            <div
-                              key={a.id}
-                              className="rounded-md border p-3 flex items-start justify-between gap-3"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-sm">{a.name}</p>
-                                <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                                  {a.stars && (
-                                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
-                                      {"★".repeat(a.stars)} {a.stars} étoile{a.stars > 1 ? "s" : ""}
-                                    </span>
-                                  )}
-                                  {a.rooms && (
-                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                      {a.rooms} chambre{a.rooms > 1 ? "s" : ""}
-                                    </span>
-                                  )}
-                                  {a.capacity && !a.rooms && (
-                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                      {a.capacity} places
-                                    </span>
-                                  )}
-                                  {a.wheelchair === true && (
-                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                      ♿ Accessible
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex gap-3 mt-1.5">
-                                  {a.phone && (
-                                    <a
-                                      href={`tel:${a.phone}`}
-                                      className="text-xs text-primary hover:underline"
-                                    >
-                                      {a.phone}
-                                    </a>
-                                  )}
-                                  {a.website && (
-                                    <a
-                                      href={a.website}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                                    >
-                                      <ExternalLink className="h-3 w-3" /> Site web
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                <span className="text-xs font-medium text-primary">{dist}</span>
-                                <a
-                                  href={mapsUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                >
-                                  <ExternalLink className="h-3 w-3" /> Google Maps
-                                </a>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                {allAccommodations.length > accommodationLimit && (
-                  <button
-                    onClick={() => setAccommodationLimit((l) => l + 5)}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-md py-1.5 transition-colors"
-                  >
-                    Voir plus ({allAccommodations.length - accommodationLimit} restants)
-                  </button>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })()}
-
-        {/* Links */}
-        {(ad.aipLink || ad.vacLink || ad.websiteUrl) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Liens Officiels</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {ad.aipLink && (
-                <a
-                  href={ad.aipLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" /> Page AIP
-                </a>
-              )}
-              {ad.vacLink && (
-                <a
-                  href={ad.vacLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" /> Carte VAC
-                </a>
-              )}
-              {ad.websiteUrl && (
-                <a
-                  href={ad.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" /> Site Web
-                </a>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-
-        {/* Events */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CalendarDays className="h-5 w-5" /> Événements à venir
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {eventAlert && (
-              <div
-                className={`mb-4 rounded-md border p-3 text-sm ${
-                  eventAlert.type === "success"
-                    ? "border-green-300 bg-green-50 text-green-800"
-                    : "border-red-300 bg-red-50 text-red-800"
-                }`}
-              >
-                {eventAlert.message}
-              </div>
-            )}
-
-            {events.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {events.map((ev) => (
-                  <div key={ev.id} className="rounded-md border p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 uppercase tracking-wide">
-                            {EVENT_TYPE_LABELS[ev.type]}
-                          </span>
-                          <span className="font-medium">{ev.title}</span>
-                        </div>
-                        {ev.description && (
-                          <p className="mt-1 text-muted-foreground">{ev.description}</p>
-                        )}
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {new Date(ev.startDate).toLocaleDateString("fr-FR", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                          {ev.endDate &&
-                            ev.endDate !== ev.startDate &&
-                            ` → ${new Date(ev.endDate).toLocaleDateString("fr-FR", { month: "long", day: "numeric" })}`}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-xs text-muted-foreground">
-                          {ev.user.displayName ?? "Membre"}
-                        </span>
-                        {user?.id === ev.user.id && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteEvent(ev.id)}
-                            className="h-6 px-1.5 text-xs text-muted-foreground"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {events.length === 0 && (
-              <p className="mb-4 text-sm text-muted-foreground">
-                Aucun événement à venir pour le moment.
-              </p>
-            )}
-
-            {user && eventForm === null && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setEventForm({
-                    type: "OTHER",
-                    title: "",
-                    description: "",
-                    startDate: "",
-                    endDate: "",
-                  })
-                }
-              >
-                <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-                Ajouter un événement
-              </Button>
-            )}
-
-            {!user && (
-              <p className="text-sm text-muted-foreground">
-                <a href="/login" className="text-primary hover:underline">Connectez-vous</a> pour ajouter un événement.
-              </p>
-            )}
-
-            {user && eventForm !== null && (
-              <form onSubmit={handleSubmitEvent} className="mt-3 space-y-3 rounded-md border p-4">
-                <p className="text-sm font-medium">Nouvel événement</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      Type <span className="text-destructive">*</span>
-                    </label>
-                    <select
-                      value={eventForm.type}
-                      onChange={(e) => setEventForm({ ...eventForm, type: e.target.value as EventItem["type"] })}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      required
-                    >
-                      {EVENT_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {EVENT_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      Intitulé <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Nom de l'événement"
-                      value={eventForm.title}
-                      onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                      maxLength={200}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      Date de début <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      type="datetime-local"
-                      value={eventForm.startDate}
-                      onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      Date de fin (optionnel)
-                    </label>
-                    <Input
-                      type="datetime-local"
-                      value={eventForm.endDate}
-                      onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Description (optionnel)
-                  </label>
-                  <textarea
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    placeholder="Informations complémentaires, contact, lien…"
-                    value={eventForm.description}
-                    onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                    maxLength={2000}
-                    rows={2}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={!eventForm.title.trim() || !eventForm.startDate}
-                  >
-                    Publier
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setEventForm(null); setEventAlert(null); }}
-                  >
-                    Annuler
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Les événements des nouveaux comptes sont soumis à modération avant publication.
-                </p>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5" /> Contributions communautaires ({communityCorrections.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-              Les informations ci-dessous sont proposées par la communauté puis validées par l&apos;équipe de modération.
-              Elles complètent la fiche sans modifier la donnée importée.
-            </div>
-
-            {correctionActionAlert && (
-              <div
-                className={`rounded-md border p-3 text-sm ${
-                  correctionActionAlert.type === "success"
-                    ? "border-green-300 bg-green-50 text-green-800"
-                    : "border-red-300 bg-red-50 text-red-800"
-                }`}
-              >
-                {correctionActionAlert.message}
-              </div>
-            )}
-
-            {user ? (
-              <form onSubmit={handleSubmitCorrection} className="space-y-3 rounded-lg border p-4">
-                <div className="grid gap-3 md:grid-cols-[220px_1fr]">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Type de contribution</label>
-                    <select
-                      value={correctionField}
-                      onChange={(event) =>
-                        setCorrectionField(
-                          event.target.value as (typeof COMMUNITY_FIELD_OPTIONS)[number]["value"],
-                        )
-                      }
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {COMMUNITY_FIELD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Proposition</label>
-                    <textarea
-                      value={correctionValue}
-                      onChange={(event) => setCorrectionValue(event.target.value)}
-                      rows={3}
-                      maxLength={2000}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Décrivez la correction ou l’information complémentaire à publier."
-                    />
-                  </div>
-                </div>
-
-                {correctionField === "other" && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Champ concerné</label>
-                    <Input
-                      value={customCorrectionField}
-                      onChange={(event) => setCustomCorrectionField(event.target.value)}
-                      maxLength={100}
-                      placeholder="Ex. procédures locales, accès, horaires..."
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Contexte ou justification</label>
-                  <textarea
-                    value={correctionReason}
-                    onChange={(event) => setCorrectionReason(event.target.value)}
-                    rows={2}
-                    maxLength={1000}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Optionnel : source, précision locale, explication..."
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Votre proposition sera relue avant publication.
-                  </p>
-                  <Button
-                    type="submit"
-                    disabled={
-                      !correctionValue.trim() ||
-                      (correctionField === "other" && !customCorrectionField.trim())
-                    }
-                  >
-                    Proposer une contribution
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                <Link href="/login" className="text-primary hover:underline">
-                  Connectez-vous
-                </Link>{" "}
-                pour proposer une correction ou un enrichissement.
-              </p>
-            )}
-
-            {communityCorrections.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucune contribution communautaire publiée pour le moment.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {communityCorrections.map((correction) => (
-                  <div key={correction.id} className="rounded-lg border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {formatCommunityFieldLabel(correction.field)}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            par{" "}
-                            {correction.user.displayName ? (
-                              <Link
-                                href={`/community/${correction.user.id}`}
-                                className="hover:text-primary hover:underline"
-                              >
-                                {correction.user.displayName}
-                              </Link>
-                            ) : (
-                              "Membre"
-                            )}{" "}
-                            le {new Date(correction.createdAt).toLocaleDateString("fr-FR")}
-                          </span>
-                        </div>
-                        {correction.currentValue && (
-                          <p className="text-xs text-muted-foreground">
-                            Référence officielle : {correction.currentValue}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap">{correction.proposedValue}</p>
-                        {correction.reason && (
-                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                            Contexte : {correction.reason}
-                          </p>
-                        )}
-                      </div>
-
-                      {user && user.id !== correction.user.id && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReportCorrection(correction.id)}
-                        >
-                          Signaler
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Photos */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ImagePlus className="h-5 w-5" /> Photos ({photos.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PhotoUpload
-              aerodromeId={id}
-              currentUserId={user?.id}
-              existingPhotos={photos}
-              onDeleteSuccess={(photoId) => {
-                setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-              }}
-              canUpload={!!user}
-            />
-            {!user && (
-              <p className="mt-3 text-sm text-muted-foreground text-center">
-                <a href="/login" className="text-primary hover:underline">Connectez-vous</a> pour ajouter des photos.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Comments */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5" /> Commentaires ({ad._count.comments})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {commentActionAlert && (
-              <div
-                className={`mb-4 rounded-md border p-3 text-sm ${
-                  commentActionAlert.type === "success"
-                    ? "border-green-300 bg-green-50 text-green-800"
-                    : "border-red-300 bg-red-50 text-red-800"
-                }`}
-              >
-                {commentActionAlert.message}
-              </div>
-            )}
-            {user && (
-              <form onSubmit={handleComment} className="flex gap-2 mb-4">
-                <Input
-                  placeholder="Partagez votre expérience..."
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  maxLength={2000}
-                />
-                <Button type="submit" disabled={!commentText.trim()}>
-                  Publier
-                </Button>
-              </form>
-            )}
-            {!user && (
-              <p className="mb-4 text-center text-sm text-muted-foreground">
-                <a href="/login" className="text-primary hover:underline">
-                  Connectez-vous
-                </a>{" "}
-                pour ajouter un commentaire.
-              </p>
-            )}
-            {comments.length === 0 ? (
-              <p className="text-muted-foreground">Aucun commentaire. Soyez le premier à partager !</p>
-            ) : (
-              <div className="space-y-3">
-                {comments.map((c) => renderCommentCard(c))}
-              </div>
-            )}
-            <p className="mt-4 text-xs text-muted-foreground">
-              Contributions sous licence CC BY-SA 4.0.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-      </main>
-
-      {/* ASIDE (sticky on desktop) — secondary docs only; main actions live in hero / bottom bar */}
-      <aside className="flex flex-col gap-3.5 lg:sticky lg:top-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Contact rapide</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {ad.aipLink ? (
-              <a
-                href={ad.aipLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
-              >
-                <span>AIP</span>
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            ) : (
-              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
-                AIP non disponible
-              </div>
-            )}
-            {ad.vacLink ? (
-              <a
-                href={ad.vacLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
-              >
-                <span>VAC</span>
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            ) : (
-              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
-                VAC non disponible
-              </div>
-            )}
-            {ad.websiteUrl ? (
-              <a
-                href={ad.websiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm font-medium text-[var(--ink-950)] hover:bg-[var(--ink-50)]"
-              >
-                <span>Site web</span>
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            ) : (
-              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-600)]">
-                Site web non disponible
-              </div>
-            )}
-            {ad.source && (
-              <div className="rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3 text-sm text-[var(--ink-700)]">
-                Source : {ad.source}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Commodités</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {amenities.map((a) => (
-                <span
-                  key={a.label}
-                  className={`inline-flex items-center rounded-full px-3 py-2 text-sm font-medium ${
-                    a.active
-                      ? "bg-[var(--horizon-100)] text-[var(--horizon-900)]"
-                      : "bg-[var(--paper-100)] text-[var(--ink-500)]"
-                  }`}
-                >
-                  <a.icon className="mr-2 h-4 w-4" />
-                  {a.label}
-                </span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">À proximité</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-[var(--ink-700)]">
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
-              <span>Restaurants</span>
-              <span>{restaurantFromNearby ? "Oui" : "Non"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
-              <span>Transports</span>
-              <span>{transportFromNearby ? "Oui" : "Non"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ink-200)] bg-[var(--paper-100)] px-4 py-3">
-              <span>Hébergement</span>
-              <span>{accommodationFromNearby ? "Oui" : "Non"}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof navigator !== "undefined" && navigator.share) {
-                navigator.share({ title: ad.name, url: window.location.href }).catch(() => {});
-              } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-                navigator.clipboard.writeText(window.location.href).catch(() => {});
-              }
-            }}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-            aria-label="Partager"
-          >
-            <Share2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </button>
-          <button
-            type="button"
-            onClick={() => typeof window !== "undefined" && window.print()}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-            aria-label="Imprimer"
-          >
-            <Printer className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </button>
-          <a
-            href="#sec-corrections"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--ink-300)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-            aria-label="Signaler une info"
-          >
-            <Flag className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </a>
+        {/* TABS */}
+        <div role="tablist" style={{ position: "sticky", top: 64, zIndex: 20, background: "var(--paper-50)", borderBottom: "1px solid var(--ink-200)", margin: "0 -32px 24px", padding: "0 32px", display: "flex", gap: 4, overflowX: "auto", scrollbarWidth: "none" }}>
+          {([
+            { key: "infos",      label: "Infos" },
+            { key: "pistes",     label: "Pistes & Frq",    count: ad.runways.length + ad.frequencies.length },
+            { key: "services",   label: "Services & Carbu" },
+            { key: "commodites", label: "Commodités" },
+            { key: "meteo",      label: "Météo" },
+            { key: "avis",       label: "Avis",            count: ad._count.comments },
+            { key: "photos",     label: "Photos",          count: photos.length || undefined },
+          ] as { key: typeof activeTab; label: string; count?: number }[]).map(({ key, label, count }) => (
+            <button key={key} role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)} style={{ padding: "14px 14px 12px", background: "transparent", border: 0, borderBottom: activeTab === key ? "2px solid var(--horizon-700)" : "2px solid transparent", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: activeTab === key ? "var(--ink-950)" : "var(--ink-700)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+              {label}{count != null && count > 0 && <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, background: "var(--ink-100)", color: "var(--ink-700)", padding: "2px 6px", borderRadius: 3 }}>{count}</span>}
+            </button>
+          ))}
         </div>
-      </aside>
+
+        {/* STATUS BANNER */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: ad.status === "OPEN" ? "oklch(0.96 0.05 130)" : "oklch(0.96 0.05 25)", border: `1px solid ${ad.status === "OPEN" ? "oklch(0.85 0.07 130)" : "oklch(0.85 0.07 25)"}`, borderRadius: 8, color: ad.status === "OPEN" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)", fontSize: 13, marginBottom: 20 }}>
+          {ad.status === "OPEN" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <TriangleAlert className="h-4 w-4 shrink-0" />}
+          <span><strong>Aérodrome {ad.status === "OPEN" ? "ouvert" : "fermé"}</strong>{ad.lastSyncedAt && ` · MAJ ${new Date(ad.lastSyncedAt).toLocaleDateString("fr-FR")}`}</span>
+        </div>
+
+        {/* LAYOUT */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 32, alignItems: "start" }}>
+
+          {/* ── MAIN ── */}
+          <main>
+
+            {/* TAB: INFOS */}
+            {activeTab === "infos" && (
+              <div>
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                    {/* Identité */}
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      <div style={asideH}><Info className="h-3 w-3" /> Identité</div>
+                      <dl style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 16 }}>
+                        {ad.icaoCode && <><dt style={dtS}>Code OACI</dt><dd style={{ ...ddS, fontFamily: "var(--f-mono)" }}>{ad.icaoCode}</dd></>}
+                        {ad.iataCode && <><dt style={dtS}>Code IATA</dt><dd style={{ ...ddS, fontFamily: "var(--f-mono)" }}>{ad.iataCode}</dd></>}
+                        {ad.altIdentifier && <><dt style={dtS}>Identifiant alt.</dt><dd style={ddS}>{ad.altIdentifier}</dd></>}
+                        <dt style={dtS}>Type</dt><dd style={ddS}>{TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}</dd>
+                        <dt style={dtS}>Statut</dt><dd style={ddS}>{STATUS_LABELS[ad.status] ?? ad.status}</dd>
+                        <dt style={{ ...dtS, borderBottom: 0 }}>Visites</dt><dd style={{ ...ddS, borderBottom: 0 }}>{visitedCount}</dd>
+                      </dl>
+                    </div>
+                    {/* Position */}
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      <div style={asideH}><MapPin className="h-3 w-3" /> Position</div>
+                      <dl style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 16 }}>
+                        <dt style={dtS}>Latitude</dt><dd style={{ ...ddS, fontFamily: "var(--f-mono)" }}>{ad.latitude.toFixed(6)}°</dd>
+                        <dt style={dtS}>Longitude</dt><dd style={{ ...ddS, fontFamily: "var(--f-mono)" }}>{ad.longitude.toFixed(6)}°</dd>
+                        {ad.elevation != null && <><dt style={dtS}>Altitude</dt><dd style={{ ...ddS, fontFamily: "var(--f-mono)" }}>{ad.elevation} ft</dd></>}
+                        {[ad.city, ad.department, ad.region].filter(Boolean).length > 0 && <><dt style={dtS}>Localisation</dt><dd style={ddS}>{[ad.city, ad.department, ad.region].filter(Boolean).join(", ")}</dd></>}
+                        <dt style={{ ...dtS, borderBottom: 0 }}>Déclinaison mag.</dt><dd style={{ ...ddS, borderBottom: 0, fontFamily: "var(--f-mono)" }}>{formatDeclination(ad.magneticDeclination) ?? "—"}</dd>
+                      </dl>
+                    </div>
+                  </div>
+                </section>
+
+                {ad.description && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      <div style={asideH}>Description</div>
+                      <p style={{ fontSize: 13, color: "var(--ink-800)", lineHeight: 1.6, margin: 0 }}>{ad.description}</p>
+                    </div>
+                  </section>
+                )}
+
+                {(ad.ppr || ad.privateUse || ad.skydiveActivity || ad.winchOnly) && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><TriangleAlert className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Particularités</h2>
+                    </div>
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {ad.ppr && <li style={particWarn}><TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--brass-700)" }} /><p style={particP}><strong>PPR requis</strong> — Permission préalable requise avant d&apos;atterrir.</p></li>}
+                        {ad.privateUse && <li style={particInfo}><Info className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--horizon-700)" }} /><p style={particP}><strong>Usage privé</strong> — Accès restreint, réservé aux membres ou propriétaires.</p></li>}
+                        {ad.skydiveActivity && <li style={particWarn}><TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--brass-700)" }} /><p style={particP}><strong>Activité parachutage</strong> — Zone de saut active, vigilance accrue requise.</p></li>}
+                        {ad.winchOnly && <li style={particNeutral}><Info className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--ink-700)" }} /><p style={particP}><strong>Treuil uniquement</strong> — Pas de remorquage motorisé disponible.</p></li>}
+                      </ul>
+                    </div>
+                  </section>
+                )}
+
+                <section style={{ marginBottom: 20 }}>
+                  <AerodromeLocationMap aerodromeId={ad.id} name={ad.name} icaoCode={ad.icaoCode} latitude={ad.latitude} longitude={ad.longitude} elevation={ad.elevation} />
+                </section>
+              </div>
+            )}
+
+            {/* TAB: PISTES & FRÉQUENCES */}
+            {activeTab === "pistes" && (
+              <div>
+                {ad.runways.length > 0 && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><Plane className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Pistes</h2>
+                      {ad.vacLink && <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={sectionAction}>Voir VAC <ExternalLink className="h-3 w-3" /></a>}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                      {ad.runways.map((r) => (
+                        <article key={r.id} style={{ border: "1px solid var(--ink-200)", borderRadius: 8, padding: 16, background: "var(--paper-100)" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                            <span style={{ fontFamily: "var(--f-mono)", fontSize: 18, fontWeight: 700, letterSpacing: "0.05em" }}>{r.identifier}</span>
+                            {r.trueHeading != null && <span style={{ fontSize: 11, color: "var(--ink-700)", background: "white", padding: "2px 8px", borderRadius: 4, fontFamily: "var(--f-mono)", fontWeight: 600 }}>QFU {r.trueHeading}°</span>}
+                          </div>
+                          <div style={{ position: "relative", height: 64, background: "var(--paper-50)", border: "1px solid var(--ink-200)", borderRadius: 6, margin: "14px 0 16px", display: "grid", placeItems: "center" }}>
+                            <div style={{ position: "relative", width: "80%", height: 14, background: "var(--ink-950)", borderRadius: 1 }}>
+                              <span style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: 8, fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "white" }}>{r.identifier.split("/")[0]?.trim() ?? ""}</span>
+                              <span style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", right: 8, fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "white" }}>{r.identifier.split("/")[1]?.trim() ?? ""}</span>
+                            </div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                            <div style={{ textAlign: "center" }}><div style={{ fontFamily: "var(--f-mono)", fontSize: 15, fontWeight: 600, color: "var(--ink-950)" }}>{r.length} m</div><div style={rwyStatL}>Longueur</div></div>
+                            <div style={{ textAlign: "center" }}><div style={{ fontFamily: "var(--f-mono)", fontSize: 15, fontWeight: 600, color: "var(--ink-950)" }}>{r.width != null ? `${r.width} m` : "—"}</div><div style={rwyStatL}>Largeur</div></div>
+                            <div style={{ textAlign: "center" }}><div style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 600, color: "var(--ink-950)" }}>{SURFACE_NAME_LABELS[r.surface] ?? r.surface}</div><div style={rwyStatL}>Surface</div></div>
+                          </div>
+                          <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {r.mainRunway && <span style={rwyTag}>Principale</span>}
+                            {r.lighting && <span style={rwyTagOk}><Check className="h-2.5 w-2.5" /> Balisée</span>}
+                            {r.operations != null && <span style={rwyTag}>{RUNWAY_OPERATIONS_LABELS[r.operations] ?? `Code ${r.operations}`}</span>}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {ad.frequencies.length > 0 && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><Radio className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Fréquences</h2>
+                    </div>
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {ad.frequencies.map((f) => (
+                          <div key={f.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 12, alignItems: "center", padding: "10px 12px", background: "var(--paper-100)", border: "1px solid var(--ink-200)", borderRadius: 6 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 6, background: "var(--horizon-100)", color: "var(--horizon-700)", display: "grid", placeItems: "center" }}><Radio className="h-3.5 w-3.5" /></div>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-950)" }}>{f.type}{f.callsign ? ` · ${f.callsign}` : ""}{f.isPrimary ? " ★" : ""}</div>
+                              {f.notes && <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 1 }}>{f.notes}</div>}
+                            </div>
+                            <div style={{ fontFamily: "var(--f-mono)", fontSize: 14, fontWeight: 600, color: "var(--ink-950)" }}>{f.mhz.toFixed(3)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {ad.runways.length === 0 && ad.frequencies.length === 0 && <p style={{ fontSize: 13, color: "var(--ink-500)", textAlign: "center", padding: "48px 0" }}>Aucune donnée disponible.</p>}
+              </div>
+            )}
+
+            {/* TAB: SERVICES & CARBU */}
+            {activeTab === "services" && (
+              <div>
+                {(ad.handlingFacilities.length > 0 || ad.passengerFacilities.length > 0) && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><Wrench className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Services au sol</h2>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                      {ad.handlingFacilities.length > 0 && (
+                        <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                          <div style={asideH}>Handling</div>
+                          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                            {ad.handlingFacilities.map((code) => (
+                              <li key={code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px dashed var(--ink-200)", fontSize: 13, color: "var(--ink-800)" }}>
+                                <Check className="h-4 w-4 shrink-0" style={{ color: "var(--terrain-700)" }} />{HANDLING_LABELS[code] ?? `Service code ${code}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {ad.passengerFacilities.length > 0 && (
+                        <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                          <div style={asideH}>Services passagers</div>
+                          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                            {ad.passengerFacilities.map((code) => (
+                              <li key={code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px dashed var(--ink-200)", fontSize: 13, color: "var(--ink-800)" }}>
+                                <Check className="h-4 w-4 shrink-0" style={{ color: "var(--terrain-700)" }} />{PASSENGER_LABELS[code] ?? `Service code ${code}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={{ ...sectionMark, background: "var(--brass-100)", color: "var(--brass-700)" }}><Fuel className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Carburants</h2>
+                  </div>
+                  <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                    {ad.fuels.length === 0 ? (
+                      <>
+                        <p style={{ fontSize: 13, color: "var(--ink-500)", margin: "0 0 12px" }}>Aucune information carburant disponible.</p>
+                        {(nearbyFuelRes?.data ?? []).length > 0 && (
+                          <div>
+                            <p style={{ fontSize: 12, color: "var(--ink-700)", margin: "0 0 8px" }}>Aérodromes avec carburant à proximité :</p>
+                            {(nearbyFuelRes?.data ?? []).map((n) => (
+                              <Link key={n.id} href={`/aerodrome/${n.id}`} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px dashed var(--ink-200)", fontSize: 13, color: "var(--ink-800)", textDecoration: "none" }}>
+                                <span>{n.icaoCode ? `${n.icaoCode} — ` : ""}{n.name}</span>
+                                <span style={{ color: "var(--ink-500)", fontFamily: "var(--f-mono)", fontSize: 12 }}>{fmtDist(n.distanceKm)}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
+                        {ad.fuels.map((f) => (
+                          <div key={f.id} style={{ padding: 12, background: f.available ? "var(--brass-100)" : "var(--paper-100)", border: `1px solid ${f.available ? "oklch(0.85 0.06 75)" : "var(--ink-200)"}`, borderRadius: 6, display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 32, height: 32, background: "white", borderRadius: 6, display: "grid", placeItems: "center", color: f.available ? "var(--brass-700)" : "var(--ink-400)" }}><Fuel className="h-4 w-4" /></div>
+                            <div>
+                              <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 700, color: f.available ? "var(--brass-700)" : "var(--ink-700)", letterSpacing: "0.04em" }}>{FUEL_LABELS[f.type as keyof typeof FUEL_LABELS] ?? f.type}</div>
+                              <div style={{ fontSize: 11, color: "var(--ink-700)", marginTop: 1 }}>{!f.available ? "Non disponible" : f.selfService ? "Self-service" : "Sur demande"}{f.availabilityHours ? ` · ${f.availabilityHours}` : ""}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* TAB: COMMODITÉS */}
+            {activeTab === "commodites" && (
+              <div>
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={sectionMark}><Home className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Commodités à proximité</h2>
+                  </div>
+
+                  {/* Sub-tabs */}
+                  <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "var(--paper-100)", border: "1px solid var(--ink-200)", borderRadius: 8, padding: 4, width: "fit-content", flexWrap: "wrap" }}>
+                    {([
+                      { key: "all",       label: "Tous"         },
+                      { key: "resto",     label: "Restaurants"  },
+                      { key: "hotel",     label: "Hébergement"  },
+                      { key: "transport", label: "Transport"    },
+                      { key: "bike",      label: "Vélos"        },
+                    ] as { key: typeof activeAmenTab; label: string }[]).map(({ key, label }) => (
+                      <button key={key} type="button" onClick={() => setActiveAmenTab(key)} style={{ height: 30, padding: "0 12px", background: activeAmenTab === key ? "white" : "transparent", border: 0, borderRadius: 6, fontFamily: "inherit", fontSize: 12, fontWeight: 500, color: activeAmenTab === key ? "var(--ink-950)" : "var(--ink-700)", cursor: "pointer", boxShadow: activeAmenTab === key ? "0 1px 2px rgba(20,30,50,.06)" : "none" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Restaurants */}
+                  {(activeAmenTab === "all" || activeAmenTab === "resto") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {restaurantsLoading && <p style={{ fontSize: 13, color: "var(--ink-500)" }}>Chargement…</p>}
+                      {(restaurantsRes?.data?.restaurants ?? []).filter((r) => r.distanceMeters <= restaurantRadius).slice(0, restaurantLimit).map((r) => (
+                        <article key={r.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", gap: 14, alignItems: "center", padding: "12px 14px", border: "1px solid var(--ink-200)", borderRadius: 8, background: "white" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 6, background: "oklch(0.96 0.04 25)", color: "oklch(0.50 0.15 25)", display: "grid", placeItems: "center" }}>
+                            {r.amenity === "cafe" ? <Coffee className="h-4 w-4" /> : r.amenity === "bar" ? <Beer className="h-4 w-4" /> : <Utensils className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-950)" }}>{r.name}</div>
+                            {r.cuisine.length > 0 && <div style={{ fontSize: 12, color: "var(--ink-700)", marginTop: 2 }}>{r.cuisine.join(", ")}</div>}
+                            <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 4, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                              <span>{r.distanceMeters < 1000 ? `${r.distanceMeters} m` : `${(r.distanceMeters / 1000).toFixed(1)} km`} · {r.accessibility === "walkable" ? "à pied" : "à proximité"}</span>
+                              {r.isOpenNow !== null && <span style={{ color: r.isOpenNow ? "var(--terrain-700)" : "oklch(0.55 0.15 25)" }}>{r.isOpenNow ? "Ouvert" : "Fermé"}</span>}
+                            </div>
+                          </div>
+                          {r.website && <a href={r.website} target="_blank" rel="noopener noreferrer" style={{ width: 32, height: 32, border: "1px solid var(--ink-300)", borderRadius: 6, display: "grid", placeItems: "center", color: "var(--ink-950)", textDecoration: "none" }}><ExternalLink className="h-3.5 w-3.5" /></a>}
+                        </article>
+                      ))}
+                      {!restaurantsLoading && !restaurantsError && (restaurantsRes?.data?.restaurants ?? []).length === 0 && activeAmenTab === "resto" && <p style={{ fontSize: 13, color: "var(--ink-500)" }}>Aucun restaurant trouvé à proximité.</p>}
+                    </div>
+                  )}
+
+                  {/* Hébergement */}
+                  {(activeAmenTab === "all" || activeAmenTab === "hotel") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {(accommodationRes?.data?.accommodations ?? []).slice(0, accommodationLimit).map((a) => (
+                        <article key={a.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr auto", gap: 14, alignItems: "center", padding: "12px 14px", border: "1px solid var(--ink-200)", borderRadius: 8, background: "white" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 6, background: "oklch(0.96 0.04 290)", color: "oklch(0.50 0.15 290)", display: "grid", placeItems: "center" }}><Home className="h-4 w-4" /></div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-950)" }}>{a.name}</div>
+                            <div style={{ fontSize: 12, color: "var(--ink-700)", marginTop: 2 }}>{a.category === "camping" ? "Camping" : a.category === "hotel" ? "Hôtel" : "Chambre d'hôtes"}{a.stars ? ` · ${"★".repeat(a.stars)}` : ""}{a.rooms ? ` · ${a.rooms} ch.` : ""}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 4 }}>{a.distanceMeters < 1000 ? `${a.distanceMeters} m` : `${(a.distanceMeters / 1000).toFixed(1)} km`}</div>
+                          </div>
+                          {a.website && <a href={a.website} target="_blank" rel="noopener noreferrer" style={{ width: 32, height: 32, border: "1px solid var(--ink-300)", borderRadius: 6, display: "grid", placeItems: "center", color: "var(--ink-950)", textDecoration: "none" }}><ExternalLink className="h-3.5 w-3.5" /></a>}
+                        </article>
+                      ))}
+                      {!accommodationLoading && !accommodationError && (accommodationRes?.data?.accommodations ?? []).length === 0 && activeAmenTab === "hotel" && <p style={{ fontSize: 13, color: "var(--ink-500)" }}>Aucun hébergement trouvé à proximité.</p>}
+                    </div>
+                  )}
+
+                  {/* Transport */}
+                  {(activeAmenTab === "all" || activeAmenTab === "transport") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {(transportRes?.data?.transports ?? []).filter((t) => t.type !== "bike").slice(0, transportLimit).map((t) => (
+                        <article key={t.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr", gap: 14, alignItems: "center", padding: "12px 14px", border: "1px solid var(--ink-200)", borderRadius: 8, background: "white" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--horizon-100)", color: "var(--horizon-700)", display: "grid", placeItems: "center" }}>{t.type === "train" ? <Train className="h-4 w-4" /> : <Bus className="h-4 w-4" />}</div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-950)" }}>{t.name}</div>
+                            {t.operator && <div style={{ fontSize: 12, color: "var(--ink-700)", marginTop: 2 }}>{t.operator}{t.network ? ` · ${t.network}` : ""}</div>}
+                            <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 4 }}>{t.distanceMeters < 1000 ? `${t.distanceMeters} m` : `${(t.distanceMeters / 1000).toFixed(1)} km`}</div>
+                          </div>
+                        </article>
+                      ))}
+                      {!transportLoading && !transportError && (transportRes?.data?.transports ?? []).filter((t) => t.type !== "bike").length === 0 && activeAmenTab === "transport" && <p style={{ fontSize: 13, color: "var(--ink-500)" }}>Aucun transport trouvé à proximité.</p>}
+                    </div>
+                  )}
+
+                  {/* Vélos */}
+                  {(activeAmenTab === "all" || activeAmenTab === "bike") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {(transportRes?.data?.transports ?? []).filter((t) => t.type === "bike").slice(0, bikeLimit).map((t) => (
+                        <article key={t.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr", gap: 14, alignItems: "center", padding: "12px 14px", border: "1px solid var(--ink-200)", borderRadius: 8, background: "white" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--terrain-100)", color: "var(--terrain-700)", display: "grid", placeItems: "center" }}><Bike className="h-4 w-4" /></div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-950)" }}>{t.name}</div>
+                            {t.operator && <div style={{ fontSize: 12, color: "var(--ink-700)", marginTop: 2 }}>{t.operator}</div>}
+                            <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 4 }}>{t.distanceMeters < 1000 ? `${t.distanceMeters} m` : `${(t.distanceMeters / 1000).toFixed(1)} km`}</div>
+                          </div>
+                        </article>
+                      ))}
+                      {!transportLoading && (transportRes?.data?.transports ?? []).filter((t) => t.type === "bike").length === 0 && activeAmenTab === "bike" && <p style={{ fontSize: 13, color: "var(--ink-500)" }}>Aucune station vélo trouvée à proximité.</p>}
+                    </div>
+                  )}
+
+                  {/* Aérodromes voisins */}
+                  {activeAmenTab === "all" && nearbyAerodromes.length > 0 && (
+                    <div style={{ marginTop: 24 }}>
+                      <div style={asideH}>Aérodromes voisins</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {nearbyAerodromes.map((n) => (
+                          <Link key={n.id} href={`/aerodrome/${n.id}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", border: "1px solid var(--ink-200)", borderRadius: 8, background: "white", textDecoration: "none", color: "inherit" }}>
+                            <span style={{ fontSize: 13, fontWeight: 500 }}>{n.icaoCode ? `${n.icaoCode} — ` : ""}{n.name}{(n.fuels ?? []).some((f) => f.available) ? " ⛽" : ""}</span>
+                            <span style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ink-500)" }}>{fmtDist(n.distanceKm)}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* TAB: MÉTÉO */}
+            {activeTab === "meteo" && (
+              <div>
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={sectionMark}><Cloud className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Météo aéronautique</h2>
+                  </div>
+                  <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
+                </section>
+              </div>
+            )}
+
+            {/* TAB: AVIS */}
+            {activeTab === "avis" && (
+              <div>
+                {events.length > 0 && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><CalendarDays className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Événements</h2>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {events.map((ev) => (
+                        <div key={ev.id} style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 8, padding: 16 }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-950)", marginBottom: 4 }}>{ev.title}</div>
+                              <div style={{ fontSize: 12, color: "var(--ink-500)" }}>{EVENT_TYPE_LABELS[ev.type] ?? ev.type} · {new Date(ev.startDate).toLocaleDateString("fr-FR")}{ev.endDate ? ` → ${new Date(ev.endDate).toLocaleDateString("fr-FR")}` : ""}</div>
+                              {ev.description && <p style={{ fontSize: 13, color: "var(--ink-700)", margin: "8px 0 0", lineHeight: 1.5 }}>{ev.description}</p>}
+                            </div>
+                            {user?.id === ev.user?.id && <button type="button" onClick={() => handleDeleteEvent(ev.id)} style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--ink-500)", padding: 4 }}><Trash2 className="h-4 w-4" /></button>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={sectionMark}><MessageSquare className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Avis & retours pilotes</h2>
+                  </div>
+                  <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                    {commentActionAlert && <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 6, background: commentActionAlert.type === "success" ? "oklch(0.96 0.05 130)" : "oklch(0.96 0.05 25)", border: `1px solid ${commentActionAlert.type === "success" ? "oklch(0.85 0.07 130)" : "oklch(0.85 0.07 25)"}`, color: commentActionAlert.type === "success" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)", fontSize: 13 }}>{commentActionAlert.message}</div>}
+                    {comments.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "var(--ink-500)", textAlign: "center", padding: "24px 0" }}>Aucun commentaire. Soyez le premier à partager votre expérience !</p>
+                    ) : (
+                      <div style={{ marginBottom: 24 }}>{comments.map((comment) => renderCommentCard(comment))}</div>
+                    )}
+                    {user ? (
+                      <form onSubmit={handleComment} style={{ borderTop: "1px solid var(--ink-200)", paddingTop: 16 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Laisser un avis</p>
+                        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Partagez votre expérience..." maxLength={2000} rows={3} style={{ width: "100%", borderRadius: 6, border: "1px solid var(--ink-200)", background: "var(--paper-50)", padding: "10px 12px", fontSize: 14, color: "var(--ink-950)", resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                          <button type="submit" disabled={!commentText.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: !commentText.trim() ? 0.5 : 1 }}><Send className="h-4 w-4" /> Publier</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div style={{ borderTop: "1px solid var(--ink-200)", paddingTop: 16, textAlign: "center" }}>
+                        <p style={{ fontSize: 13, color: "var(--ink-700)" }}><Link href="/login" style={{ color: "var(--horizon-700)", fontWeight: 600 }}>Connectez-vous</Link> pour laisser un avis.</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {user && (
+                  <section style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={sectionMark}><CalendarDays className="h-3.5 w-3.5" /></div>
+                      <h2 style={sectionH2}>Proposer un événement</h2>
+                    </div>
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                      {eventAlert && <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 6, background: eventAlert.type === "success" ? "oklch(0.96 0.05 130)" : "oklch(0.96 0.05 25)", border: `1px solid ${eventAlert.type === "success" ? "oklch(0.85 0.07 130)" : "oklch(0.85 0.07 25)"}`, color: eventAlert.type === "success" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)", fontSize: 13 }}>{eventAlert.message}</div>}
+                      {eventForm === null ? (
+                        <button type="button" onClick={() => setEventForm({ type: "OTHER", title: "", description: "", startDate: "", endDate: "" })} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer" }}><CalendarDays className="h-4 w-4" /> Signaler un événement</button>
+                      ) : (
+                        <form onSubmit={handleSubmitEvent} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div><label style={labelS}>Type d&apos;événement</label><select value={eventForm.type} onChange={(e) => setEventForm({ ...eventForm, type: e.target.value as EventItem["type"] })} style={selectS}>{EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_TYPE_LABELS[t] ?? t}</option>)}</select></div>
+                          <div><label style={labelS}>Titre *</label><input type="text" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} required maxLength={200} style={inputS} /></div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                            <div><label style={labelS}>Date début *</label><input type="date" value={eventForm.startDate} onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })} required style={inputS} /></div>
+                            <div><label style={labelS}>Date fin</label><input type="date" value={eventForm.endDate} onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })} style={inputS} /></div>
+                          </div>
+                          <div><label style={labelS}>Description</label><textarea value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} rows={3} maxLength={1000} style={{ ...inputS, resize: "vertical" }} /></div>
+                          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                            <button type="button" onClick={() => setEventForm(null)} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Annuler</button>
+                            <button type="submit" disabled={!eventForm.title.trim() || !eventForm.startDate} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!eventForm.title.trim() || !eventForm.startDate) ? 0.5 : 1 }}>Soumettre</button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={sectionMark}><PencilLine className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Contributions communautaires</h2>
+                  </div>
+                  <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+                    {correctionActionAlert && <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 6, background: correctionActionAlert.type === "success" ? "oklch(0.96 0.05 130)" : "oklch(0.96 0.05 25)", border: `1px solid ${correctionActionAlert.type === "success" ? "oklch(0.85 0.07 130)" : "oklch(0.85 0.07 25)"}`, color: correctionActionAlert.type === "success" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)", fontSize: 13 }}>{correctionActionAlert.message}</div>}
+                    {communityCorrections.length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        {communityCorrections.map((c) => (
+                          <div key={c.id} style={{ borderBottom: "1px solid var(--ink-200)", padding: "12px 0" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-700)", textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: "var(--f-mono)" }}>{formatCommunityFieldLabel(c.field)}</span>
+                              <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{new Date(c.createdAt).toLocaleDateString("fr-FR")}</span>
+                            </div>
+                            <p style={{ fontSize: 13, color: "var(--ink-800)", margin: "4px 0" }}>{c.proposedValue}</p>
+                            {c.reason && <p style={{ fontSize: 12, color: "var(--ink-500)", margin: "4px 0 0" }}>Motif : {c.reason}</p>}
+                            {user && user.id !== c.user.id && <button type="button" onClick={() => handleReportCorrection(c.id)} style={{ marginTop: 8, background: "transparent", border: 0, cursor: "pointer", fontSize: 12, color: "var(--ink-500)", padding: 0 }}>Signaler</button>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <form onSubmit={handleSubmitCorrection} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>Proposer une correction</p>
+                      <div><label style={labelS}>Champ à corriger</label><select value={correctionField} onChange={(e) => setCorrectionField(e.target.value as typeof correctionField)} style={selectS}>{COMMUNITY_FIELD_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
+                      {correctionField === "other" && <div><label style={labelS}>Précisez le champ</label><Input value={customCorrectionField} onChange={(e) => setCustomCorrectionField(e.target.value)} maxLength={100} /></div>}
+                      <div><label style={labelS}>Valeur proposée</label><textarea value={correctionValue} onChange={(e) => setCorrectionValue(e.target.value)} rows={3} maxLength={2000} style={{ ...inputS, resize: "vertical" }} /></div>
+                      <div><label style={labelS}>Motif (optionnel)</label><Input value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} maxLength={500} /></div>
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="submit" disabled={!correctionValue.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: !correctionValue.trim() ? 0.5 : 1 }}><Send className="h-4 w-4" /> Envoyer</button></div>
+                    </form>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* TAB: PHOTOS */}
+            {activeTab === "photos" && (
+              <div>
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={sectionMark}><ImagePlus className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Photos</h2>
+                  </div>
+                  <PhotoUpload aerodromeId={ad.id} existingPhotos={photos} currentUserId={user?.id} canUpload={!!user} onUploadSuccess={(photo) => setPhotos((prev) => [photo, ...prev])} onDeleteSuccess={(photoId) => setPhotos((prev) => prev.filter((p) => p.id !== photoId))} />
+                </section>
+              </div>
+            )}
+
+          </main>
+
+          {/* ── ASIDE ── */}
+          <aside style={{ position: "sticky", top: 116, display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Actions */}
+            <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 18 }}>
+              <div style={asideH}><CheckCircle2 className="h-3 w-3" /> Mes actions</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: "none" }}><Send className="h-4 w-4" /> Planifier un vol</Link>
+                {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Ajouter à l'Aérodex"}</button>}
+                {user && <button type="button" onClick={() => handleVisit("FAVORITE")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><Star className="h-4 w-4" style={{ fill: isFavorite ? "var(--brass-500)" : "none", color: isFavorite ? "var(--brass-500)" : "var(--ink-950)" }} /> {isFavorite ? "Favori ✓" : "Ajouter aux favoris"}</button>}
+                {ad.vacLink && <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><FileText className="h-4 w-4" /> Voir la VAC officielle</a>}
+
+                {user && userLists.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Mes listes</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {userLists.map((list) => {
+                        const active = isInList(list);
+                        return (
+                          <button key={list.id} type="button" onClick={() => { if (active) removeFromListMutation.mutate(list.id); else addToListMutation.mutate(list.id); }} disabled={addToListMutation.isPending || removeFromListMutation.isPending} style={{ height: 28, padding: "0 12px", borderRadius: 999, border: active ? "none" : "1px solid var(--ink-300)", background: active ? "var(--ink-950)" : "white", color: active ? "white" : "var(--ink-700)", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, opacity: (addToListMutation.isPending || removeFromListMutation.isPending) ? 0.6 : 1 }}>
+                            {active && <Check className="h-3 w-3" />}{list.name}
+                          </button>
+                        );
+                      })}
+                      <button type="button" onClick={() => { setNewListName(""); setNewListDialogOpen(true); }} style={{ height: 28, padding: "0 12px", borderRadius: 999, border: "1px solid var(--ink-200)", background: "transparent", color: "var(--ink-500)", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>+ Nouvelle liste</button>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 4 }}>
+                  <button type="button" onClick={() => { if (navigator.share) navigator.share({ title: ad.name, url: window.location.href }).catch(() => {}); else navigator.clipboard.writeText(window.location.href).catch(() => {}); }} style={{ height: 36, background: "white", border: "1px solid var(--ink-300)", borderRadius: 8, cursor: "pointer", color: "var(--ink-950)", display: "inline-flex", alignItems: "center", justifyContent: "center" }} aria-label="Partager"><Share2 className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => window.print()} style={{ height: 36, background: "white", border: "1px solid var(--ink-300)", borderRadius: 8, cursor: "pointer", color: "var(--ink-950)", display: "inline-flex", alignItems: "center", justifyContent: "center" }} aria-label="Imprimer"><Printer className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={async () => { const r = window.prompt("Pourquoi signalez-vous cette fiche ?"); if (!r?.trim()) return; try { await apiClient.post(`/aerodromes/${id}/reports`, { targetType: "aerodrome", targetId: id, reason: r.trim() }); } catch { /* ignore */ } }} style={{ height: 36, background: "white", border: "1px solid var(--ink-300)", borderRadius: 8, cursor: "pointer", color: "var(--ink-950)", display: "inline-flex", alignItems: "center", justifyContent: "center" }} aria-label="Signaler"><Flag className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            </div>
+
+            {/* Weather mini */}
+            {user && (
+              <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ padding: "18px 18px 0", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--ink-500)", display: "flex", alignItems: "center", gap: 6 }}><Cloud className="h-3 w-3" /> Météo</div>
+                {weatherLoading ? (
+                  <div style={{ padding: 18 }}><p style={{ fontSize: 12, color: "var(--ink-500)", margin: 0 }}>Chargement…</p></div>
+                ) : weatherRes?.data?.metar ? (
+                  <>
+                    <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "auto 1fr", gap: 14, alignItems: "center", padding: "16px 18px", background: "linear-gradient(180deg, var(--horizon-100) 0%, var(--horizon-50) 100%)" }}>
+                      <div style={{ width: 48, height: 48, background: "white", borderRadius: 8, display: "grid", placeItems: "center", color: "var(--horizon-700)" }}><Cloud className="h-6 w-6" /></div>
+                      <div>
+                        <div style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: 28, lineHeight: 1, color: "var(--ink-950)", letterSpacing: "-0.02em" }}>{weatherRes.data.metar.temperature_c != null ? `${weatherRes.data.metar.temperature_c}°` : "—"}</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-700)", marginTop: 2 }}>{weatherRes.data.metar.flight_category ?? ""}{weatherRes.data.metar.conditions.length > 0 ? ` · ${weatherRes.data.metar.conditions.map((c) => c.text || c.code).join(", ")}` : ""}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid var(--ink-200)" }}>
+                      {weatherRes.data.metar.wind && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--ink-700)", display: "flex", alignItems: "center", gap: 6 }}><Wind className="h-3 w-3" style={{ color: "var(--ink-500)" }} /><strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{weatherRes.data.metar.wind.degrees != null ? `${weatherRes.data.metar.wind.degrees}°` : "VRB"}/{weatherRes.data.metar.wind.speed_kts}kt</strong></div>}
+                      {weatherRes.data.metar.pressure_hpa && <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--ink-700)", display: "flex", alignItems: "center", gap: 6, borderLeft: "1px solid var(--ink-200)" }}><Gauge className="h-3 w-3" style={{ color: "var(--ink-500)" }} />QNH <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{weatherRes.data.metar.pressure_hpa}</strong></div>}
+                    </div>
+                    {weatherRes.data.metar.raw && <div style={{ padding: "12px 18px", background: "var(--ink-950)", color: "oklch(0.85 0.05 130)", fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1.6, borderTop: "1px solid var(--ink-200)" }}><span style={{ color: "var(--ink-500)", marginRight: 6 }}>METAR</span>{weatherRes.data.metar.raw.split(" ").slice(2).join(" ")}</div>}
+                    <div style={{ padding: "10px 18px", borderTop: "1px solid var(--ink-200)" }}><button type="button" onClick={() => setActiveTab("meteo")} style={{ fontSize: 12, color: "var(--horizon-700)", background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>Voir la météo complète →</button></div>
+                  </>
+                ) : (
+                  <div style={{ padding: 18 }}><button type="button" onClick={() => setActiveTab("meteo")} style={{ fontSize: 12, color: "var(--horizon-700)", background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>Voir la météo →</button></div>
+                )}
+              </div>
+            )}
+
+            {/* Liens officiels */}
+            {(ad.websiteUrl || ad.aipLink || ad.vacLink) && (
+              <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 18 }}>
+                <div style={asideH}><ExternalLink className="h-3 w-3" /> Liens officiels</div>
+                <div>
+                  {ad.websiteUrl && (
+                    <a href={ad.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                      <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
+                      <div><div style={contactLabel}>Site officiel</div><div style={contactValue}>{(() => { try { return new URL(ad.websiteUrl).hostname; } catch { return ad.websiteUrl; } })()}</div></div>
+                      <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
+                    </a>
+                  )}
+                  {ad.aipLink && (
+                    <a href={ad.aipLink} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: ad.vacLink ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                      <FileText className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
+                      <div><div style={contactLabel}>AIP</div><div style={contactValue}>Documentation officielle SIA</div></div>
+                      <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
+                    </a>
+                  )}
+                  {ad.vacLink && (
+                    <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", textDecoration: "none" }}>
+                      <Download className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
+                      <div><div style={contactLabel}>VAC</div><div style={contactValue}>Vue en approche et circuits</div></div>
+                      <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </aside>
+        </div>
+
+        {/* FOOTER NOTICE */}
+        <div style={{ marginTop: 28, padding: "12px 18px", background: "oklch(0.97 0.04 85)", border: "1px solid oklch(0.90 0.05 85)", borderRadius: 8, fontSize: 12, color: "var(--ink-700)", display: "flex", alignItems: "center", gap: 10 }}>
+          <Info className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--ink-500)" }} />
+          <span>Les informations affichées sont indicatives et ne sauraient se substituer à la VAC en vigueur. Consultez les NOTAMs avant chaque vol.{ad.source && ` · Source : ${ad.source}`}</span>
+        </div>
       </div>
 
+      {/* MOBILE BOTTOM BAR */}
+      <div className="fixed bottom-0 left-0 right-0 flex gap-2 border-t border-[var(--ink-200)] bg-[rgba(253,252,249,.96)] p-2.5 backdrop-blur-md sm:hidden" style={{ zIndex: 30 }}>
+        <Link href={`/planner?to=${ad.id}`} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--ink-950)] px-4 py-2.5 text-[13px] font-medium text-white"><Send className="h-4 w-4" /> Planifier</Link>
+        {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--ink-300)] bg-white px-4 py-2.5 text-[13px] font-medium text-[var(--ink-950)] disabled:opacity-60"><CheckCircle2 className="h-4 w-4" /> Aérodex</button>}
+        <button type="button" onClick={() => { if (navigator.share) navigator.share({ title: ad.name, url: window.location.href }).catch(() => {}); else navigator.clipboard.writeText(window.location.href).catch(() => {}); }} className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--ink-300)] bg-white text-[var(--ink-950)]"><Share2 className="h-4 w-4" /></button>
       </div>
 
-      {/* MOBILE bottom action bar */}
-      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-[var(--ink-200)] bg-[rgba(253,252,249,.96)] px-4 py-2.5 backdrop-blur lg:hidden">
-        <Link
-          href={`/planner?to=${ad.id}`}
-          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white"
-        >
-          <Send className="h-4 w-4" strokeWidth={1.6} />
-          Planifier
-        </Link>
-        {user && (
-          <button
-            type="button"
-            onClick={() => handleVisit("VISITED")}
-            disabled={isVisitUpdating}
-            className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border px-4 text-[13px] font-medium disabled:opacity-60 ${
-              isVisited
-                ? "border-[oklch(0.85_0.06_75)] bg-[var(--brass-100)] text-[var(--brass-700)]"
-                : "border-[var(--ink-300)] bg-white text-[var(--ink-950)]"
-            }`}
-          >
-            <CheckCircle2 className="h-4 w-4" strokeWidth={1.6} />
-            Aérodex
-          </button>
-        )}
-      </div>
-
-      {/* New list dialog */}
+      {/* NEW LIST DIALOG */}
       {newListDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          onClick={() => setNewListDialogOpen(false)}
-        >
-          <div
-            className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="m-0 font-[var(--f-serif)] text-[20px] font-medium text-[var(--ink-950)]">
-              Nouvelle liste
-            </h2>
-            <p className="mt-1 text-[13px] text-[var(--ink-700)]">
-              Créez une liste pour organiser vos aérodromes favoris.
-            </p>
-            <label className="mt-4 block font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
-              Nom
-            </label>
-            <input
-              type="text"
-              autoFocus
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const n = newListName.trim();
-                  if (!n) return;
-                  createListMutation.mutate(n);
-                  setNewListDialogOpen(false);
-                }
-                if (e.key === "Escape") setNewListDialogOpen(false);
-              }}
-              placeholder="Ex. Week-ends d'été"
-              className="mt-1.5 h-11 w-full rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 text-[14px] text-[var(--ink-950)] placeholder:text-[var(--ink-500)] focus:border-[var(--horizon-700)] focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-[var(--horizon-100)]"
-            />
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setNewListDialogOpen(false)}
-                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const n = newListName.trim();
-                  if (!n) return;
-                  createListMutation.mutate(n);
-                  setNewListDialogOpen(false);
-                }}
-                disabled={!newListName.trim() || createListMutation.isPending}
-                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white hover:bg-[oklch(0.10_0.02_250)] disabled:opacity-60"
-              >
-                Créer
-              </button>
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.4)" }} onClick={() => setNewListDialogOpen(false)}>
+          <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 24, width: 400, maxWidth: "calc(100vw - 32px)", boxShadow: "0 14px 36px -12px rgba(20,30,50,.18)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: 20, margin: "0 0 16px" }}>Créer une nouvelle liste</h3>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-700)", display: "block", marginBottom: 6 }}>Nom de la liste</label>
+            <input type="text" value={newListName} onChange={(e) => setNewListName(e.target.value)} placeholder="Ex. Escales Bretagne..." maxLength={100} autoFocus style={{ width: "100%", borderRadius: 6, border: "1px solid var(--ink-200)", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", background: "var(--paper-50)", color: "var(--ink-950)", outline: "none", boxSizing: "border-box" }} />
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" onClick={() => setNewListDialogOpen(false)} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Annuler</button>
+              <button type="button" onClick={() => { const n = newListName.trim(); if (!n) return; createListMutation.mutate(n); setNewListDialogOpen(false); }} disabled={!newListName.trim() || createListMutation.isPending} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: (!newListName.trim() || createListMutation.isPending) ? 0.6 : 1 }}>Créer</button>
             </div>
           </div>
         </div>
