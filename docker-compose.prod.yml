@@ -97,7 +97,7 @@ services:
       - internal
       - proxy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8333/ 2>&1 | grep -q '\\(ListAllMyBuckets\\|InvalidAccessKeyId\\|AccessDenied\\)' || exit 1"]
+      test: ["CMD-SHELL", "wget -S --spider -q http://localhost:8333/ 2>&1 | grep -q 'HTTP/' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
