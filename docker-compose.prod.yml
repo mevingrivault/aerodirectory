@@ -137,9 +137,9 @@ services:
       clamav-updater:
         condition: service_started
       seaweedfs-filer:
-        condition: service_started
+        condition: service_healthy
       seaweedfs-s3:
-        condition: service_started
+        condition: service_healthy
     environment:
       NODE_ENV: production
       TZ: ${SYNC_TIMEZONE:-Europe/Paris}
@@ -214,9 +214,9 @@ services:
       clamav-updater:
         condition: service_started
       seaweedfs-filer:
-        condition: service_started
+        condition: service_healthy
       seaweedfs-s3:
-        condition: service_started
+        condition: service_healthy
     environment:
       NODE_ENV: production
       TZ: ${SYNC_TIMEZONE:-Europe/Paris}
