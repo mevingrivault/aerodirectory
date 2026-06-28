@@ -38,13 +38,20 @@ services:
       - seaweedfs_master:/data
     networks:
       - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9333/cluster/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
     restart: unless-stopped
     command: volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -port=8080 -dir=/data
     depends_on:
-      - seaweedfs-master
+      seaweedfs-master:
+        condition: service_healthy
     volumes:
       - seaweedfs_volume:/data
     networks:
@@ -55,12 +62,20 @@ services:
     restart: unless-stopped
     command: filer -master=seaweedfs-master:9333 -ip.bind=0.0.0.0
     depends_on:
-      - seaweedfs-master
-      - seaweedfs-volume
+      seaweedfs-master:
+        condition: service_healthy
+      seaweedfs-volume:
+        condition: service_started
     volumes:
       - seaweedfs_filer:/data
     networks:
       - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   seaweedfs-s3:
     image: chrislusf/seaweedfs:latest
@@ -76,10 +91,17 @@ services:
         printf '{"identities":[{"name":"app","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write"]}]}' "$S3_ACCESS_KEY" "$S3_SECRET_KEY" > /etc/seaweedfs/s3.json
         exec weed s3 -filer=seaweedfs-filer:8888 -ip.bind=0.0.0.0 -port=8333 -config=/etc/seaweedfs/s3.json
     depends_on:
-      - seaweedfs-filer
+      seaweedfs-filer:
+        condition: service_healthy
     networks:
       - internal
       - proxy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8333/ 2>&1 | grep -q '\\(ListAllMyBuckets\\|InvalidAccessKeyId\\|AccessDenied\\)' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   clamav-updater:
     image: clamav/clamav:stable

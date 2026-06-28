@@ -91,6 +91,15 @@ const AltchaWidget = forwardRef<AltchaHandle, AltchaWidgetProps>(
       if (mode !== "fallback" || typeof window === "undefined") return;
       if (customElements.get("altcha-widget")) return;
 
+      // Load the stylesheet for the external-CSS build of altcha.
+      if (!document.getElementById("altcha-css")) {
+        const link = document.createElement("link");
+        link.id = "altcha-css";
+        link.rel = "stylesheet";
+        link.href = "/altcha.css";
+        document.head.appendChild(link);
+      }
+
       const script = document.createElement("script");
       script.src = "/altcha.js";
       script.async = true;

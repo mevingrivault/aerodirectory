@@ -58,6 +58,14 @@ if (source) {
   fs.mkdirSync(publicDir, { recursive: true });
   fs.copyFileSync(source, destination);
   console.log(`Copied ALTCHA widget from ${path.relative(appDir, source)}.`);
+
+  // The external/ variant ships CSS separately — copy it so the widget is styled.
+  const cssSource = path.join(path.dirname(source), "altcha.css");
+  const cssDest = path.join(publicDir, "altcha.css");
+  if (fs.existsSync(cssSource)) {
+    fs.copyFileSync(cssSource, cssDest);
+    console.log(`Copied ALTCHA CSS from ${path.relative(appDir, cssSource)}.`);
+  }
 } else if (fs.existsSync(destination)) {
   console.warn("ALTCHA package asset was not found; keeping existing public/altcha.js.");
 } else {
