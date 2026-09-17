@@ -93,9 +93,11 @@ services:
     depends_on:
       seaweedfs-filer:
         condition: service_healthy
+    # Internal only: every stored object is served through an API endpoint
+    # that checks access first, so the object store itself never needs to be
+    # reachable from the proxy network.
     networks:
       - internal
-      - proxy
     healthcheck:
       test: ["CMD-SHELL", "wget -S --spider -q http://localhost:8333/ 2>&1 | grep -q 'HTTP/' || exit 1"]
       interval: 10s
@@ -162,7 +164,6 @@ services:
       S3_BUCKET: ${S3_BUCKET:-navventura}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
       PHOTO_MAX_UPLOAD_BYTES: ${PHOTO_MAX_UPLOAD_BYTES:-5242880}
       PHOTO_MAX_WIDTH: ${PHOTO_MAX_WIDTH:-4096}
       PHOTO_MAX_HEIGHT: ${PHOTO_MAX_HEIGHT:-4096}
@@ -239,7 +240,6 @@ services:
       S3_BUCKET: ${S3_BUCKET:-navventura}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
       PHOTO_MAX_UPLOAD_BYTES: ${PHOTO_MAX_UPLOAD_BYTES:-5242880}
       PHOTO_MAX_WIDTH: ${PHOTO_MAX_WIDTH:-4096}
       PHOTO_MAX_HEIGHT: ${PHOTO_MAX_HEIGHT:-4096}
