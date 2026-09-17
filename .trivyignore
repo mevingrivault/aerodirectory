@@ -37,3 +37,14 @@ CVE-2026-22184
 
 # undici@6.26.0 — DoS via unbounded WebSocket memory growth (npm bundled only, overridden to 8.5.0 in pnpm)
 CVE-2026-12151
+
+# brace-expansion@5.0.7 — DoS via expand() memory exhaustion, and the bypass of
+# its mitigation (npm bundled only; workspace resolves 5.0.12 via pnpm overrides)
+CVE-2026-14257
+CVE-2026-69152
+
+# ip-address@10.2.0 — SSRF via inconsistent IP parsing (npm bundled only)
+CVE-2026-69192
+
+# tar@7.5.19 — DoS via crafted long-path archive (npm bundled only)
+CVE-2026-73566
