@@ -256,14 +256,14 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
       // @ts-ignore
       import("maplibre-gl/dist/maplibre-gl.css");
 
-      const map = new ml.default.Map({
+      const map = new ml.Map({
         container: containerRef.current,
         style: PLANNER_MAP_STYLES.osm as any,
         center: [2.3, 46.6],
         zoom: 6,
       });
 
-      map.addControl(new ml.default.NavigationControl(), "top-right");
+      map.addControl(new ml.NavigationControl(), "top-right");
       map.on("load", () => setMapLoaded(true));
       mapRef.current = map;
     });
@@ -289,11 +289,11 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
         const el = document.createElement("div");
         el.style.cssText =
           "width:16px;height:16px;border-radius:50%;background:var(--horizon-700);border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4)";
-        const popup = new ml.default.Popup({ offset: 10, closeButton: false }).setHTML(
+        const popup = new ml.Popup({ offset: 10, closeButton: false }).setHTML(
           `<div style="font-size:12px;font-weight:600">${departure.name}</div>
            <div style="font-size:11px;color:var(--ink-500)">Départ</div>`,
         );
-        const marker = new ml.default.Marker({ element: el })
+        const marker = new ml.Marker({ element: el })
           .setLngLat([departure.longitude, departure.latitude])
           .setPopup(popup)
           .addTo(mapRef.current!);
@@ -306,7 +306,7 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
         el.style.cssText =
           "width:10px;height:10px;border-radius:50%;background:var(--terrain-500);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:pointer";
 
-        const popup = new ml.default.Popup({ offset: 8, closeButton: false }).setHTML(
+        const popup = new ml.Popup({ offset: 8, closeButton: false }).setHTML(
           `<div style="font-size:12px">
             <div style="font-weight:600">${r.aerodrome.name}</div>
             <div style="color:var(--ink-500);font-size:11px">${r.aerodrome.icaoCode ?? ""}${r.aerodrome.city ? ` · ${r.aerodrome.city}` : ""}</div>
@@ -318,7 +318,7 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
            </div>`,
         );
 
-        const marker = new ml.default.Marker({ element: el })
+        const marker = new ml.Marker({ element: el })
           .setLngLat([r.aerodrome.longitude, r.aerodrome.latitude])
           .setPopup(popup)
           .addTo(mapRef.current!);

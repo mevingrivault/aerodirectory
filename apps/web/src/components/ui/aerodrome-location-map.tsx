@@ -113,16 +113,16 @@ export function AerodromeLocationMap({
 
       if (cancelled || !mapContainerRef.current) return;
 
-      const map = new maplibregl.default.Map({
+      const map = new maplibregl.Map({
         container: mapContainerRef.current,
         style: buildRasterStyle(mapStyle) as any,
         center,
         zoom: 14,
       });
 
-      map.addControl(new maplibregl.default.NavigationControl(), "top-right");
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-      popupRef.current = new maplibregl.default.Popup({
+      popupRef.current = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
         offset: 18,
@@ -133,7 +133,7 @@ export function AerodromeLocationMap({
           }</div>`,
       );
 
-      markerRef.current = new maplibregl.default.Marker({
+      markerRef.current = new maplibregl.Marker({
         color: "#2563eb",
         scale: 1.1,
       })

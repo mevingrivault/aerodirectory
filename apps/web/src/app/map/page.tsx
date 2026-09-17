@@ -7,6 +7,11 @@ import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
+// maplibre-gl 6 no longer declares GeoJSON or maplibregl as global namespaces,
+// so both are imported as types here. The library itself is still loaded
+// dynamically at runtime.
+import type * as GeoJSON from "geojson";
+import type * as maplibregl from "maplibre-gl";
 
 interface AirspaceFeature {
   id: string;
@@ -266,16 +271,16 @@ function MapPageInner() {
       // @ts-ignore
       import("maplibre-gl/dist/maplibre-gl.css");
 
-      const map = new maplibregl.default.Map({
+      const map = new maplibregl.Map({
         container: mapContainer.current,
         style: MAP_STYLES.osm,
         center: [2.3, 46.6],
         zoom: 6,
       });
 
-      map.addControl(new maplibregl.default.NavigationControl(), "top-right");
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-      popupRef.current = new maplibregl.default.Popup({
+      popupRef.current = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
         offset: 8,

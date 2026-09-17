@@ -38,14 +38,22 @@
       "defu": ">=6.1.5",
       "picomatch": ">=4.0.4",
       "effect": ">=3.20.0",
-      "brace-expansion": ">=1.1.13",
+      "brace-expansion": ">=5.0.6",
       "ajv": ">=8.18.0",
-      "fastify": "5.8.5",
+      "fastify": "5.12.1",
       "@types/jsonwebtoken": "9.0.9",
-      "fast-uri": ">=3.1.2",
+      "fast-uri": ">=3.1.3",
       "fast-xml-builder": ">=1.1.7",
-      "undici": "8.5.0",
-      "hono": "4.12.25"
+      "undici": "8.9.0",
+      "hono": "4.12.27",
+      "browserslist": ">=4.28.7",
+      "find-my-way": ">=9.7.0",
+      "js-yaml": ">=4.2.0",
+      "nanoid": ">=3.3.12",
+      "postcss": ">=8.5.18",
+      "sharp": ">=0.35.4",
+      "deepmerge-ts": ">=8.0.0",
+      "mysql2": ">=3.22.0"
     },
     "patchedDependencies": {
       "altcha-lib@2.0.2": "patches/altcha-lib@2.0.2.patch",
@@ -53,6 +61,6 @@
     }
   },
   "dependencies": {
-    "undici": "8.5.0"
+    "undici": "8.9.0"
   }
 }
