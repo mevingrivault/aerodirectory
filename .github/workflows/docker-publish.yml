@@ -75,6 +75,9 @@ jobs:
       - name: Typecheck API
         run: pnpm --filter @aerodirectory/api lint
 
+      - name: Test API
+        run: pnpm --filter @aerodirectory/api test
+
       - name: Build API
         run: pnpm --filter @aerodirectory/api build
 
