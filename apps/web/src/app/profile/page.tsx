@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
+import { resolveMediaUrl } from "@/lib/public-env";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -405,7 +406,7 @@ export default function ProfilePage() {
               {user.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={user.avatarUrl}
+                  src={resolveMediaUrl(user.avatarUrl) ?? undefined}
                   alt={`Avatar de ${user.displayName ?? "Membre"}`}
                   className="h-24 w-24 rounded-full border object-cover"
                 />

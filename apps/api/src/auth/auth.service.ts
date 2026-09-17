@@ -880,7 +880,7 @@ export class AuthService {
       id: user.id,
       displayName: user.displayName,
       bio: user.bio,
-      avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+      avatarUrl: this.storage.resolveAvatarUrl(user.id, user.avatarKey),
       createdAt: user.createdAt.toISOString(),
       homeAerodrome: user.homeAerodrome ?? null,
       followersCount: user._count.followers,
@@ -940,7 +940,7 @@ export class AuthService {
         id: follower.id,
         displayName: follower.displayName!,
         bio: follower.bio,
-        avatarUrl: this.storage.resolvePublicUrl(follower.avatarKey),
+        avatarUrl: this.storage.resolveAvatarUrl(follower.id, follower.avatarKey),
       }));
   }
 
@@ -974,7 +974,7 @@ export class AuthService {
         id: following.id,
         displayName: following.displayName!,
         bio: following.bio,
-        avatarUrl: this.storage.resolvePublicUrl(following.avatarKey),
+        avatarUrl: this.storage.resolveAvatarUrl(following.id, following.avatarKey),
       }));
   }
 
@@ -1076,7 +1076,7 @@ export class AuthService {
       email: user.email,
       displayName: user.displayName,
       bio: user.bio,
-      avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+      avatarUrl: this.storage.resolveOwnAvatarUrl(user.avatarKey),
       communityConsentAt: user.communityConsentAt?.toISOString() ?? null,
       role: user.role,
       emailVerified: user.emailVerified?.toISOString() ?? null,
@@ -1105,6 +1105,45 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  /**
+   * Stream a member's avatar, but only when their community profile is public.
+   *
+   * Mirrors the photo serving endpoint: visibility is checked here rather than
+   * relying on the storage bucket, so a private profile's avatar stays private
+   * even if the bucket allows anonymous reads.
+   */
+  async getCommunityAvatar(userId: string) {
+    await this.ensureCommunityProfileVisible(userId);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarKey: true },
+    });
+
+    if (!user?.avatarKey) {
+      throw new NotFoundException("Avatar introuvable.");
+    }
+
+    return this.storage.getObject(user.avatarKey);
+  }
+
+  /**
+   * Stream the signed-in member's own avatar, whatever their profile
+   * visibility — they always get to see their own picture.
+   */
+  async getOwnAvatar(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarKey: true },
+    });
+
+    if (!user?.avatarKey) {
+      throw new NotFoundException("Avatar introuvable.");
+    }
+
+    return this.storage.getObject(user.avatarKey);
   }
 
   private computeEstimatedDistanceNm(
@@ -1210,7 +1249,10 @@ export class AuthService {
         email: user.email,
         displayName: user.displayName,
         bio: user.bio,
-        avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+        // RGPD export: the API route, not a storage URL. The member can open it
+        // while signed in; a bucket URL would break as soon as the bucket stops
+        // serving anonymous reads.
+        avatarUrl: this.storage.resolveOwnAvatarUrl(user.avatarKey),
         avatarMimeType: user.avatarMimeType,
         communityConsentAt: user.communityConsentAt?.toISOString() ?? null,
         role: user.role,

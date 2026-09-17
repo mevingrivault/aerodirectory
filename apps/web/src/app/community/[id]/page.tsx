@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api-client";
+import { resolveMediaUrl } from "@/lib/public-env";
 import { useAuth } from "@/lib/auth-context";
 import {
   ArrowLeft,
@@ -67,7 +68,7 @@ function FollowListCard({
               {item.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={item.avatarUrl}
+                  src={resolveMediaUrl(item.avatarUrl) ?? undefined}
                   alt={`Avatar de ${item.displayName}`}
                   className="h-11 w-11 rounded-full border object-cover"
                 />
@@ -227,7 +228,7 @@ export default function CommunityProfilePage() {
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={profile.avatarUrl}
+                src={resolveMediaUrl(profile.avatarUrl) ?? undefined}
                 alt={`Avatar de ${profile.displayName}`}
                 className="h-28 w-28 rounded-full border object-cover"
               />

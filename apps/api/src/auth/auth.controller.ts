@@ -214,6 +214,23 @@ export class AuthController {
   }
 
   @Public()
+  @Get("community/:userId/avatar")
+  async communityAvatar(
+    @Param("userId") userId: string,
+    @Res() res: FastifyReply,
+  ) {
+    const { stream, contentType, contentLength } =
+      await this.auth.getCommunityAvatar(userId);
+
+    res.header("Content-Type", contentType);
+    res.header("Cache-Control", "public, max-age=86400");
+    if (contentLength) {
+      res.header("Content-Length", contentLength);
+    }
+    res.send(stream);
+  }
+
+  @Public()
   @Get("community/:userId/followers")
   async communityFollowers(@Param("userId") userId: string) {
     const followers = await this.auth.listFollowers(userId);
@@ -261,6 +278,23 @@ export class AuthController {
   ) {
     const profile = await this.auth.updateProfile(user.sub, body);
     return ok(profile);
+  }
+
+  @Get("profile/avatar")
+  async ownAvatar(
+    @CurrentUser() user: { sub: string },
+    @Res() res: FastifyReply,
+  ) {
+    const { stream, contentType, contentLength } = await this.auth.getOwnAvatar(
+      user.sub,
+    );
+
+    res.header("Content-Type", contentType);
+    res.header("Cache-Control", "private, max-age=0, must-revalidate");
+    if (contentLength) {
+      res.header("Content-Length", contentLength);
+    }
+    res.send(stream);
   }
 
   @Post("profile/avatar")

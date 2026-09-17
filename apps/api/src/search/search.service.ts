@@ -140,7 +140,7 @@ export class SearchService {
       user: {
         id: user.id,
         displayName: user.displayName!,
-        avatarUrl: this.storage.resolvePublicUrl(user.avatarKey),
+        avatarUrl: this.storage.resolveAvatarUrl(user.id, user.avatarKey),
       },
     }));
   }
@@ -219,7 +219,7 @@ export class SearchService {
       user: {
         id: candidate.user.id,
         displayName: candidate.user.displayName!,
-        avatarUrl: this.storage.resolvePublicUrl(candidate.user.avatarKey),
+        avatarUrl: this.storage.resolveAvatarUrl(candidate.user.id, candidate.user.avatarKey),
       },
     }));
   }

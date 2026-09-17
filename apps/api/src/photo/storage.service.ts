@@ -16,14 +16,14 @@ export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
   private readonly client: S3Client;
   private readonly bucket: string;
-  private readonly publicUrl: string;
+  // No public bucket URL here on purpose: every stored object is served
+  // through an API endpoint that checks access first.
 
   constructor(private readonly config: ConfigService) {
     const endpoint = this.config.get<string>("S3_ENDPOINT");
     const region = this.config.get<string>("S3_REGION", "auto");
 
     this.bucket = this.config.get<string>("S3_BUCKET", "aerodirectory");
-    this.publicUrl = this.config.get<string>("S3_PUBLIC_URL", "");
 
     this.client = new S3Client({
       endpoint,
@@ -58,7 +58,7 @@ export class StorageService implements OnModuleInit {
     ext: string,
     mimeType: string,
     folder = "photos",
-  ): Promise<{ key: string; filename: string; url: string }> {
+  ): Promise<{ key: string; filename: string }> {
     const filename = `${randomUUID()}.${ext}`;
     const key = `${folder}/${filename}`;
 
@@ -71,8 +71,7 @@ export class StorageService implements OnModuleInit {
       }),
     );
 
-    const url = this.publicUrl ? `${this.publicUrl}/${key}` : key;
-    return { key, filename, url };
+    return { key, filename };
   }
 
   /** Get an object stream by its key */
@@ -94,11 +93,34 @@ export class StorageService implements OnModuleInit {
     );
   }
 
-  resolvePublicUrl(key: string | null | undefined): string | null {
+  /**
+   * Avatar URL for a community member.
+   *
+   * Points at our own API rather than the bucket: the endpoint checks the
+   * member's `showCommunityProfile` flag before streaming the file. A direct
+   * bucket URL would bypass that check and expose the avatar of a member whose
+   * profile is not public.
+   */
+  resolveAvatarUrl(userId: string, key: string | null | undefined): string | null {
     if (!key) {
       return null;
     }
 
-    return this.publicUrl ? `${this.publicUrl}/${key}` : key;
+    return `/auth/community/${userId}/avatar`;
+  }
+
+  /**
+   * Avatar URL for the signed-in owner of the account.
+   *
+   * Separate from `resolveAvatarUrl` because the owner must see their own
+   * avatar even while their community profile is hidden, which the public
+   * endpoint refuses by design.
+   */
+  resolveOwnAvatarUrl(key: string | null | undefined): string | null {
+    if (!key) {
+      return null;
+    }
+
+    return `/auth/profile/avatar`;
   }
 }

@@ -33,3 +33,22 @@ function resolveApiBase(configuredApiBase: string | undefined): string {
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
+
+/**
+ * Turn an API-relative media path (avatars, files) into an absolute URL.
+ *
+ * The API returns paths like `/auth/community/:id/avatar` rather than storage
+ * URLs, so that access checks run on every fetch. Absolute URLs and empty
+ * values are passed through untouched.
+ */
+export function resolveMediaUrl(path: string | null | undefined): string | null {
+  if (!path) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return `${API_BASE}${path}`;
+}
