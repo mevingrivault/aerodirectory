@@ -14,14 +14,16 @@ import { TOTP } from "otplib";
 import { NobleCryptoPlugin } from "@otplib/plugin-crypto-noble";
 import { ScureBase32Plugin } from "@otplib/plugin-base32-scure";
 import * as QRCode from "qrcode";
-import { randomBytes, randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
 import { StorageService } from "../photo/storage.service";
 import { CryptoService } from "../common/crypto.service";
+import { ReplayStore } from "../common/replay-store";
 import { parseDurationSeconds } from "../common/bootstrap-config";
 import { RefreshTokenStore } from "./refresh-token.store";
+import { AccountDeletionService } from "./account-deletion.service";
 import type {
   RegisterInput,
   LoginInput,
@@ -36,7 +38,6 @@ import type {
   ChangePasswordInput,
   ForgotPasswordInput,
   ResendVerificationInput,
-  CheckEmailInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
 import { BADGES } from "@aerodirectory/shared";
@@ -55,6 +56,15 @@ const ARGON2_OPTIONS = {
 
 /** Lifetime of the partial token issued between password and TOTP steps. */
 export const TOTP_PENDING_TTL_SECONDS = 5 * 60;
+
+/**
+ * E-mail tokens (verification, password reset) are stored hashed: a database
+ * dump must not let anyone reset a password. The raw token only travels in
+ * the e-mail.
+ */
+export function hashEmailToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
 
 /** Shape of the JWT payloads issued by this service. */
 export interface AccessTokenPayload {
@@ -103,17 +113,32 @@ export class AuthService {
     private readonly storage: StorageService,
     private readonly crypto: CryptoService,
     private readonly sessions: RefreshTokenStore,
+    private readonly replay: ReplayStore,
+    private readonly deletion: AccountDeletionService,
   ) {}
 
-  private async verifyTotpCode(secret: string, code: string): Promise<boolean> {
+  /**
+   * Check a TOTP code and consume it: a code that was just accepted cannot be
+   * accepted again (an observed code is useless to a shoulder surfer). The
+   * tolerance defaults to one step either side.
+   */
+  private async verifyTotpCode(userId: string, secret: string, code: string): Promise<boolean> {
     const configuredWindow = Number(this.config.get("TOTP_WINDOW"));
     const window =
       Number.isInteger(configuredWindow) && configuredWindow >= 0
         ? configuredWindow
-        : 2;
+        : 1;
     const epochTolerance = window * 30;
     const result = await totp.verify(code, { secret, epochTolerance });
-    return result.valid;
+    if (!result.valid) return false;
+
+    // A code stays valid for (2 * window + 1) steps of 30 s; keep the mark
+    // slightly longer than that.
+    return this.replay.claimOnce(`totp:used:${userId}:${code}`, (2 * window + 2) * 30);
+  }
+
+  private static failedAttemptsKey(userId: string, ip?: string): string {
+    return `login:fail:${userId}:${ip?.trim() || "unknown"}`;
   }
 
   // ─── Registration ───────────────────────────────────────
@@ -161,7 +186,7 @@ export class AuthService {
     const token = randomBytes(32).toString("hex");
     await this.prisma.emailToken.create({
       data: {
-        token,
+        token: hashEmailToken(token),
         userId: user.id,
         type: "verify",
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
@@ -180,19 +205,19 @@ export class AuthService {
 
   // ─── Login ──────────────────────────────────────────────
 
-  async checkEmailAvailability(
-    input: CheckEmailInput,
-  ): Promise<{ available: boolean }> {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: input.email },
-      select: { id: true },
-    });
-
-    return { available: !existing };
-  }
-
-  private static readonly MAX_FAILED_ATTEMPTS = 5;
+  /**
+   * Lockout policy. Failures are counted twice:
+   *  - per (account, IP), in the replay store: 5 failures lock that IP out of
+   *    that account for 15 minutes. This is what stops online guessing.
+   *  - per account, in the database: only a much larger number of failures,
+   *    necessarily spread over several IPs, locks the account for everyone.
+   * A single attacker can therefore no longer lock a victim out by sending
+   * five wrong passwords.
+   */
+  static readonly MAX_FAILED_ATTEMPTS_PER_IP = 5;
+  static readonly MAX_FAILED_ATTEMPTS_ACCOUNT = 25;
   private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+  private static readonly LOCKOUT_DURATION_SECONDS = 15 * 60;
 
   async login(
     input: LoginInput,
@@ -209,7 +234,7 @@ export class AuthService {
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    this.assertNotLocked(user);
+    await this.assertNotLocked(user, ip);
 
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
@@ -218,7 +243,7 @@ export class AuthService {
     }
 
     // Reset lockout counters on successful password verification
-    await this.resetFailedAttempts(user);
+    await this.resetFailedAttempts(user, ip);
 
     if (user.status === "BANNED") {
       throw new UnauthorizedException("Votre compte a été suspendu.");
@@ -261,17 +286,24 @@ export class AuthService {
     };
   }
 
-  private assertNotLocked(user: { lockedUntil: Date | null }) {
+  private async assertNotLocked(user: { id: string; lockedUntil: Date | null }, ip?: string) {
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
       throw new UnauthorizedException(
         `Compte temporairement verrouillé. Réessayez dans ${Math.ceil(retryAfterSeconds / 60)} minute(s).`,
       );
     }
+
+    const ipFailures = await this.replay.count(AuthService.failedAttemptsKey(user.id, ip));
+    if (ipFailures >= AuthService.MAX_FAILED_ATTEMPTS_PER_IP) {
+      throw new UnauthorizedException(
+        "Trop de tentatives échouées depuis cette adresse. Réessayez dans 15 minutes.",
+      );
+    }
   }
 
   /**
-   * Count a failed password or TOTP attempt and lock the account when the
+   * Count a failed password or TOTP attempt on both counters and lock when a
    * threshold is reached. Throws the lockout error itself when locking.
    */
   private async registerFailedAttempt(
@@ -280,10 +312,15 @@ export class AuthService {
     userAgent?: string,
   ): Promise<void> {
     const newAttempts = user.failedLoginAttempts + 1;
-    const shouldLock = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS;
-    const lockedUntil = shouldLock
+    const shouldLockAccount = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS_ACCOUNT;
+    const lockedUntil = shouldLockAccount
       ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
       : null;
+
+    const ipAttempts = await this.replay.increment(
+      AuthService.failedAttemptsKey(user.id, ip),
+      AuthService.LOCKOUT_DURATION_SECONDS,
+    );
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -298,28 +335,41 @@ export class AuthService {
       action: "LOGIN_FAILED",
       ip,
       userAgent,
-      metadata: { attempt: newAttempts },
+      metadata: { attempt: newAttempts, attemptFromIp: ipAttempts },
     });
 
-    if (shouldLock) {
+    if (shouldLockAccount) {
       await this.audit.log({
         userId: user.id,
         action: "ACCOUNT_LOCKED",
         ip,
         userAgent,
-        metadata: { lockedUntil: lockedUntil!.toISOString() },
+        metadata: { lockedUntil: lockedUntil!.toISOString(), scope: "account" },
       });
       throw new UnauthorizedException(
         "Compte verrouillé après trop de tentatives échouées. Réessayez dans 15 minutes.",
       );
     }
+
+    if (ipAttempts >= AuthService.MAX_FAILED_ATTEMPTS_PER_IP) {
+      await this.audit.log({
+        userId: user.id,
+        action: "ACCOUNT_LOCKED",
+        ip,
+        userAgent,
+        metadata: { scope: "ip", attempts: ipAttempts },
+      });
+      throw new UnauthorizedException(
+        "Trop de tentatives échouées depuis cette adresse. Réessayez dans 15 minutes.",
+      );
+    }
   }
 
-  private async resetFailedAttempts(user: {
-    id: string;
-    failedLoginAttempts: number;
-    lockedUntil: Date | null;
-  }) {
+  private async resetFailedAttempts(
+    user: { id: string; failedLoginAttempts: number; lockedUntil: Date | null },
+    ip?: string,
+  ) {
+    await this.replay.clear(AuthService.failedAttemptsKey(user.id, ip));
     if (user.failedLoginAttempts > 0 || user.lockedUntil) {
       await this.prisma.user.update({
         where: { id: user.id },
@@ -368,7 +418,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = await this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(userId, secret, code);
 
     if (!valid) {
       throw new UnauthorizedException("Invalid TOTP code");
@@ -421,17 +471,17 @@ export class AuthService {
       throw new BadRequestException("TOTP not enabled");
     }
 
-    this.assertNotLocked(user);
+    await this.assertNotLocked(user, ip);
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const valid = await this.verifyTotpCode(secret, code);
+    const valid = await this.verifyTotpCode(user.id, secret, code);
 
     if (!valid) {
       await this.registerFailedAttempt(user, ip, userAgent);
       throw new UnauthorizedException("Invalid TOTP code");
     }
 
-    await this.resetFailedAttempts(user);
+    await this.resetFailedAttempts(user, ip);
 
     await this.audit.log({
       userId: user.id,
@@ -468,7 +518,7 @@ export class AuthService {
     }
 
     const secret = this.crypto.decrypt(user.totpSecret);
-    const codeOk = await this.verifyTotpCode(secret, input.code);
+    const codeOk = await this.verifyTotpCode(userId, secret, input.code);
     if (!codeOk) {
       throw new UnauthorizedException("Invalid TOTP code");
     }
@@ -490,7 +540,7 @@ export class AuthService {
 
   async verifyEmail(token: string): Promise<void> {
     const emailToken = await this.prisma.emailToken.findUnique({
-      where: { token },
+      where: { token: hashEmailToken(token) },
     });
 
     if (
@@ -542,7 +592,7 @@ export class AuthService {
     const token = randomBytes(32).toString("hex");
     await this.prisma.emailToken.create({
       data: {
-        token,
+        token: hashEmailToken(token),
         userId: user.id,
         type: "verify",
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -578,7 +628,7 @@ export class AuthService {
     const token = randomBytes(32).toString("hex");
     await this.prisma.emailToken.create({
       data: {
-        token,
+        token: hashEmailToken(token),
         userId: user.id,
         type: "reset",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 heure
@@ -601,7 +651,7 @@ export class AuthService {
     userAgent?: string,
   ): Promise<void> {
     const emailToken = await this.prisma.emailToken.findUnique({
-      where: { token: input.token },
+      where: { token: hashEmailToken(input.token) },
       include: { user: true },
     });
 
@@ -832,9 +882,7 @@ export class AuthService {
   ): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      include: {
-        photos: { select: { id: true, storedKey: true } },
-      },
+      select: { passwordHash: true },
     });
 
     const valid = await argon2.verify(user.passwordHash, currentPassword);
@@ -842,44 +890,6 @@ export class AuthService {
       throw new UnauthorizedException("Mot de passe actuel incorrect");
     }
 
-    // ── Étape 1 : anonymiser les logs existants AVANT toute suppression ──
-    // (le userId est encore valide ; on supprime l'email des metadata)
-    try {
-      await this.prisma.auditLog.updateMany({
-        where: {
-          userId,
-          metadata: { path: ["email"], equals: user.email },
-        },
-        data: { metadata: { anonymized: true } },
-      });
-    } catch (err) {
-      // Bloquer la suppression si on ne peut pas garantir l'anonymisation
-      this.logger.error(`Anonymisation des audit logs échouée pour userId=${userId}`, err);
-      throw new InternalServerErrorException(
-        "Impossible d'anonymiser les logs d'audit. La suppression du compte a été annulée.",
-      );
-    }
-
-    // ── Étape 2 : supprimer les fichiers S3 (RGPD Art. 17 — droit à l'effacement) ──
-    const failedKeys: string[] = [];
-    await Promise.all(
-      user.photos.map(async (p: { id: string; storedKey: string }) => {
-        try {
-          await this.storage.delete(p.storedKey);
-        } catch (err) {
-          this.logger.error(`Échec suppression S3 key=${p.storedKey} pour userId=${userId}`, err);
-          failedKeys.push(p.storedKey);
-        }
-      }),
-    );
-
-    if (failedKeys.length > 0) {
-      throw new InternalServerErrorException(
-        "Certaines photos n'ont pas pu être supprimées. La suppression du compte a été annulée.",
-      );
-    }
-
-    // ── Étape 3 : log COMPTE_DELETE (sans email en metadata) ──
     await this.audit.log({
       userId,
       action: "ACCOUNT_DELETE",
@@ -887,8 +897,9 @@ export class AuthService {
       userAgent,
     });
 
-    // ── Étape 4 : suppression du compte (cascade DB) ──
-    await this.prisma.user.delete({ where: { id: userId } });
+    // Same purge as an admin-initiated deletion: audit logs anonymised, S3
+    // objects removed, then the row (cascade).
+    await this.deletion.purge(userId);
   }
 
   async getProfile(userId: string): Promise<UserProfile> {

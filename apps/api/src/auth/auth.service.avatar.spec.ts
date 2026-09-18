@@ -43,6 +43,8 @@ function buildService(user: UserRow | null) {
     storage as never,
     {} as never, // crypto
     {} as never, // sessions
+    {} as never, // replay
+    {} as never, // deletion
   );
 
   return { service, prisma, storage };

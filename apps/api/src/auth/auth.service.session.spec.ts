@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import * as argon2 from "argon2";
-import { AuthService } from "./auth.service";
+import { AuthService, hashEmailToken } from "./auth.service";
 import { RefreshTokenStore } from "./refresh-token.store";
+import { ReplayStore } from "../common/replay-store";
 
 vi.mock("argon2", () => ({
   hash: vi.fn().mockResolvedValue("hashed"),
@@ -68,6 +69,8 @@ function build(user: UserRow | null, overrides: Partial<UserRow> = {}) {
     user: {
       findUnique: vi.fn().mockResolvedValue(row),
       findUniqueOrThrow: vi.fn().mockResolvedValue(row),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue(row),
       update: vi.fn().mockResolvedValue(row),
     },
     $transaction: vi.fn(async (ops: unknown[]) => ops),
@@ -80,19 +83,26 @@ function build(user: UserRow | null, overrides: Partial<UserRow> = {}) {
   const audit = { log: vi.fn().mockResolvedValue(undefined) };
   const crypto = { encrypt: vi.fn((v: string) => `enc:${v}`), decrypt: vi.fn((v: string) => v.replace(/^enc:/, "")) };
   const sessions = new RefreshTokenStore(null);
+  const replay = new ReplayStore(null);
+  const mail = {
+    sendEmailVerification: vi.fn().mockResolvedValue(undefined),
+    sendPasswordReset: vi.fn().mockResolvedValue(undefined),
+  };
 
   const service = new AuthService(
     prisma as never,
     jwt as never,
     config as never,
     audit as never,
-    {} as never,
+    mail as never,
     {} as never,
     crypto as never,
     sessions,
+    replay,
+    {} as never, // deletion
   );
 
-  return { service, prisma, jwt, audit, sessions };
+  return { service, prisma, jwt, audit, sessions, mail };
 }
 
 const parse = (token: string) => JSON.parse(token) as Record<string, unknown>;
@@ -187,6 +197,7 @@ describe("AuthService sessions", () => {
       (prisma as Record<string, unknown>)["emailToken"] = {
         findUnique: vi.fn().mockResolvedValue({
           id: "t1",
+          token: hashEmailToken("t"),
           userId: "user-1",
           type: "reset",
           usedAt: null,
@@ -260,12 +271,97 @@ describe("AuthService sessions", () => {
       );
     });
 
-    it("locks the account after too many wrong codes", async () => {
+    it("locks the address out after too many wrong codes", async () => {
       totpVerify.mockResolvedValue({ valid: false });
-      const { service } = build(totpUser, { failedLoginAttempts: 4 });
-      const partial = (await service.login({ email: totpUser.email, password: "x" } as never)).accessToken;
+      const { service } = build(totpUser);
+      const partial = (await service.login({ email: totpUser.email, password: "x" } as never, "5.5.5.5")).accessToken;
 
-      await expect(service.verifyTotpLogin(partial, "000000")).rejects.toThrow(/verrouill/i);
+      for (let i = 1; i < AuthService.MAX_FAILED_ATTEMPTS_PER_IP; i += 1) {
+        await expect(service.verifyTotpLogin(partial, "000000", "5.5.5.5")).rejects.toThrow(/Invalid TOTP/i);
+      }
+      await expect(service.verifyTotpLogin(partial, "000000", "5.5.5.5")).rejects.toThrow(/cette adresse/i);
+    });
+
+    it("refuses a code that was already accepted", async () => {
+      const { service } = build(totpUser);
+      const first = (await service.login({ email: totpUser.email, password: "x" } as never)).accessToken;
+      await service.verifyTotpLogin(first, "123456");
+
+      const second = (await service.login({ email: totpUser.email, password: "x" } as never)).accessToken;
+
+      await expect(service.verifyTotpLogin(second, "123456")).rejects.toThrow(/Invalid TOTP/i);
+      await expect(service.verifyTotpLogin(second, "654321")).resolves.toBeDefined();
+    });
+  });
+
+  describe("e-mail tokens", () => {
+    function withEmailTokens(prisma: Record<string, unknown>) {
+      const rows: Array<Record<string, unknown>> = [];
+      prisma["emailToken"] = {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          rows.push({ id: `t${rows.length}`, usedAt: null, ...data });
+          return rows[rows.length - 1];
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        findUnique: vi.fn(async ({ where }: { where: { token: string } }) =>
+          rows.find((row) => row["token"] === where.token) ?? null),
+        update: vi.fn(),
+      };
+      return rows;
+    }
+
+    it("stores only a hash of the verification token and mails the raw one", async () => {
+      const { service, prisma, mail } = build(null);
+      prisma.user.create.mockResolvedValue({ id: "new", email: "new@example.fr" });
+      const rows = withEmailTokens(prisma as never);
+
+      await service.register({
+        email: "new@example.fr",
+        password: "Str0ng-password!!",
+        displayName: "New",
+        communityProfileConsent: true,
+      } as never);
+
+      const raw = mail.sendEmailVerification.mock.calls[0]?.[1] as string;
+      expect(raw).toMatch(/^[0-9a-f]{64}$/);
+      expect(rows[0]?.["token"]).toBe(hashEmailToken(raw));
+      expect(rows[0]?.["token"]).not.toBe(raw);
+    });
+
+    it("verifies an e-mail from the raw token", async () => {
+      const { service, prisma } = build(baseUser);
+      const rows = withEmailTokens(prisma as never);
+      rows.push({
+        id: "t1",
+        token: hashEmailToken("raw-token"),
+        userId: "user-1",
+        type: "verify",
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await expect(service.verifyEmail("raw-token")).resolves.toBeUndefined();
+      await expect(service.verifyEmail(hashEmailToken("raw-token"))).rejects.toThrow(/invalid/i);
+    });
+
+    it("resets a password from the raw token, never from the stored hash", async () => {
+      const { service, prisma } = build(baseUser);
+      const rows = withEmailTokens(prisma as never);
+      rows.push({
+        id: "t1",
+        token: hashEmailToken("raw-reset"),
+        userId: "user-1",
+        type: "reset",
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await expect(
+        service.resetPassword({ token: hashEmailToken("raw-reset"), password: "New-password-123!" } as never),
+      ).rejects.toThrow(/invalide/i);
+      await expect(
+        service.resetPassword({ token: "raw-reset", password: "New-password-123!" } as never),
+      ).resolves.toBeUndefined();
     });
   });
 

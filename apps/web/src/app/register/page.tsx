@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +34,6 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState("");
   const [showRules, setShowRules] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const [communityConsent, setCommunityConsent] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -50,19 +48,11 @@ export default function RegisterPage() {
   const confirmOk = confirm.length > 0 && password === confirm;
   const displayNameOk = displayName.trim().length >= 2;
   const showPasswordHelp = showRules || passwordTouched || password.length > 0;
-  const emailTrimmed = email.trim();
-  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!displayNameOk) {
       setError("Le pseudo est obligatoire.");
-      return;
-    }
-
-    if (emailStatus === "taken") {
-      setError("Cette adresse e-mail est deja utilisee.");
       return;
     }
 
@@ -112,24 +102,6 @@ export default function RegisterPage() {
       setAltchaPayload(null);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleEmailBlur = async () => {
-    if (!emailLooksValid) {
-      setEmailStatus("idle");
-      return;
-    }
-
-    setEmailStatus("checking");
-
-    try {
-      const response = await apiClient.post<{ available: boolean }>("/auth/check-email", {
-        email: emailTrimmed,
-      });
-      setEmailStatus(response.data.available ? "available" : "taken");
-    } catch {
-      setEmailStatus("idle");
     }
   };
 
@@ -200,28 +172,9 @@ export default function RegisterPage() {
                     autoComplete="email"
                     placeholder="pilote@navventura.fr"
                     value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setEmailStatus("idle");
-                    }}
-                    onBlur={handleEmailBlur}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                   />
-                  {emailStatus === "checking" && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Verification de l&apos;adresse...
-                    </p>
-                  )}
-                  {emailStatus === "available" && (
-                    <p className="mt-1 text-xs text-green-600">
-                      Cette adresse e-mail est disponible.
-                    </p>
-                  )}
-                  {emailStatus === "taken" && (
-                    <p className="mt-1 text-xs text-destructive">
-                      Cette adresse e-mail est deja utilisee.
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -341,9 +294,7 @@ export default function RegisterPage() {
                     !displayNameOk ||
                     !allRulesOk ||
                     !confirmOk ||
-                    !communityConsent ||
-                    emailStatus === "checking" ||
-                    emailStatus === "taken"
+                    !communityConsent
                   }
                 >
                   {loading ? "Creation en cours..." : "Creer mon compte"}

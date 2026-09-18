@@ -34,7 +34,6 @@ import {
   DeleteAccountSchema,
   ForgotPasswordSchema,
   ResendVerificationSchema,
-  CheckEmailSchema,
   ResetPasswordSchema,
   type RegisterInput,
   type LoginInput,
@@ -45,7 +44,6 @@ import {
   type DeleteAccountInput,
   type ForgotPasswordInput,
   type ResendVerificationInput,
-  type CheckEmailInput,
   type ResetPasswordInput,
 } from "@aerodirectory/shared";
 
@@ -125,16 +123,6 @@ export class AuthController {
     return ok({
       message: "Compte créé. Vérifiez votre adresse e-mail pour activer votre compte.",
     });
-  }
-
-  @Public()
-  @Post("check-email")
-  @HttpCode(HttpStatus.OK)
-  async checkEmail(
-    @Body(new ZodValidationPipe(CheckEmailSchema)) body: CheckEmailInput,
-  ) {
-    const result = await this.auth.checkEmailAvailability(body);
-    return ok(result);
   }
 
   @Public()
