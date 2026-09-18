@@ -108,6 +108,7 @@ export async function runRegionsSyncTask(
   });
 
   let updated = 0;
+  let unresolved = 0;
   let errors = 0;
   const failures: string[] = [];
 
@@ -119,9 +120,21 @@ export async function runRegionsSyncTask(
         aerodrome.longitude,
       );
 
+      // Never overwrite an existing value with null: an empty Nominatim
+      // answer (error, ocean, outage) must not erase what we already know.
+      const data = {
+        ...(city !== null ? { city } : {}),
+        ...(region !== null ? { region } : {}),
+      };
+
+      if (Object.keys(data).length === 0) {
+        unresolved++;
+        continue;
+      }
+
       await prisma.aerodrome.update({
         where: { id: aerodrome.id },
-        data: { city, region, lastSyncedAt: new Date() },
+        data: { ...data, lastSyncedAt: new Date() },
       });
       updated++;
     } catch (error) {
@@ -137,6 +150,7 @@ export async function runRegionsSyncTask(
   return {
     total: aerodromes.length,
     updated,
+    unresolved,
     errors,
     failures,
     scope: options.aerodromeIds?.length ? "delta" : options.forceAll ? "full" : "missing_only",
