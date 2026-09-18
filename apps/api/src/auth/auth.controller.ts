@@ -35,6 +35,7 @@ import {
   ForgotPasswordSchema,
   ResendVerificationSchema,
   ResetPasswordSchema,
+  VerifyEmailSchema,
   type RegisterInput,
   type LoginInput,
   type TotpVerifyInput,
@@ -45,6 +46,7 @@ import {
   type ForgotPasswordInput,
   type ResendVerificationInput,
   type ResetPasswordInput,
+  type VerifyEmailInput,
 } from "@aerodirectory/shared";
 
 const COOKIE_BASE_OPTS = {
@@ -195,8 +197,8 @@ export class AuthController {
 
   @Public()
   @Get("verify-email")
-  async verifyEmail(@Query("token") token: string) {
-    await this.auth.verifyEmail(token);
+  async verifyEmail(@Query(new ZodValidationPipe(VerifyEmailSchema)) query: VerifyEmailInput) {
+    await this.auth.verifyEmail(query.token);
     return ok({ verified: true });
   }
 
