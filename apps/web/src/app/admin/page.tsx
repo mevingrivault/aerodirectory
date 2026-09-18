@@ -152,6 +152,14 @@ export default function AdminPage() {
           summary: "Garder la main sur les enrichissements sans toucher aux imports.",
         },
         {
+          href: "/admin/events",
+          icon: MessageSquare,
+          title: "Événements",
+          metric: "Agenda",
+          value: "Publier ou rejeter",
+          summary: "Événements proposés par les nouveaux membres, en attente de validation.",
+        },
+        {
           href: "/admin/users",
           icon: Users,
           title: "Utilisateurs",

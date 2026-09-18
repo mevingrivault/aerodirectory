@@ -372,12 +372,38 @@ export interface AdminMailEventItem {
   errorMessage: string | null;
 }
 
+export interface AdminEventListItem {
+  id: string;
+  type: "CAFE_CROISSANT" | "OPEN_DAY" | "AIRSHOW" | "OTHER";
+  title: string;
+  description: string | null;
+  startDate: string;
+  endDate: string | null;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  aerodrome: {
+    id: string;
+    name: string;
+    icaoCode: string | null;
+  };
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string;
+  };
+}
+
 export interface AdminContentAuditItem {
   id: string;
   createdAt: string;
   actionType:
     | "COMMENT_DELETE"
     | "COMMENT_RESTORE"
+    | "COMMENT_APPROVE"
+    | "COMMENT_REJECT"
+    | "EVENT_APPROVE"
+    | "EVENT_REJECT"
     | "CORRECTION_APPROVE"
     | "CORRECTION_REJECT"
     | "PHOTO_APPROVE"
@@ -387,7 +413,7 @@ export interface AdminContentAuditItem {
     | "USER_BAN"
     | "USER_UNBAN"
     | "USER_DELETE";
-  targetType: "comment" | "correction" | "photo" | "user";
+  targetType: "comment" | "correction" | "photo" | "event" | "user";
   targetId: string;
   targetSummary: string | null;
   reason: string | null;

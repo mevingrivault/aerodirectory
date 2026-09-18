@@ -14,6 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const ACTION_LABELS: Record<AdminContentAuditItem["actionType"], string> = {
   COMMENT_DELETE: "Suppression de commentaire",
   COMMENT_RESTORE: "Restauration de commentaire",
+  COMMENT_APPROVE: "Publication de commentaire",
+  COMMENT_REJECT: "Rejet de commentaire",
+  EVENT_APPROVE: "Publication d'événement",
+  EVENT_REJECT: "Rejet d'événement",
   CORRECTION_APPROVE: "Validation de contribution",
   CORRECTION_REJECT: "Rejet de contribution",
   PHOTO_APPROVE: "Validation de photo",
@@ -29,6 +33,7 @@ const TARGET_LABELS: Record<AdminContentAuditItem["targetType"], string> = {
   comment: "Commentaire",
   correction: "Contribution",
   photo: "Photo",
+  event: "Événement",
   user: "Membre",
 };
 

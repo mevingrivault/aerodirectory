@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Eye, MessageSquareWarning, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, MessageSquareWarning, Trash2, X } from "lucide-react";
 import type { AdminCommentListItem } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -13,11 +13,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+type CommentState = "pending" | "active" | "reported" | "rejected" | "all";
+
+const STATUS_LABELS: Record<AdminCommentListItem["contentStatus"], string> = {
+  PENDING: "En attente",
+  APPROVED: "Publié",
+  FLAGGED: "Signalé",
+  REJECTED: "Rejeté",
+};
+
+const STATUS_VARIANTS: Record<AdminCommentListItem["contentStatus"], "warning" | "success" | "outline" | "destructive"> = {
+  PENDING: "outline",
+  APPROVED: "success",
+  FLAGGED: "warning",
+  REJECTED: "destructive",
+};
+
 export default function AdminCommentsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [state, setState] = useState<"active" | "reported" | "all">("active");
+  const [state, setState] = useState<CommentState>("pending");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -71,18 +87,22 @@ export default function AdminCommentsPage() {
     }
   };
 
-  const handleRestore = async (comment: AdminCommentListItem) => {
-    if (!window.confirm("Reafficher ce commentaire ?")) {
+  const handleApprove = async (comment: AdminCommentListItem) => {
+    const isFlagged = comment.contentStatus === "FLAGGED";
+    if (!window.confirm(isFlagged ? "Reafficher ce commentaire ?" : "Publier ce commentaire ?")) {
       return;
     }
 
     const note = window.prompt("Note de moderation (optionnel) :") ?? "";
 
     try {
-      await apiClient.post(`/admin/comments/${comment.id}/restore`, {
+      await apiClient.post(`/admin/comments/${comment.id}/approve`, {
         note: note.trim() || undefined,
       });
-      setFeedback({ type: "success", message: "Commentaire reaffiche avec succes." });
+      setFeedback({
+        type: "success",
+        message: isFlagged ? "Commentaire reaffiche avec succes." : "Commentaire publie.",
+      });
       await commentsQuery.refetch();
     } catch (err: unknown) {
       setFeedback({
@@ -90,7 +110,31 @@ export default function AdminCommentsPage() {
         message:
           err instanceof Error
             ? err.message
-            : "Impossible de reafficher ce commentaire.",
+            : "Impossible de publier ce commentaire.",
+      });
+    }
+  };
+
+  const handleReject = async (comment: AdminCommentListItem) => {
+    if (!window.confirm("Rejeter ce commentaire ? Il restera invisible mais ne sera pas supprime.")) {
+      return;
+    }
+
+    const note = window.prompt("Motif interne (optionnel) :") ?? "";
+
+    try {
+      await apiClient.post(`/admin/comments/${comment.id}/reject`, {
+        note: note.trim() || undefined,
+      });
+      setFeedback({ type: "success", message: "Commentaire rejete." });
+      await commentsQuery.refetch();
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Impossible de rejeter ce commentaire.",
       });
     }
   };
@@ -131,13 +175,13 @@ export default function AdminCommentsPage() {
         />
         <select
           value={state}
-          onChange={(event) =>
-            setState(event.target.value as "active" | "reported" | "all")
-          }
+          onChange={(event) => setState(event.target.value as CommentState)}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="active">Commentaires actifs</option>
+          <option value="pending">En attente de publication</option>
           <option value="reported">Commentaires signales</option>
+          <option value="active">Commentaires publies</option>
+          <option value="rejected">Commentaires rejetes</option>
           <option value="all">Tous les commentaires</option>
         </select>
       </div>
@@ -158,14 +202,8 @@ export default function AdminCommentsPage() {
                   <span className="text-muted-foreground"> · {comment.user.email}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge
-                    variant={
-                      comment.contentStatus === "FLAGGED"
-                          ? "warning"
-                          : "success"
-                    }
-                  >
-                    {comment.contentStatus === "FLAGGED" ? "Signale" : "Actif"}
+                  <Badge variant={STATUS_VARIANTS[comment.contentStatus]}>
+                    {STATUS_LABELS[comment.contentStatus]}
                   </Badge>
                   <Badge variant="outline">
                     {comment.aerodrome.icaoCode
@@ -189,14 +227,35 @@ export default function AdminCommentsPage() {
 
               <div className="mt-3">
                 <div className="flex flex-wrap gap-2">
+                  {comment.contentStatus === "PENDING" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleApprove(comment)}
+                    >
+                      <Check className="mr-2 h-4 w-4" />
+                      Publier
+                    </Button>
+                  )}
                   {comment.contentStatus === "FLAGGED" && (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => handleRestore(comment)}
+                      onClick={() => handleApprove(comment)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       Reafficher
+                    </Button>
+                  )}
+                  {(comment.contentStatus === "PENDING" ||
+                    comment.contentStatus === "FLAGGED") && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleReject(comment)}
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Rejeter
                     </Button>
                   )}
                   <Button

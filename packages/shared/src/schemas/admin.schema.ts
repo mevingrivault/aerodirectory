@@ -10,7 +10,12 @@ export const AdminUsersQuerySchema = PaginationSchema.extend({
 
 export const AdminCommentsQuerySchema = PaginationSchema.extend({
   search: z.string().trim().max(255).optional(),
-  state: z.enum(["active", "reported", "all"]).optional(),
+  state: z.enum(["active", "pending", "reported", "rejected", "all"]).optional(),
+});
+
+export const AdminEventsQuerySchema = PaginationSchema.extend({
+  search: z.string().trim().max(255).optional(),
+  state: z.enum(["pending", "approved", "rejected", "all"]).optional(),
 });
 
 export const AdminCorrectionsQuerySchema = PaginationSchema.extend({
@@ -38,11 +43,15 @@ export const AdminMailEventsQuerySchema = PaginationSchema.extend({
 });
 
 export const AdminContentAuditQuerySchema = PaginationSchema.extend({
-  targetType: z.enum(["comment", "correction", "photo", "user", "all"]).optional(),
+  targetType: z.enum(["comment", "correction", "photo", "event", "user", "all"]).optional(),
   actionType: z
     .enum([
       "COMMENT_DELETE",
       "COMMENT_RESTORE",
+      "COMMENT_APPROVE",
+      "COMMENT_REJECT",
+      "EVENT_APPROVE",
+      "EVENT_REJECT",
       "CORRECTION_APPROVE",
       "CORRECTION_REJECT",
       "PHOTO_APPROVE",
@@ -74,6 +83,14 @@ export const RestoreAdminCommentSchema = z.object({
   note: optionalText,
 });
 
+export const ReviewAdminCommentSchema = z.object({
+  note: optionalText,
+});
+
+export const ReviewAdminEventSchema = z.object({
+  note: optionalText,
+});
+
 export const ReviewAdminCorrectionSchema = z.object({
   note: optionalText,
 });
@@ -98,6 +115,9 @@ export const AdminImportOpenAirSchema = z.object({
 
 export type AdminUsersQueryInput = z.infer<typeof AdminUsersQuerySchema>;
 export type AdminCommentsQueryInput = z.infer<typeof AdminCommentsQuerySchema>;
+export type AdminEventsQueryInput = z.infer<typeof AdminEventsQuerySchema>;
+export type ReviewAdminCommentInput = z.infer<typeof ReviewAdminCommentSchema>;
+export type ReviewAdminEventInput = z.infer<typeof ReviewAdminEventSchema>;
 export type AdminCorrectionsQueryInput = z.infer<typeof AdminCorrectionsQuerySchema>;
 export type AdminPhotosQueryInput = z.infer<typeof AdminPhotosQuerySchema>;
 export type AdminReportsQueryInput = z.infer<typeof AdminReportsQuerySchema>;

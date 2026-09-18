@@ -18,6 +18,13 @@ import type {
 // Comptes de moins de 7 jours : contributions soumises à modération
 const NEW_ACCOUNT_THRESHOLD_DAYS = 7;
 
+/**
+ * Number of distinct members who must report a comment before it is hidden
+ * pending admin review. Below that, the comment stays visible and the reports
+ * simply queue up for the admin: one member alone cannot censor another.
+ */
+export const REPORT_AUTO_FLAG_THRESHOLD = 3;
+
 function accountAgeDays(createdAt: Date): number {
   return (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
 }
@@ -567,18 +574,32 @@ export class CommentService {
       },
     });
 
+    let autoFlagged = false;
     if (input.targetType === "comment") {
-      await this.prisma.comment.update({
-        where: { id: input.targetId },
-        data: { contentStatus: "FLAGGED" },
+      const pendingReports = await this.prisma.report.findMany({
+        where: {
+          targetType: "comment",
+          targetId: input.targetId,
+          contentStatus: "PENDING",
+        },
+        select: { userId: true },
       });
+      const distinctReporters = new Set(pendingReports.map((r) => r.userId)).size;
+
+      if (distinctReporters >= REPORT_AUTO_FLAG_THRESHOLD) {
+        await this.prisma.comment.updateMany({
+          where: { id: input.targetId, contentStatus: "APPROVED" },
+          data: { contentStatus: "FLAGGED" },
+        });
+        autoFlagged = true;
+      }
     }
 
     await this.audit.log({
       userId,
       action: "REPORT_CREATE",
       ip,
-      metadata: { reportId: report.id, aerodromeId },
+      metadata: { reportId: report.id, aerodromeId, autoFlagged },
     });
 
     return report;

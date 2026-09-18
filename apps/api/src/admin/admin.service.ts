@@ -12,6 +12,10 @@ import { parseOpenAirFile } from "../services/airspace/openair-parser";
 import type {
   AdminImportOpenAirInput,
   AdminCommentsQueryInput,
+  AdminEventsQueryInput,
+  AdminEventListItem,
+  ReviewAdminCommentInput,
+  ReviewAdminEventInput,
   AdminContentAuditItem,
   AdminContentAuditQueryInput,
   AdminCorrectionsQueryInput,
@@ -220,6 +224,8 @@ export class AdminService {
         bannedAt: new Date(),
         bannedReason: reason,
         bannedById: adminId,
+        // Invalidate every access and refresh token the user still holds.
+        tokenVersion: { increment: 1 },
       },
     });
 
@@ -349,10 +355,14 @@ export class AdminService {
     const where = {
       deletedAt: null,
       ...(state === "active"
-        ? { contentStatus: { not: "FLAGGED" as const } }
-        : state === "reported"
-          ? { contentStatus: "FLAGGED" as const }
-          : {}),
+        ? { contentStatus: "APPROVED" as const }
+        : state === "pending"
+          ? { contentStatus: "PENDING" as const }
+          : state === "reported"
+            ? { contentStatus: "FLAGGED" as const }
+            : state === "rejected"
+              ? { contentStatus: "REJECTED" as const }
+              : {}),
       ...(search
         ? {
             OR: [
@@ -747,7 +757,12 @@ export class AdminService {
     });
   }
 
-  async restoreComment(
+  /**
+   * Publish a comment that is waiting for moderation: either a new member's
+   * `PENDING` comment or a `FLAGGED` one the admin decides to keep. Pending
+   * reports on it are closed as rejected.
+   */
+  async approveComment(
     adminId: string,
     commentId: string,
     input: RestoreAdminCommentInput,
@@ -756,7 +771,14 @@ export class AdminService {
   ): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true, content: true, aerodromeId: true, deletedAt: true, contentStatus: true },
+      select: {
+        id: true,
+        userId: true,
+        content: true,
+        aerodromeId: true,
+        deletedAt: true,
+        contentStatus: true,
+      },
     });
 
     if (!comment) {
@@ -767,31 +789,34 @@ export class AdminService {
       throw new BadRequestException("Un commentaire supprimé ne peut pas être rétabli.");
     }
 
-    if (comment.contentStatus !== "FLAGGED") {
+    if (comment.contentStatus !== "FLAGGED" && comment.contentStatus !== "PENDING") {
       throw new BadRequestException("Ce commentaire n'est pas en attente de modération.");
     }
 
-    await this.prisma.comment.update({
-      where: { id: commentId },
-      data: { contentStatus: "APPROVED" },
-    });
+    const wasFlagged = comment.contentStatus === "FLAGGED";
 
-    await this.prisma.report.updateMany({
-      where: {
-        targetType: "comment",
-        targetId: commentId,
-        contentStatus: "PENDING",
-      },
-      data: {
-        contentStatus: "REJECTED",
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.comment.update({
+        where: { id: commentId },
+        data: { contentStatus: "APPROVED" },
+      }),
+      this.prisma.report.updateMany({
+        where: {
+          targetType: "comment",
+          targetId: commentId,
+          contentStatus: "PENDING",
+        },
+        data: {
+          contentStatus: "REJECTED",
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      }),
+    ]);
 
     await this.logCommunityAdminAction({
       adminId,
-      actionType: "COMMENT_RESTORE",
+      actionType: wasFlagged ? "COMMENT_RESTORE" : "COMMENT_APPROVE",
       targetType: "comment",
       targetId: commentId,
       targetSummary: comment.content.slice(0, 180),
@@ -801,7 +826,266 @@ export class AdminService {
       userAgent,
       metadata: {
         commentId,
+        previousStatus: comment.contentStatus,
       },
+    });
+
+    if (!wasFlagged) {
+      const aerodrome = await this.prisma.aerodrome.findUnique({
+        where: { id: comment.aerodromeId },
+        select: { name: true },
+      });
+      await this.notifications.notifyUser({
+        userId: comment.userId,
+        type: "COMMENT_APPROVED",
+        title: "Commentaire publié",
+        message: `Votre commentaire sur ${aerodrome?.name ?? "un aérodrome"} a été publié.`,
+        linkUrl: `/aerodrome/${comment.aerodromeId}`,
+        metadata: { commentId, aerodromeId: comment.aerodromeId },
+      });
+    }
+  }
+
+  /** Kept for the existing "reafficher" action: same as approving a flagged comment. */
+  async restoreComment(
+    adminId: string,
+    commentId: string,
+    input: RestoreAdminCommentInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    return this.approveComment(adminId, commentId, input, ip, userAgent);
+  }
+
+  /**
+   * Refuse a pending or flagged comment without deleting it: it stays in the
+   * database (audit, RGPD export) but never shows publicly.
+   */
+  async rejectComment(
+    adminId: string,
+    commentId: string,
+    input: ReviewAdminCommentInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: {
+        id: true,
+        userId: true,
+        content: true,
+        aerodromeId: true,
+        deletedAt: true,
+        contentStatus: true,
+      },
+    });
+
+    if (!comment) {
+      throw new NotFoundException("Commentaire introuvable");
+    }
+
+    if (comment.deletedAt || comment.contentStatus === "REJECTED") {
+      throw new BadRequestException("Ce commentaire est déjà retiré.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.comment.update({
+        where: { id: commentId },
+        data: { contentStatus: "REJECTED" },
+      }),
+      this.prisma.report.updateMany({
+        where: {
+          targetType: "comment",
+          targetId: commentId,
+          contentStatus: "PENDING",
+        },
+        data: {
+          contentStatus: "APPROVED",
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      }),
+    ]);
+
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: "COMMENT_REJECT",
+      targetType: "comment",
+      targetId: commentId,
+      targetSummary: comment.content.slice(0, 180),
+      reason: input.note?.trim() || null,
+      aerodromeId: comment.aerodromeId,
+      ip,
+      userAgent,
+      metadata: {
+        commentId,
+        previousStatus: comment.contentStatus,
+      },
+    });
+
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id: comment.aerodromeId },
+      select: { name: true },
+    });
+    await this.notifications.notifyUser({
+      userId: comment.userId,
+      type: "COMMENT_REJECTED",
+      title: "Commentaire non publié",
+      message: `Votre commentaire sur ${aerodrome?.name ?? "un aérodrome"} n'a pas été publié.`,
+      linkUrl: `/aerodrome/${comment.aerodromeId}`,
+      metadata: { commentId, aerodromeId: comment.aerodromeId },
+    });
+  }
+
+  // ─── Events ────────────────────────────────────────────
+
+  async listEvents(query: AdminEventsQueryInput) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const search = query.search?.trim();
+    const state = query.state ?? "pending";
+
+    const where = {
+      ...(state === "pending"
+        ? { contentStatus: "PENDING" as const }
+        : state === "approved"
+          ? { contentStatus: "APPROVED" as const }
+          : state === "rejected"
+            ? { contentStatus: "REJECTED" as const }
+            : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: "insensitive" as const } },
+              { description: { contains: search, mode: "insensitive" as const } },
+              { user: { email: { contains: search, mode: "insensitive" as const } } },
+              { user: { displayName: { contains: search, mode: "insensitive" as const } } },
+              { aerodrome: { name: { contains: search, mode: "insensitive" as const } } },
+              { aerodrome: { icaoCode: { contains: search, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [events, total] = await Promise.all([
+      this.prisma.aerodromeEvent.findMany({
+        where,
+        include: {
+          user: { select: { id: true, displayName: true, email: true } },
+          aerodrome: { select: { id: true, name: true, icaoCode: true } },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.aerodromeEvent.count({ where }),
+    ]);
+
+    return {
+      data: events.map(
+        (event): AdminEventListItem => ({
+          id: event.id,
+          type: event.type,
+          title: event.title,
+          description: event.description,
+          startDate: event.startDate.toISOString(),
+          endDate: event.endDate?.toISOString() ?? null,
+          contentStatus: event.contentStatus,
+          createdAt: event.createdAt.toISOString(),
+          reviewedAt: event.reviewedAt?.toISOString() ?? null,
+          aerodrome: event.aerodrome,
+          user: event.user,
+        }),
+      ),
+      total,
+    };
+  }
+
+  async approveEvent(
+    adminId: string,
+    eventId: string,
+    input: ReviewAdminEventInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    await this.reviewEvent(adminId, eventId, "APPROVED", input, ip, userAgent);
+  }
+
+  async rejectEvent(
+    adminId: string,
+    eventId: string,
+    input: ReviewAdminEventInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    await this.reviewEvent(adminId, eventId, "REJECTED", input, ip, userAgent);
+  }
+
+  private async reviewEvent(
+    adminId: string,
+    eventId: string,
+    decision: "APPROVED" | "REJECTED",
+    input: ReviewAdminEventInput,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const event = await this.prisma.aerodromeEvent.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        aerodromeId: true,
+        contentStatus: true,
+        aerodrome: { select: { name: true } },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException("Événement introuvable");
+    }
+
+    if (event.contentStatus === decision) {
+      throw new BadRequestException(
+        decision === "APPROVED" ? "Cet événement est déjà publié." : "Cet événement est déjà rejeté.",
+      );
+    }
+
+    await this.prisma.aerodromeEvent.update({
+      where: { id: eventId },
+      data: {
+        contentStatus: decision,
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    await this.logCommunityAdminAction({
+      adminId,
+      actionType: decision === "APPROVED" ? "EVENT_APPROVE" : "EVENT_REJECT",
+      targetType: "event",
+      targetId: eventId,
+      targetSummary: event.title.slice(0, 180),
+      reason: input.note?.trim() || null,
+      aerodromeId: event.aerodromeId,
+      ip,
+      userAgent,
+      metadata: {
+        eventId,
+        previousStatus: event.contentStatus,
+      },
+    });
+
+    await this.notifications.notifyUser({
+      userId: event.userId,
+      type: decision === "APPROVED" ? "EVENT_APPROVED" : "EVENT_REJECTED",
+      title: decision === "APPROVED" ? "Événement publié" : "Événement non publié",
+      message:
+        decision === "APPROVED"
+          ? `Votre événement « ${event.title} » sur ${event.aerodrome.name} a été publié.`
+          : `Votre événement « ${event.title} » sur ${event.aerodrome.name} n'a pas été publié.`,
+      linkUrl: `/aerodrome/${event.aerodromeId}`,
+      metadata: { eventId, aerodromeId: event.aerodromeId },
     });
   }
 
@@ -1976,10 +2260,28 @@ export class AdminService {
 
   private mapCommunityActionToAuditAction(
     actionType: AdminContentAuditItem["actionType"],
-  ): "ADMIN_ACTION" | "COMMENT_DELETE" | "PHOTO_APPROVE" | "PHOTO_REJECT" | "USER_BAN" | "USER_UNBAN" {
+  ):
+    | "ADMIN_ACTION"
+    | "COMMENT_DELETE"
+    | "COMMENT_APPROVE"
+    | "COMMENT_REJECT"
+    | "EVENT_APPROVE"
+    | "EVENT_REJECT"
+    | "PHOTO_APPROVE"
+    | "PHOTO_REJECT"
+    | "USER_BAN"
+    | "USER_UNBAN" {
     switch (actionType) {
       case "COMMENT_DELETE":
         return "COMMENT_DELETE";
+      case "COMMENT_APPROVE":
+        return "COMMENT_APPROVE";
+      case "COMMENT_REJECT":
+        return "COMMENT_REJECT";
+      case "EVENT_APPROVE":
+        return "EVENT_APPROVE";
+      case "EVENT_REJECT":
+        return "EVENT_REJECT";
       case "PHOTO_APPROVE":
         return "PHOTO_APPROVE";
       case "PHOTO_REJECT":
@@ -2046,6 +2348,10 @@ export class AdminService {
     return (
       value === "COMMENT_DELETE" ||
       value === "COMMENT_RESTORE" ||
+      value === "COMMENT_APPROVE" ||
+      value === "COMMENT_REJECT" ||
+      value === "EVENT_APPROVE" ||
+      value === "EVENT_REJECT" ||
       value === "CORRECTION_APPROVE" ||
       value === "CORRECTION_REJECT" ||
       value === "PHOTO_APPROVE" ||
@@ -2065,6 +2371,7 @@ export class AdminService {
       value === "comment" ||
       value === "correction" ||
       value === "photo" ||
+      value === "event" ||
       value === "user"
     );
   }
