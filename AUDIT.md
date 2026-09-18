@@ -37,7 +37,31 @@ Non traité dans cette phase (volontairement) : codes de récupération TOTP.
 | M6 | Content-Security-Policy posée par Next sur toutes les pages (scripts et connexions limités à l'origine et aux fournisseurs de tuiles, `object-src 'none'`, `frame-ancestors 'none'`, workers en `blob:`). Limite : `script-src` garde `'unsafe-inline'` car les pages sont prérendues sans nonce. HSTS est déjà posé par le reverse proxy. | build Next |
 | M7 | `AccountDeletionService` partagé entre l'auto-suppression et la suppression admin : anonymisation des logs, suppression des photos **et de l'avatar** en S3, puis de la ligne ; abandon si un objet ne peut pas être supprimé. | `account-deletion.service.spec.ts`, `admin.service.moderation.spec.ts` |
 
-Reste après le lot 1 : points Moyens fonctionnels (M11, M15, M16, M17, M18), dette (M12, M13, M14, M19), performance (P1 à P7) et Faibles.
+## Lot 2 — fonctionnel et intégrité (branche `fix/audit-lot-2-3`)
+
+| # | Correctif appliqué | Tests |
+|---|---|---|
+| M11 | HEIC/HEIF retirés des formats acceptés (API et front) ; un fichier HEIC, reconnu par son extension ou ses octets, reçoit un message explicite avec la manipulation iPhone au lieu de « image corrompue ». | `image.service.spec.ts` |
+| M15 | Booléens de query string parsés avec `z.stringbool()` (`"false"` vaut désormais `false`) sur la recherche, `nearby` et les notifications. | `shared-schemas.spec.ts` |
+| M16 | `POST/PUT/DELETE /aerodromes` réservés à ADMIN, journalisés, et refusés (409) sur toute fiche importée (`source` ≠ `manual`) : les données sources ne sont plus modifiables par l'API. | `aerodrome.service.spec.ts` |
+| M17 | Type de signalement `aerodrome` accepté par l'API et affiché dans l'admin ; le bouton « Signaler la fiche » affiche le résultat au lieu d'avaler l'erreur. | `comment.service.report.spec.ts`, `shared-schemas.spec.ts` |
+| M18 | La sync régions n'écrit plus `null` : seuls les champs résolus par Nominatim sont mis à jour, les réponses vides sont comptées à part (`unresolved`). | `regions-sync.task.spec.ts` |
+
+## Lot 3 — dette et performance (même branche)
+
+| # | Correctif appliqué | Tests |
+|---|---|---|
+| M12 | `tmp-api-deploy/`, `tmp-api-deploy2/` (145 fichiers), `aerodrome.html` et `tsconfig.tsbuildinfo` retirés du dépôt et ignorés. | — |
+| M13 | Un seul client Redis (`RedisModule`) partagé par un `CacheService` JSON avec repli mémoire ; restaurants, transports, hébergements, météo et sync n'ouvrent plus leur propre connexion. | contrôle DI (`test:di`) |
+| M14 | Haversine unique dans `@aerodirectory/shared` (`geo.ts`) à la place de six copies ; `findById`/`findByIcao` partagent une requête. | suites existantes |
+| P1 | Espaces aériens lus depuis un cache d'une heure (liste FR complète) puis filtrés en mémoire ; `Cache-Control: public, max-age=3600`. | — |
+| P2 | Marqueurs de la carte cachés une heure (sans filtre) ; `Cache-Control: public, max-age=600`. | — |
+| P3 | Tri par distance : classement sur `id`+coordonnées puis chargement des seules lignes de la page. | — |
+| P5 | Index `(latitude, longitude)` sur `aerodromes` et `(aerodromeId, parentId, contentStatus, deletedAt)` sur `comments` (migration `20260919100000`). | — |
+| M10 | Override `hono` supprimé et paquet mis à jour, `nodemailer` ≥ 9.1.1, `@fastify/csrf-protection` retiré ; `.trivyignore` nettoyé. | `pnpm audit` |
+| F2 / F3 | `verify-email` validé par Zod ; course sur l'unicité e-mail/pseudo à l'inscription renvoie 409 au lieu de 500. | — |
+
+Non traité (volontairement) : M19 (découpage des gros services et pages), M14 partiel (stats Aerodex dupliquées), P4/P6/P7, F12 (renommage `aerodirectory` → `navventura` : il change les noms d'images GHCR, de bucket et de packages, à planifier comme une opération à part), tests front (aucun harnais en place).
 
 ---
 
