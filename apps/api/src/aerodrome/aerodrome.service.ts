@@ -1,74 +1,47 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { CacheService } from "../common/cache.service";
 import { Prisma } from "@aerodirectory/database";
-import type {
-  AerodromeCreateInput,
-  AerodromeUpdateInput,
+import {
+  haversineKm,
+  type AerodromeCreateInput,
+  type AerodromeUpdateInput,
 } from "@aerodirectory/shared";
+
+/** Sheets created through the API carry this source; imported ones carry the importer's name. */
+export const MANUAL_SOURCE = "manual";
+
+export interface AdminActor {
+  adminId: string;
+  ip?: string;
+  userAgent?: string;
+}
 
 @Injectable()
 export class AerodromeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly cache: CacheService,
+  ) {}
+
+  /** The full marker set changes once a night; every map load asks for it. */
+  private static readonly MARKERS_CACHE_KEY = "aerodromes:markers:v1";
+  private static readonly MARKERS_CACHE_TTL_SECONDS = 60 * 60;
 
   async findById(id: string) {
-    const aerodrome = await this.prisma.aerodrome.findUnique({
-      where: { id },
-      include: {
-        runways: true,
-        frequencies: true,
-        fuels: true,
-        corrections: {
-          where: {
-            contentStatus: "APPROVED",
-            user: { showCommunityContributions: true },
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                showCommunityProfile: true,
-              },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        },
-        _count: {
-          select: {
-            visits: true,
-            comments: {
-              where: {
-                deletedAt: null,
-                contentStatus: "APPROVED",
-                user: { showCommunityContributions: true },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!aerodrome) {
-      throw new NotFoundException("Aerodrome not found");
-    }
-
-    return {
-      ...aerodrome,
-      corrections: aerodrome.corrections.map((correction) => ({
-        ...correction,
-        user: {
-          id: correction.user.id,
-          displayName: correction.user.showCommunityProfile
-            ? correction.user.displayName
-            : null,
-        },
-      })),
-    };
+    return this.findOne({ id });
   }
 
   async findByIcao(icaoCode: string) {
+    return this.findOne({ icaoCode });
+  }
+
+  /** Full sheet: source data plus the approved community corrections shown alongside it. */
+  private async findOne(where: Prisma.AerodromeWhereUniqueInput) {
     const aerodrome = await this.prisma.aerodrome.findUnique({
-      where: { icaoCode },
+      where,
       include: {
         runways: true,
         frequencies: true,
@@ -156,12 +129,13 @@ export class AerodromeService {
     return withDistance;
   }
 
-  async create(input: AerodromeCreateInput) {
+  async create(input: AerodromeCreateInput, actor: AdminActor) {
     const { runways, frequencies, fuels, ...data } = input;
 
-    return this.prisma.aerodrome.create({
+    const created = await this.prisma.aerodrome.create({
       data: {
         ...data,
+        source: MANUAL_SOURCE,
         runways: runways ? { create: runways } : undefined,
         frequencies: frequencies ? { create: frequencies } : undefined,
         fuels: fuels ? { create: fuels } : undefined,
@@ -172,15 +146,48 @@ export class AerodromeService {
         fuels: true,
       },
     });
+
+    await this.audit.log({
+      userId: actor.adminId,
+      action: "ADMIN_ACTION",
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+      metadata: { type: "AERODROME_CREATE", aerodromeId: created.id, name: created.name },
+    });
+
+    return created;
   }
 
-  async update(id: string, input: AerodromeUpdateInput) {
-    // Verify exists
-    await this.findById(id);
+  /**
+   * Imported sheets are owned by their importer: editing them here would be
+   * silently undone by the next sync, so the API refuses. Only manual sheets
+   * can be changed or removed.
+   */
+  private async assertEditable(id: string) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id },
+      select: { id: true, name: true, source: true },
+    });
+
+    if (!aerodrome) {
+      throw new NotFoundException("Aerodrome not found");
+    }
+
+    if (aerodrome.source && aerodrome.source !== MANUAL_SOURCE) {
+      throw new ConflictException(
+        `Cette fiche est importée depuis ${aerodrome.source} : elle ne peut pas être modifiée manuellement, la prochaine synchronisation l'écraserait. Proposez une correction ou corrigez la source.`,
+      );
+    }
+
+    return aerodrome;
+  }
+
+  async update(id: string, input: AerodromeUpdateInput, actor: AdminActor) {
+    await this.assertEditable(id);
 
     const { runways, frequencies, fuels, ...data } = input;
 
-    return this.prisma.aerodrome.update({
+    const updated = await this.prisma.aerodrome.update({
       where: { id },
       data: {
         ...data,
@@ -210,14 +217,49 @@ export class AerodromeService {
         fuels: true,
       },
     });
+
+    await this.audit.log({
+      userId: actor.adminId,
+      action: "ADMIN_ACTION",
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+      metadata: {
+        type: "AERODROME_UPDATE",
+        aerodromeId: id,
+        fields: Object.keys(input),
+      },
+    });
+
+    return updated;
   }
 
-  async delete(id: string) {
-    await this.findById(id);
+  async delete(id: string, actor: AdminActor) {
+    const aerodrome = await this.assertEditable(id);
+
     await this.prisma.aerodrome.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: actor.adminId,
+      action: "ADMIN_ACTION",
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+      metadata: { type: "AERODROME_DELETE", aerodromeId: id, name: aerodrome.name },
+    });
   }
 
   async findAllMarkers(q?: string) {
+    const query = q?.trim();
+    if (!query) {
+      return this.cache.getOrSet(
+        AerodromeService.MARKERS_CACHE_KEY,
+        AerodromeService.MARKERS_CACHE_TTL_SECONDS,
+        () => this.queryMarkers(),
+      );
+    }
+    return this.queryMarkers(query);
+  }
+
+  private queryMarkers(q?: string) {
     const where: Prisma.AerodromeWhereInput = q
       ? {
           OR: [
@@ -300,22 +342,3 @@ export class AerodromeService {
   }
 }
 
-/** Haversine distance in km */
-function haversineKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}

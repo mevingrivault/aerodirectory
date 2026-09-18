@@ -7,7 +7,10 @@ import {
   Param,
   Body,
   Query,
+  Req,
+  Header,
 } from "@nestjs/common";
+import type { FastifyRequest } from "fastify";
 import { AerodromeService } from "./aerodrome.service";
 import { RestaurantService } from "../restaurant/restaurant.service";
 import { TransportService } from "../transport/transport.service";
@@ -15,7 +18,7 @@ import { AccommodationService } from "../accommodation/accommodation.service";
 import { MetarService } from "../metar/metar.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
-import { Public, Roles } from "../common/decorators";
+import { Public, Roles, CurrentUser } from "../common/decorators";
 import {
   AerodromeCreateSchema,
   AerodromeUpdateSchema,
@@ -58,6 +61,7 @@ export class AerodromeController {
 
   @Public()
   @Get("map")
+  @Header("Cache-Control", "public, max-age=600")
   async mapMarkers(@Query("q") q?: string) {
     const data = await this.aerodromes.findAllMarkers(q);
     return ok(data);
@@ -106,31 +110,54 @@ export class AerodromeController {
     return ok(aerodrome);
   }
 
-  @Roles("ADMIN", "MODERATOR")
+  // Source data is imported (openAIP, OSM); the API only lets an admin manage
+  // the few sheets created by hand (source "manual"), and every change is
+  // written to the audit log.
+  @Roles("ADMIN")
   @Post()
   async create(
     @Body(new ZodValidationPipe(AerodromeCreateSchema))
     body: AerodromeCreateInput,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
   ) {
-    const aerodrome = await this.aerodromes.create(body);
+    const aerodrome = await this.aerodromes.create(body, {
+      adminId: user.sub,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     return ok(aerodrome);
   }
 
-  @Roles("ADMIN", "MODERATOR")
+  @Roles("ADMIN")
   @Put(":id")
   async update(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(AerodromeUpdateSchema))
     body: AerodromeUpdateInput,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
   ) {
-    const aerodrome = await this.aerodromes.update(id, body);
+    const aerodrome = await this.aerodromes.update(id, body, {
+      adminId: user.sub,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     return ok(aerodrome);
   }
 
   @Roles("ADMIN")
   @Delete(":id")
-  async remove(@Param("id") id: string) {
-    await this.aerodromes.delete(id);
+  async remove(
+    @Param("id") id: string,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    await this.aerodromes.delete(id, {
+      adminId: user.sub,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     return ok({ deleted: true });
   }
 
