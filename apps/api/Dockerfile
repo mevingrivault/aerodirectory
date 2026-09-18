@@ -32,12 +32,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Antivirus scanning talks to the `clamav` service (clamd, INSTREAM) over the
+# internal network, so no ClamAV binaries or signature database live here.
 RUN set -eux; \
-    groupadd --system clamav || true; \
-    useradd --system --gid clamav --no-create-home --home-dir /var/lib/clamav clamav || true; \
     apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends ca-certificates clamav gosu openssl osmium-tool tzdata && \
+    apt-get install -y --no-install-recommends ca-certificates gosu openssl osmium-tool tzdata && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules

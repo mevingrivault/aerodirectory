@@ -150,7 +150,7 @@ pnpm dev
 Notes:
 
 - `.env.development` now matches Docker PostgreSQL on port `5432`.
-- `CLAMSCAN_ENABLED=false` by default in development to avoid requiring a host-level `clamscan` binary while debugging locally.
+- `CLAMAV_ENABLED=false` by default in development. Set it to `true` with `docker compose up -d clamav` running: the API streams uploads to clamd on `localhost:3310` (no host-level ClamAV install needed).
 - Redis, SeaweedFS, and Mailpit are started by `pnpm infra:up`; they are useful for features beyond the happy path.
 
 ### Local App + Remote Database
