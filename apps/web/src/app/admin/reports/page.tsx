@@ -24,6 +24,7 @@ const TARGET_LABELS: Record<AdminReportListItem["targetType"], string> = {
   comment: "Commentaire",
   correction: "Correction",
   photo: "Photo",
+  aerodrome: "Fiche aérodrome",
 };
 
 export default function AdminReportsPage() {
@@ -31,7 +32,7 @@ export default function AdminReportsPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [state, setState] = useState<"pending" | "approved" | "rejected" | "all">("pending");
-  const [targetType, setTargetType] = useState<"comment" | "correction" | "photo" | "all">("all");
+  const [targetType, setTargetType] = useState<"comment" | "correction" | "photo" | "aerodrome" | "all">("all");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -143,7 +144,7 @@ export default function AdminReportsPage() {
         <select
           value={targetType}
           onChange={(event) =>
-            setTargetType(event.target.value as "comment" | "correction" | "photo" | "all")
+            setTargetType(event.target.value as "comment" | "correction" | "photo" | "aerodrome" | "all")
           }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
@@ -151,6 +152,7 @@ export default function AdminReportsPage() {
           <option value="comment">Commentaires</option>
           <option value="correction">Corrections</option>
           <option value="photo">Photos</option>
+          <option value="aerodrome">Fiches aérodrome</option>
         </select>
       </div>
 

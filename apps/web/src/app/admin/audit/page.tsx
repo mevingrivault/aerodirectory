@@ -34,6 +34,7 @@ const TARGET_LABELS: Record<AdminContentAuditItem["targetType"], string> = {
   correction: "Contribution",
   photo: "Photo",
   event: "Événement",
+  aerodrome: "Fiche aérodrome",
   user: "Membre",
 };
 

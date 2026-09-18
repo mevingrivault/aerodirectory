@@ -525,6 +525,35 @@ export class CommentService {
       if (existingPendingReport) {
         throw new BadRequestException("Vous avez déjà signalé cette contribution.");
       }
+    } else if (input.targetType === "aerodrome") {
+      // Reporting the sheet itself (wrong data, closed field...). Nothing to
+      // hide: the admin simply gets the report in their queue.
+      if (input.targetId !== aerodromeId) {
+        throw new BadRequestException("Signalement incohérent.");
+      }
+
+      const aerodrome = await this.prisma.aerodrome.findUnique({
+        where: { id: aerodromeId },
+        select: { id: true },
+      });
+      if (!aerodrome) {
+        throw new NotFoundException("Aérodrome introuvable.");
+      }
+
+      const existingPendingReport = await this.prisma.report.findFirst({
+        where: {
+          userId,
+          aerodromeId,
+          targetType: "aerodrome",
+          targetId: aerodromeId,
+          contentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      if (existingPendingReport) {
+        throw new BadRequestException("Vous avez déjà signalé cette fiche.");
+      }
     } else {
       const photo = await this.prisma.photo.findUnique({
         where: { id: input.targetId },

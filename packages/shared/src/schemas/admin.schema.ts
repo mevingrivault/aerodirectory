@@ -31,7 +31,7 @@ export const AdminPhotosQuerySchema = PaginationSchema.extend({
 export const AdminReportsQuerySchema = PaginationSchema.extend({
   search: z.string().trim().max(255).optional(),
   state: z.enum(["pending", "approved", "rejected", "all"]).optional(),
-  targetType: z.enum(["comment", "correction", "photo", "all"]).optional(),
+  targetType: z.enum(["comment", "correction", "photo", "aerodrome", "all"]).optional(),
 });
 
 export const AdminMailEventsQuerySchema = PaginationSchema.extend({
@@ -43,7 +43,7 @@ export const AdminMailEventsQuerySchema = PaginationSchema.extend({
 });
 
 export const AdminContentAuditQuerySchema = PaginationSchema.extend({
-  targetType: z.enum(["comment", "correction", "photo", "event", "user", "all"]).optional(),
+  targetType: z.enum(["comment", "correction", "photo", "event", "aerodrome", "user", "all"]).optional(),
   actionType: z
     .enum([
       "COMMENT_DELETE",

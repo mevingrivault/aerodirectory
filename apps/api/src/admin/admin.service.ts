@@ -1602,20 +1602,7 @@ export class AdminService {
         },
         select: { userId: true },
       }),
-      report.targetType === "comment"
-        ? this.prisma.comment.findUnique({
-            where: { id: report.targetId },
-            select: { userId: true },
-          })
-        : report.targetType === "correction"
-          ? this.prisma.correction.findUnique({
-              where: { id: report.targetId },
-              select: { userId: true },
-            })
-          : this.prisma.photo.findUnique({
-              where: { id: report.targetId },
-              select: { userId: true },
-            }),
+      this.findReportTargetOwner(report.targetType, report.targetId),
       this.prisma.aerodrome.findUnique({
         where: { id: report.aerodromeId },
         select: { name: true },
@@ -1636,7 +1623,10 @@ export class AdminService {
         },
       });
 
-      if (report.targetType === "comment") {
+      if (report.targetType === "aerodrome") {
+        // Nothing to hide: the sheet is source data, the admin acts on it
+        // through the sync tools. Approving just acknowledges the report.
+      } else if (report.targetType === "comment") {
         await tx.comment.updateMany({
           where: { id: report.targetId },
           data: { contentStatus: "FLAGGED" },
@@ -1662,12 +1652,7 @@ export class AdminService {
     await this.logCommunityAdminAction({
       adminId,
       actionType: "REPORT_APPROVE",
-      targetType:
-        report.targetType === "comment"
-          ? "comment"
-          : report.targetType === "correction"
-            ? "correction"
-            : "photo",
+      targetType: reportTargetType(report.targetType),
       targetId: report.targetId,
       targetSummary: `${report.targetType} ${report.targetId}`,
       reason: input.note?.trim() || null,
@@ -1702,7 +1687,9 @@ export class AdminService {
             ? `Un commentaire a été marqué comme signalé sur ${aerodrome?.name ?? "un aérodrome"}.`
             : report.targetType === "correction"
               ? `Une correction proposée a été marquée comme signalée sur ${aerodrome?.name ?? "un aérodrome"}.`
-              : `Une photo a été retirée après signalement sur ${aerodrome?.name ?? "un aérodrome"}.`,
+              : report.targetType === "photo"
+                ? `Une photo a été retirée après signalement sur ${aerodrome?.name ?? "un aérodrome"}.`
+                : `Un signalement a été retenu sur ${aerodrome?.name ?? "un aérodrome"}.`,
         linkUrl: `/aerodrome/${report.aerodromeId}`,
         metadata: { targetType: report.targetType, targetId: report.targetId },
       });
@@ -1745,20 +1732,7 @@ export class AdminService {
         },
         select: { userId: true },
       }),
-      report.targetType === "comment"
-        ? this.prisma.comment.findUnique({
-            where: { id: report.targetId },
-            select: { userId: true },
-          })
-        : report.targetType === "correction"
-          ? this.prisma.correction.findUnique({
-              where: { id: report.targetId },
-              select: { userId: true },
-            })
-          : this.prisma.photo.findUnique({
-              where: { id: report.targetId },
-              select: { userId: true },
-            }),
+      this.findReportTargetOwner(report.targetType, report.targetId),
       this.prisma.aerodrome.findUnique({
         where: { id: report.aerodromeId },
         select: { name: true },
@@ -1795,12 +1769,7 @@ export class AdminService {
     await this.logCommunityAdminAction({
       adminId,
       actionType: "REPORT_REJECT",
-      targetType:
-        report.targetType === "comment"
-          ? "comment"
-          : report.targetType === "correction"
-            ? "correction"
-            : "photo",
+      targetType: reportTargetType(report.targetType),
       targetId: report.targetId,
       targetSummary: `${report.targetType} ${report.targetId}`,
       reason: input.note?.trim() || null,
@@ -1835,7 +1804,9 @@ export class AdminService {
             ? `Votre commentaire a été rétabli sur ${aerodrome?.name ?? "un aérodrome"}.`
             : report.targetType === "correction"
               ? `Votre correction proposée a été rétablie sur ${aerodrome?.name ?? "un aérodrome"}.`
-              : `Votre photo a été conservée après examen sur ${aerodrome?.name ?? "un aérodrome"}.`,
+              : report.targetType === "photo"
+                ? `Votre photo a été conservée après examen sur ${aerodrome?.name ?? "un aérodrome"}.`
+                : `Un signalement a été classé sans suite sur ${aerodrome?.name ?? "un aérodrome"}.`,
         linkUrl: `/aerodrome/${report.aerodromeId}`,
         metadata: { targetType: report.targetType, targetId: report.targetId },
       });
@@ -2170,17 +2141,14 @@ export class AdminService {
           ? `Photo publiée le ${photoTarget.createdAt.toLocaleDateString("fr-FR")}${
               photoTarget.user.displayName ? ` par ${photoTarget.user.displayName}` : ""
             }`
-        : null;
+          : report.targetType === "aerodrome"
+            ? `Fiche ${report.aerodrome.icaoCode ?? report.aerodrome.name}`
+            : null;
     const targetStatus = commentTarget?.contentStatus ?? correctionTarget?.contentStatus ?? photoTarget?.status ?? null;
 
     return {
       id: report.id,
-      targetType:
-        report.targetType === "comment"
-          ? "comment"
-          : report.targetType === "correction"
-            ? "correction"
-            : "photo",
+      targetType: reportTargetType(report.targetType),
       targetId: report.targetId,
       reason: report.reason,
       contentStatus: report.contentStatus,
@@ -2261,6 +2229,20 @@ export class AdminService {
         ...(params.metadata ?? {}),
       },
     });
+  }
+
+  /** Author of the reported content, or null for a report on the sheet itself. */
+  private findReportTargetOwner(targetType: string, targetId: string) {
+    switch (targetType) {
+      case "comment":
+        return this.prisma.comment.findUnique({ where: { id: targetId }, select: { userId: true } });
+      case "correction":
+        return this.prisma.correction.findUnique({ where: { id: targetId }, select: { userId: true } });
+      case "photo":
+        return this.prisma.photo.findUnique({ where: { id: targetId }, select: { userId: true } });
+      default:
+        return Promise.resolve(null);
+    }
   }
 
   private mapCommunityActionToAuditAction(
@@ -2377,9 +2359,16 @@ export class AdminService {
       value === "correction" ||
       value === "photo" ||
       value === "event" ||
+      value === "aerodrome" ||
       value === "user"
     );
   }
+}
+
+function reportTargetType(value: string): AdminReportListItem["targetType"] {
+  return value === "comment" || value === "correction" || value === "photo" || value === "aerodrome"
+    ? value
+    : "photo";
 }
 
 function buildOpenAirSourceId(

@@ -337,7 +337,7 @@ export interface AdminPhotoListItem {
 
 export interface AdminReportListItem {
   id: string;
-  targetType: "comment" | "correction" | "photo";
+  targetType: "comment" | "correction" | "photo" | "aerodrome";
   targetId: string;
   reason: string;
   contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
@@ -413,7 +413,7 @@ export interface AdminContentAuditItem {
     | "USER_BAN"
     | "USER_UNBAN"
     | "USER_DELETE";
-  targetType: "comment" | "correction" | "photo" | "event" | "user";
+  targetType: "comment" | "correction" | "photo" | "event" | "aerodrome" | "user";
   targetId: string;
   targetSummary: string | null;
   reason: string | null;

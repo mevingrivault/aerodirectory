@@ -8,6 +8,12 @@ import {
   MAX_SEARCH_RADIUS_KM,
 } from "../constants";
 
+/**
+ * Boolean query parameter. `z.coerce.boolean()` turns the string "false" into
+ * `true` (Boolean("false") === true); this parses the usual spellings.
+ */
+export const queryBoolean = () => z.stringbool();
+
 export const PaginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -19,15 +25,15 @@ export const AerodromeSearchSchema = PaginationSchema.extend({
   minRunwayLength: z.coerce.number().int().positive().optional(),
   surface: z.enum(SURFACE_TYPES).optional(),
   fuel: z.enum(FUEL_TYPES).optional(),
-  hasRestaurant: z.coerce.boolean().optional(),
-  hasAccommodation: z.coerce.boolean().optional(),
-  hasBikes: z.coerce.boolean().optional(),
-  hasTransport: z.coerce.boolean().optional(),
-  nightOperations: z.coerce.boolean().optional(),
-  ppr: z.coerce.boolean().optional(),
-  privateUse: z.coerce.boolean().optional(),
-  skydiveActivity: z.coerce.boolean().optional(),
-  winchOnly: z.coerce.boolean().optional(),
+  hasRestaurant: queryBoolean().optional(),
+  hasAccommodation: queryBoolean().optional(),
+  hasBikes: queryBoolean().optional(),
+  hasTransport: queryBoolean().optional(),
+  nightOperations: queryBoolean().optional(),
+  ppr: queryBoolean().optional(),
+  privateUse: queryBoolean().optional(),
+  skydiveActivity: queryBoolean().optional(),
+  winchOnly: queryBoolean().optional(),
   status: z.enum(["OPEN", "CLOSED", "RESTRICTED", "SEASONAL"]).optional(),
   // Geospatial
   lat: z.coerce.number().min(-90).max(90).optional(),
@@ -47,7 +53,7 @@ export const NearbySchema = z.object({
   lng: z.coerce.number().min(-180).max(180),
   radiusKm: z.coerce.number().positive().max(MAX_SEARCH_RADIUS_KM).default(50),
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-  hasFuel: z.coerce.boolean().optional(),
+  hasFuel: queryBoolean().optional(),
 });
 
 export const SavedSearchCreateSchema = z.object({

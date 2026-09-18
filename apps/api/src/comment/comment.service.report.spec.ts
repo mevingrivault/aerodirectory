@@ -71,6 +71,29 @@ describe("CommentService.createReport", () => {
     expect(prisma.comment.updateMany).not.toHaveBeenCalled();
   });
 
+  it("accepts a report on the aerodrome sheet itself without hiding anything", async () => {
+    const { service, prisma } = build([]);
+    (prisma as Record<string, unknown>)["aerodrome"] = {
+      findUnique: vi.fn().mockResolvedValue({ id: "ad1" }),
+    };
+
+    await service.createReport("reporter-1", "ad1", { targetType: "aerodrome", targetId: "ad1", reason: "Fermé" });
+
+    expect(prisma.report.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ targetType: "aerodrome", targetId: "ad1" }) }),
+    );
+    expect(prisma.comment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses an aerodrome report whose target does not match the route", async () => {
+    const { service, prisma } = build([]);
+
+    await expect(
+      service.createReport("reporter-1", "ad1", { targetType: "aerodrome", targetId: "ad2", reason: "x" }),
+    ).rejects.toThrow(/incohérent/i);
+    expect(prisma.report.create).not.toHaveBeenCalled();
+  });
+
   it("refuses to report one's own comment", async () => {
     const { service, prisma } = build([]);
 
