@@ -19,8 +19,11 @@ import { AltchaWidget, type AltchaHandle } from "@/components/ui/altcha-widget";
 
 const MAX_SIZE_MB = 5;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-const ACCEPTED_EXT = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
+const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_EXT = [".jpg", ".jpeg", ".png", ".webp"];
+const HEIC_EXT = [".heic", ".heif"];
+const HEIC_MESSAGE =
+  "Les photos HEIC/HEIF ne sont pas prises en charge. Exporte-la en JPEG (iPhone : Réglages › Appareil photo › Formats › Le plus compatible).";
 const INITIAL_VISIBLE_PHOTOS = 6;
 
 interface PhotoEntry {
@@ -86,11 +89,15 @@ export function PhotoUpload({
     }
 
     const ext = "." + (file.name.split(".").pop()?.toLowerCase() ?? "");
+    if (HEIC_EXT.includes(ext) || file.type === "image/heic" || file.type === "image/heif") {
+      return HEIC_MESSAGE;
+    }
+
     const mimeOk = ACCEPTED.some((mime) => file.type === mime || file.type === "");
     const extOk = ACCEPTED_EXT.includes(ext);
 
     if (!mimeOk && !extOk) {
-      return "Format non supporté. Formats acceptés : JPEG, PNG, WebP, HEIC.";
+      return "Format non supporté. Formats acceptés : JPEG, PNG, WebP.";
     }
 
     return null;
@@ -377,7 +384,7 @@ export function PhotoUpload({
               Glissez une photo ou <span className="text-primary">cliquez pour parcourir</span>
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              JPEG, PNG, WebP, HEIC · Max {MAX_SIZE_MB} Mo
+              JPEG, PNG, WebP · Max {MAX_SIZE_MB} Mo
             </p>
             <input
               ref={fileInputRef}

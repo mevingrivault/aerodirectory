@@ -11,6 +11,9 @@ import sharp from "sharp";
 import {
   PHOTO_ALLOWED_EXTENSIONS,
   PHOTO_ALLOWED_MIME_TYPES,
+  PHOTO_HEIC_EXTENSIONS,
+  PHOTO_HEIC_MESSAGE,
+  PHOTO_HEIC_MIME_TYPES,
   PHOTO_MAX_HEIGHT,
   PHOTO_MAX_INPUT_PIXELS,
   PHOTO_MAX_UPLOAD_BYTES,
@@ -69,14 +72,21 @@ export class ImageService {
     }
 
     const extension = extname(originalFilename).replace(".", "").toLowerCase();
+    if (extension && PHOTO_HEIC_EXTENSIONS.has(extension)) {
+      throw new BadRequestException(PHOTO_HEIC_MESSAGE);
+    }
     if (extension && !PHOTO_ALLOWED_EXTENSIONS.has(extension)) {
       throw new BadRequestException(
-        `Extension non autorisée: .${extension}. Formats acceptés: JPEG, PNG, WebP, HEIC, HEIF.`,
+        `Extension non autorisée: .${extension}. Formats acceptés: JPEG, PNG, WebP.`,
       );
     }
 
     const sourceBuffer = await readFile(tempFilePath);
     const detectedType = await this.detectFileType(sourceBuffer);
+
+    if (detectedType && PHOTO_HEIC_MIME_TYPES.has(detectedType.mime)) {
+      throw new BadRequestException(PHOTO_HEIC_MESSAGE);
+    }
 
     if (!detectedType || !PHOTO_ALLOWED_MIME_TYPES.has(detectedType.mime)) {
       throw new BadRequestException(
@@ -106,7 +116,7 @@ export class ImageService {
 
     return {
       sourceBuffer,
-      sourceMimeType: detectedType.mime,
+      sourceMimeType: detectedType.mime as AllowedPhotoMimeType,
       outputMimeType,
       outputExtension: outputMimeType === "image/jpeg" ? "jpg" : "webp",
       width: metadata.width,
@@ -180,7 +190,7 @@ export class ImageService {
 
   private async detectFileType(
     sourceBuffer: Buffer,
-  ): Promise<{ ext: string; mime: AllowedPhotoMimeType } | null> {
+  ): Promise<{ ext: string; mime: string } | null> {
     const fileTypeModule = (await import("file-type")) as {
       fileTypeFromBuffer: (
         buffer: Buffer,
@@ -188,18 +198,7 @@ export class ImageService {
     };
 
     const detected = await fileTypeModule.fileTypeFromBuffer(sourceBuffer);
-    if (!detected) {
-      return null;
-    }
-
-    if (!PHOTO_ALLOWED_MIME_TYPES.has(detected.mime)) {
-      return null;
-    }
-
-    return {
-      ext: detected.ext,
-      mime: detected.mime as AllowedPhotoMimeType,
-    };
+    return detected ?? null;
   }
 
   private getPositiveNumber(key: string, fallback: number): number {
