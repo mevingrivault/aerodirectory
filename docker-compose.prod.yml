@@ -105,19 +105,37 @@ services:
       retries: 12
       start_period: 30s
 
-  clamav-updater:
-    image: clamav/clamav:stable
+  clamav:
+    # Long-running clamd (signatures loaded once) + freshclam in the same
+    # container. The API streams each upload to it over INSTREAM instead of
+    # spawning a clamscan process per file.
+    image: clamav/clamav:1.4
     restart: unless-stopped
-    user: "0:0"
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        mkdir -p /var/lib/clamav
-        chown -R 100:101 /var/lib/clamav
-        exec freshclam --foreground=true --checks=${CLAMAV_FRESHCLAM_CHECKS:-12}
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+      FRESHCLAM_CHECKS: ${CLAMAV_FRESHCLAM_CHECKS:-12}
     volumes:
       - clamav_db:/var/lib/clamav
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s  # first start downloads the signature database
+
+  migrate:
+    # One-shot: applies pending Prisma migrations, then exits. api and
+    # sync-worker wait for it to succeed so the schema always matches the code.
+    image: ghcr.io/${GITHUB_REPO}/aerodirectory-api:${IMAGE_TAG:-latest}
+    restart: "no"
+    entrypoint: ["node", "/app/apps/api/docker/migrate.mjs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
     networks:
       - internal
 
@@ -136,8 +154,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      clamav-updater:
-        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
       seaweedfs-filer:
         condition: service_healthy
       seaweedfs-s3:
@@ -169,11 +189,14 @@ services:
       PHOTO_MAX_HEIGHT: ${PHOTO_MAX_HEIGHT:-4096}
       PHOTO_MAX_INPUT_PIXELS: ${PHOTO_MAX_INPUT_PIXELS:-16777216}
       PHOTO_UPLOAD_TMP_DIR: ${PHOTO_UPLOAD_TMP_DIR:-/tmp/navventura-uploads}
-      CLAMSCAN_ENABLED: ${CLAMSCAN_ENABLED:-true}
-      CLAMSCAN_PATH: ${CLAMSCAN_PATH:-/usr/bin/clamscan}
-      CLAMSCAN_DATABASE_PATH: ${CLAMSCAN_DATABASE_PATH:-/var/lib/clamav}
-      CLAMSCAN_TIMEOUT_MS: ${CLAMSCAN_TIMEOUT_MS:-20000}
-      CLAMSCAN_AUTO_UPDATE: ${CLAMSCAN_AUTO_UPDATE:-false}
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_MODE: clamd
+      CLAMD_HOST: clamav
+      CLAMD_PORT: 3310
+      CLAMAV_TIMEOUT_MS: ${CLAMAV_TIMEOUT_MS:-20000}
+      CLAMAV_MAX_CONCURRENT: ${CLAMAV_MAX_CONCURRENT:-2}
+      CLAMAV_MAX_QUEUE: ${CLAMAV_MAX_QUEUE:-20}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       OPENAIP_API_KEY: ${OPENAIP_API_KEY}
       CHECKWX_API_KEY: ${CHECKWX_API_KEY}
       ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
@@ -191,8 +214,6 @@ services:
       SYNC_REPORT_EMAIL_OVERRIDE: ${SYNC_REPORT_EMAIL_OVERRIDE:-}
       SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
       RUN_MIGRATIONS: "false"
-    volumes:
-      - clamav_db:/var/lib/clamav:ro
     networks:
       - internal
       - proxy
@@ -212,8 +233,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      clamav-updater:
-        condition: service_started
+      migrate:
+        condition: service_completed_successfully
       seaweedfs-filer:
         condition: service_healthy
       seaweedfs-s3:
@@ -245,11 +266,14 @@ services:
       PHOTO_MAX_HEIGHT: ${PHOTO_MAX_HEIGHT:-4096}
       PHOTO_MAX_INPUT_PIXELS: ${PHOTO_MAX_INPUT_PIXELS:-16777216}
       PHOTO_UPLOAD_TMP_DIR: ${PHOTO_UPLOAD_TMP_DIR:-/tmp/navventura-uploads}
-      CLAMSCAN_ENABLED: ${CLAMSCAN_ENABLED:-true}
-      CLAMSCAN_PATH: ${CLAMSCAN_PATH:-/usr/bin/clamscan}
-      CLAMSCAN_DATABASE_PATH: ${CLAMSCAN_DATABASE_PATH:-/var/lib/clamav}
-      CLAMSCAN_TIMEOUT_MS: ${CLAMSCAN_TIMEOUT_MS:-20000}
-      CLAMSCAN_AUTO_UPDATE: ${CLAMSCAN_AUTO_UPDATE:-false}
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_MODE: clamd
+      CLAMD_HOST: clamav
+      CLAMD_PORT: 3310
+      CLAMAV_TIMEOUT_MS: ${CLAMAV_TIMEOUT_MS:-20000}
+      CLAMAV_MAX_CONCURRENT: ${CLAMAV_MAX_CONCURRENT:-2}
+      CLAMAV_MAX_QUEUE: ${CLAMAV_MAX_QUEUE:-20}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       OPENAIP_API_KEY: ${OPENAIP_API_KEY}
       CHECKWX_API_KEY: ${CHECKWX_API_KEY}
       ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
@@ -268,7 +292,6 @@ services:
       SYNC_DATA_DIR: ${SYNC_DATA_DIR:-/data/sync}
       RUN_MIGRATIONS: "false"
     volumes:
-      - clamav_db:/var/lib/clamav:ro
       - sync_data:${SYNC_DATA_DIR:-/data/sync}
     networks:
       - internal
