@@ -17,7 +17,7 @@ import {
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { FastifyRequest, FastifyReply } from "fastify";
-import { AuthService } from "./auth.service";
+import { AuthService, TOTP_PENDING_TTL_SECONDS } from "./auth.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok } from "../common/api-response";
 import { Public, CurrentUser } from "../common/decorators";
@@ -28,6 +28,7 @@ import {
   RegisterSchema,
   LoginSchema,
   TotpVerifySchema,
+  TotpDisableSchema,
   UpdateProfileSchema,
   ChangePasswordSchema,
   DeleteAccountSchema,
@@ -38,6 +39,7 @@ import {
   type RegisterInput,
   type LoginInput,
   type TotpVerifyInput,
+  type TotpDisableInput,
   type UpdateProfileInput,
   type ChangePasswordInput,
   type DeleteAccountInput,
@@ -60,6 +62,25 @@ const COOKIE_OPTS = (persistent: boolean, maxAgeSeconds: number) =>
 const ACCESS_TTL = 15 * 60;        // 15 minutes
 const REFRESH_TTL = 7 * 24 * 3600; // 7 jours
 const REMEMBER_COOKIE = "remember_session";
+// Partial-login cookie: only ever sent to the TOTP completion route.
+const TOTP_PENDING_COOKIE = "totp_pending";
+const TOTP_PENDING_PATH = "/api/v1/auth/login/totp";
+
+function setTotpPendingCookie(res: FastifyReply, partialToken: string) {
+  void res.setCookie(TOTP_PENDING_COOKIE, partialToken, {
+    ...COOKIE_BASE_OPTS,
+    path: TOTP_PENDING_PATH,
+    maxAge: TOTP_PENDING_TTL_SECONDS,
+  });
+}
+
+function clearTotpPendingCookie(res: FastifyReply) {
+  void res.setCookie(TOTP_PENDING_COOKIE, "", {
+    ...COOKIE_BASE_OPTS,
+    path: TOTP_PENDING_PATH,
+    maxAge: 0,
+  });
+}
 
 function setAuthCookies(
   res: FastifyReply,
@@ -127,28 +148,36 @@ export class AuthController {
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
     const result = await this.auth.login(body, req.ip, req.headers["user-agent"]);
-    if (!result.requireTotp) {
+    if (result.requireTotp) {
+      // Hand the partial token to the browser in a cookie scoped to the TOTP
+      // route; the client never sees or stores it.
+      setTotpPendingCookie(res, result.accessToken);
+    } else {
       setAuthCookies(res, result, body.rememberMe ?? false);
     }
     return ok({ requireTotp: result.requireTotp });
   }
 
+  @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
   @Post("login/totp")
+  @HttpCode(HttpStatus.OK)
   async loginTotp(
     @Body(new ZodValidationPipe(TotpVerifySchema)) body: TotpVerifyInput,
-    @CurrentUser() user: { sub: string; totpPending: boolean },
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
-    if (!user.totpPending) {
+    const partialToken = req.cookies?.[TOTP_PENDING_COOKIE];
+    if (!partialToken) {
       throw new UnauthorizedException("2FA step not initiated");
     }
     const tokens = await this.auth.verifyTotpLogin(
-      user.sub,
+      partialToken,
       body.code,
       req.ip,
       req.headers["user-agent"],
     );
+    clearTotpPendingCookie(res);
     setAuthCookies(res, tokens, body.rememberMe ?? false);
     return ok({ success: true });
   }
@@ -165,9 +194,13 @@ export class AuthController {
     return ok({ refreshed: true });
   }
 
+  @Public()
   @Post("logout")
   @HttpCode(HttpStatus.OK)
-  async logout(@Res({ passthrough: true }) res: FastifyReply) {
+  async logout(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+    // Public on purpose: an expired access token must not prevent revoking
+    // the refresh token that would otherwise outlive it.
+    await this.auth.logout(req.cookies?.["refresh_token"]);
     clearAuthCookies(res);
     return ok({ loggedOut: true });
   }
@@ -198,6 +231,17 @@ export class AuthController {
       req.headers["user-agent"],
     );
     return ok({ enabled: true });
+  }
+
+  @Post("totp/disable")
+  @HttpCode(HttpStatus.OK)
+  async disableTotp(
+    @Body(new ZodValidationPipe(TotpDisableSchema)) body: TotpDisableInput,
+    @CurrentUser() user: { sub: string },
+    @Req() req: FastifyRequest,
+  ) {
+    await this.auth.disableTotp(user.sub, body, req.ip, req.headers["user-agent"]);
+    return ok({ disabled: true });
   }
 
   @Get("profile")
@@ -379,8 +423,13 @@ export class AuthController {
     @Body(new ZodValidationPipe(ChangePasswordSchema)) body: ChangePasswordInput,
     @CurrentUser() user: { sub: string },
     @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
     await this.auth.changePassword(user.sub, body, req.ip, req.headers["user-agent"]);
+    // The change revoked every session, including this one: re-issue cookies
+    // so the current browser stays signed in.
+    const tokens = await this.auth.issueSession(user.sub);
+    setAuthCookies(res, tokens, req.cookies?.[REMEMBER_COOKIE] === "1");
     return ok({ changed: true });
   }
 

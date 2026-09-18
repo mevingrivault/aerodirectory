@@ -8,23 +8,25 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import type { StringValue } from "ms";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
 import { TOTP } from "otplib";
 import { NobleCryptoPlugin } from "@otplib/plugin-crypto-noble";
 import { ScureBase32Plugin } from "@otplib/plugin-base32-scure";
 import * as QRCode from "qrcode";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
 import { StorageService } from "../photo/storage.service";
 import { CryptoService } from "../common/crypto.service";
+import { parseDurationSeconds } from "../common/bootstrap-config";
+import { RefreshTokenStore } from "./refresh-token.store";
 import type {
   RegisterInput,
   LoginInput,
   AuthTokens,
+  TotpDisableInput,
   Badge,
   CommunityFollowListItem,
   CommunityPublicProfile,
@@ -44,6 +46,47 @@ const totp = new TOTP({
   base32: new ScureBase32Plugin(),
 });
 
+const ARGON2_OPTIONS = {
+  type: argon2.argon2id,
+  memoryCost: 65536, // 64 MB
+  timeCost: 3,
+  parallelism: 4,
+} as const;
+
+/** Lifetime of the partial token issued between password and TOTP steps. */
+export const TOTP_PENDING_TTL_SECONDS = 5 * 60;
+
+/** Shape of the JWT payloads issued by this service. */
+export interface AccessTokenPayload {
+  sub: string;
+  role: string;
+  /** User.tokenVersion at issue time — mismatch means the session was revoked. */
+  ver: number;
+  typ?: undefined;
+}
+
+export interface RefreshTokenPayload {
+  sub: string;
+  role: string;
+  ver: number;
+  typ: "refresh";
+  jti: string;
+}
+
+export interface TotpPendingPayload {
+  sub: string;
+  role: string;
+  ver: number;
+  typ: "totp";
+  totpPending: true;
+}
+
+interface SessionUser {
+  id: string;
+  role: string;
+  tokenVersion: number;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -59,6 +102,7 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly storage: StorageService,
     private readonly crypto: CryptoService,
+    private readonly sessions: RefreshTokenStore,
   ) {}
 
   private async verifyTotpCode(secret: string, code: string): Promise<boolean> {
@@ -102,12 +146,7 @@ export class AuthService {
     }
 
     // Argon2id with OWASP-recommended parameters
-    const passwordHash = await argon2.hash(input.password, {
-      type: argon2.argon2id,
-      memoryCost: 65536, // 64 MB
-      timeCost: 3,
-      parallelism: 4,
-    });
+    const passwordHash = await argon2.hash(input.password, ARGON2_OPTIONS);
 
     const user = await this.prisma.user.create({
       data: {
@@ -166,67 +205,20 @@ export class AuthService {
 
     if (!user) {
       // Constant-time comparison — hash a dummy password to prevent timing attacks
-      await argon2.hash("dummy-password-for-timing", {
-        type: argon2.argon2id,
-      });
+      await argon2.hash("dummy-password-for-timing", ARGON2_OPTIONS);
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    // Check lockout before password verification
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
-      throw new UnauthorizedException(
-        `Compte temporairement verrouillé. Réessayez dans ${Math.ceil(retryAfterSeconds / 60)} minute(s).`,
-      );
-    }
+    this.assertNotLocked(user);
 
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
-      const newAttempts = user.failedLoginAttempts + 1;
-      const shouldLock = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS;
-      const lockedUntil = shouldLock
-        ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
-        : null;
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: newAttempts,
-          ...(lockedUntil !== null ? { lockedUntil } : {}),
-        },
-      });
-
-      await this.audit.log({
-        userId: user.id,
-        action: "LOGIN_FAILED",
-        ip,
-        userAgent,
-        metadata: { attempt: newAttempts },
-      });
-
-      if (shouldLock) {
-        await this.audit.log({
-          userId: user.id,
-          action: "ACCOUNT_LOCKED",
-          ip,
-          userAgent,
-          metadata: { lockedUntil: lockedUntil!.toISOString() },
-        });
-        throw new UnauthorizedException(
-          "Compte verrouillé après trop de tentatives échouées. Réessayez dans 15 minutes.",
-        );
-      }
-
+      await this.registerFailedAttempt(user, ip, userAgent);
       throw new UnauthorizedException("Invalid credentials");
     }
 
     // Reset lockout counters on successful password verification
-    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { failedLoginAttempts: 0, lockedUntil: null },
-      });
-    }
+    await this.resetFailedAttempts(user);
 
     if (user.status === "BANNED") {
       throw new UnauthorizedException("Votre compte a été suspendu.");
@@ -236,12 +228,19 @@ export class AuthService {
       throw new UnauthorizedException("Veuillez vérifier votre adresse e-mail avant de vous connecter.");
     }
 
-    // If TOTP is enabled, return partial auth (frontend must complete TOTP step)
+    // If TOTP is enabled, return partial auth (frontend must complete TOTP step).
+    // The partial token is only ever accepted by verifyTotpLogin().
     if (user.totpEnabled) {
-      const partialToken = this.jwt.sign(
-        { sub: user.id, role: user.role, totpPending: true },
-        { expiresIn: "5m" },
-      );
+      const payload: TotpPendingPayload = {
+        sub: user.id,
+        role: user.role,
+        ver: user.tokenVersion,
+        typ: "totp",
+        totpPending: true,
+      };
+      const partialToken = this.jwt.sign(payload, {
+        expiresIn: TOTP_PENDING_TTL_SECONDS,
+      });
       return {
         accessToken: partialToken,
         refreshToken: "",
@@ -257,9 +256,76 @@ export class AuthService {
     });
 
     return {
-      ...(await this.generateTokens(user.id, user.role)),
+      ...(await this.generateTokens(user)),
       requireTotp: false,
     };
+  }
+
+  private assertNotLocked(user: { lockedUntil: Date | null }) {
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      throw new UnauthorizedException(
+        `Compte temporairement verrouillé. Réessayez dans ${Math.ceil(retryAfterSeconds / 60)} minute(s).`,
+      );
+    }
+  }
+
+  /**
+   * Count a failed password or TOTP attempt and lock the account when the
+   * threshold is reached. Throws the lockout error itself when locking.
+   */
+  private async registerFailedAttempt(
+    user: { id: string; failedLoginAttempts: number },
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const newAttempts = user.failedLoginAttempts + 1;
+    const shouldLock = newAttempts >= AuthService.MAX_FAILED_ATTEMPTS;
+    const lockedUntil = shouldLock
+      ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
+      : null;
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: newAttempts,
+        ...(lockedUntil !== null ? { lockedUntil } : {}),
+      },
+    });
+
+    await this.audit.log({
+      userId: user.id,
+      action: "LOGIN_FAILED",
+      ip,
+      userAgent,
+      metadata: { attempt: newAttempts },
+    });
+
+    if (shouldLock) {
+      await this.audit.log({
+        userId: user.id,
+        action: "ACCOUNT_LOCKED",
+        ip,
+        userAgent,
+        metadata: { lockedUntil: lockedUntil!.toISOString() },
+      });
+      throw new UnauthorizedException(
+        "Compte verrouillé après trop de tentatives échouées. Réessayez dans 15 minutes.",
+      );
+    }
+  }
+
+  private async resetFailedAttempts(user: {
+    id: string;
+    failedLoginAttempts: number;
+    lockedUntil: Date | null;
+  }) {
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+    }
   }
 
   // ─── TOTP ──────────────────────────────────────────────
@@ -321,36 +387,103 @@ export class AuthService {
     });
   }
 
+  /**
+   * Second step of the login: exchange the partial token issued by `login()`
+   * plus a valid TOTP code for a real session. Failed codes count towards the
+   * same lockout as failed passwords.
+   */
   async verifyTotpLogin(
-    userId: string,
+    partialToken: string,
     code: string,
     ip?: string,
     userAgent?: string,
   ): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
+    let payload: TotpPendingPayload;
+    try {
+      payload = await this.jwt.verifyAsync<TotpPendingPayload>(partialToken);
+    } catch {
+      throw new UnauthorizedException("Session de connexion expirée. Recommencez.");
+    }
+
+    if (payload.typ !== "totp" || payload.totpPending !== true || !payload.sub) {
+      throw new UnauthorizedException("2FA step not initiated");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
     });
+
+    if (!user || user.status === "BANNED" || user.tokenVersion !== payload.ver) {
+      throw new UnauthorizedException("Session de connexion invalide. Recommencez.");
+    }
 
     if (!user.totpSecret || !user.totpEnabled) {
       throw new BadRequestException("TOTP not enabled");
     }
 
+    this.assertNotLocked(user);
+
     const secret = this.crypto.decrypt(user.totpSecret);
     const valid = await this.verifyTotpCode(secret, code);
 
     if (!valid) {
+      await this.registerFailedAttempt(user, ip, userAgent);
       throw new UnauthorizedException("Invalid TOTP code");
     }
 
+    await this.resetFailedAttempts(user);
+
     await this.audit.log({
-      userId,
+      userId: user.id,
       action: "LOGIN",
       ip,
       userAgent,
       metadata: { method: "totp" },
     });
 
-    return this.generateTokens(user.id, user.role);
+    return this.generateTokens(user);
+  }
+
+  /**
+   * Turn two-factor authentication off. Requires the current password and a
+   * valid code so a hijacked session cannot weaken the account on its own.
+   */
+  async disableTotp(
+    userId: string,
+    input: TotpDisableInput,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+
+    if (!user.totpEnabled || !user.totpSecret) {
+      throw new BadRequestException("TOTP not enabled");
+    }
+
+    const passwordOk = await argon2.verify(user.passwordHash, input.currentPassword);
+    if (!passwordOk) {
+      throw new UnauthorizedException("Mot de passe actuel incorrect");
+    }
+
+    const secret = this.crypto.decrypt(user.totpSecret);
+    const codeOk = await this.verifyTotpCode(secret, input.code);
+    if (!codeOk) {
+      throw new UnauthorizedException("Invalid TOTP code");
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpEnabled: false, totpSecret: null },
+    });
+
+    await this.audit.log({
+      userId,
+      action: "TOTP_DISABLE",
+      ip,
+      userAgent,
+    });
   }
 
   // ─── Email verification ─────────────────────────────────
@@ -481,17 +614,19 @@ export class AuthService {
       throw new BadRequestException("Lien de réinitialisation invalide ou expiré");
     }
 
-    const passwordHash = await argon2.hash(input.password, {
-      type: argon2.argon2id,
-      memoryCost: 65536,
-      timeCost: 3,
-      parallelism: 4,
-    });
+    const passwordHash = await argon2.hash(input.password, ARGON2_OPTIONS);
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: emailToken.userId },
-        data: { passwordHash },
+        // Bumping tokenVersion kills every existing session: a reset is the
+        // recovery path after a compromise, so nothing issued before survives.
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 },
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
       }),
       this.prisma.emailToken.update({
         where: { id: emailToken.id },
@@ -509,31 +644,90 @@ export class AuthService {
 
   // ─── Token generation ──────────────────────────────────
 
-  private async generateTokens(
-    userId: string,
-    role: string,
-  ): Promise<AuthTokens> {
-    const payload = { sub: userId, role };
+  private refreshTtlSeconds(): number {
+    return parseDurationSeconds(
+      this.config.get<string>("JWT_REFRESH_EXPIRES_IN"),
+      7 * 24 * 3600,
+    );
+  }
+
+  private async generateTokens(user: SessionUser): Promise<AuthTokens> {
+    const accessPayload: AccessTokenPayload = {
+      sub: user.id,
+      role: user.role,
+      ver: user.tokenVersion,
+    };
+    const refreshPayload: RefreshTokenPayload = {
+      ...accessPayload,
+      typ: "refresh",
+      jti: randomUUID(),
+    };
+    const refreshTtl = this.refreshTtlSeconds();
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwt.signAsync(payload),
-      this.jwt.signAsync(payload, {
+      this.jwt.signAsync(accessPayload),
+      this.jwt.signAsync(refreshPayload, {
         secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
-        expiresIn: (this.config.get("JWT_REFRESH_EXPIRES_IN") ?? "7d") as StringValue,
+        expiresIn: refreshTtl,
       }),
     ]);
+
+    await this.sessions.save(user.id, refreshPayload.jti, refreshTtl);
 
     return { accessToken, refreshToken };
   }
 
+  /**
+   * Rotate a refresh token: the presented token is consumed (single use) and
+   * a fresh pair is issued. Reuse of a consumed token, a revoked session, a
+   * banned user or a bumped tokenVersion all end here with a 401.
+   */
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
+    let payload: RefreshTokenPayload;
     try {
-      const payload = await this.jwt.verifyAsync(refreshToken, {
-        secret: this.config.get<string>("JWT_REFRESH_SECRET"),
+      payload = await this.jwt.verifyAsync<RefreshTokenPayload>(refreshToken, {
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
-      return this.generateTokens(payload.sub, payload.role);
     } catch {
       throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    if (payload.typ !== "refresh" || !payload.jti || !payload.sub) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const consumed = await this.sessions.consume(payload.sub, payload.jti);
+    if (!consumed) {
+      // Either already rotated (possible theft) or revoked by logout/ban.
+      throw new UnauthorizedException("Refresh token révoqué ou déjà utilisé");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, role: true, status: true, tokenVersion: true },
+    });
+
+    if (!user || user.status === "BANNED" || user.tokenVersion !== payload.ver) {
+      throw new UnauthorizedException("Session révoquée");
+    }
+
+    return this.generateTokens(user);
+  }
+
+  /** Revoke the presented refresh token so it cannot be replayed after logout. */
+  async logout(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) return;
+
+    try {
+      const payload = await this.jwt.verifyAsync<RefreshTokenPayload>(refreshToken, {
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+        ignoreExpiration: true,
+      });
+      if (payload.typ === "refresh" && payload.jti && payload.sub) {
+        await this.sessions.revoke(payload.sub, payload.jti);
+      }
+    } catch {
+      // A garbage token has nothing to revoke.
     }
   }
 
@@ -604,16 +798,13 @@ export class AuthService {
       throw new UnauthorizedException("Mot de passe actuel incorrect");
     }
 
-    const newHash = await argon2.hash(input.newPassword, {
-      type: argon2.argon2id,
-      memoryCost: 65536,
-      timeCost: 3,
-      parallelism: 4,
-    });
+    const newHash = await argon2.hash(input.newPassword, ARGON2_OPTIONS);
 
+    // Every other session dies with the old password; the caller gets fresh
+    // cookies from the controller.
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: newHash },
+      data: { passwordHash: newHash, tokenVersion: { increment: 1 } },
     });
 
     await this.audit.log({
@@ -622,6 +813,15 @@ export class AuthService {
       ip,
       userAgent,
     });
+  }
+
+  /** Fresh session for a user whose previous sessions were just invalidated. */
+  async issueSession(userId: string): Promise<AuthTokens> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, role: true, tokenVersion: true },
+    });
+    return this.generateTokens(user);
   }
 
   async deleteAccount(

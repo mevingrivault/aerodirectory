@@ -9,6 +9,14 @@ import { JwtService } from "@nestjs/jwt";
 import { IS_PUBLIC_KEY } from "../../common/decorators";
 import { PrismaService } from "../../prisma/prisma.service";
 
+interface IncomingTokenPayload {
+  sub?: string;
+  role?: string;
+  ver?: number;
+  typ?: string;
+  totpPending?: boolean;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -34,35 +42,41 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("Missing authentication token");
     }
 
+    let payload: IncomingTokenPayload;
     try {
-      const payload = await this.jwt.verifyAsync(token);
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: { id: true, role: true, status: true },
-      });
-
-      if (!dbUser) {
-        throw new UnauthorizedException("Account not found");
-      }
-
-      if (dbUser.status === "BANNED") {
-        throw new UnauthorizedException("Votre compte a été suspendu.");
-      }
-
-      if (payload.totpPending && !request.url.startsWith("/api/v1/auth/login/totp")) {
-        throw new UnauthorizedException("Two-factor authentication required");
-      }
-      request.user = {
-        ...payload,
-        role: dbUser.role,
-        status: dbUser.status,
-      };
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
+      payload = await this.jwt.verifyAsync<IncomingTokenPayload>(token);
+    } catch {
       throw new UnauthorizedException("Invalid or expired token");
     }
+
+    // Only plain access tokens open a session: the partial TOTP token and the
+    // refresh token are signed for their own endpoints and nothing else.
+    if (payload.typ !== undefined || payload.totpPending || !payload.sub) {
+      throw new UnauthorizedException("Invalid or expired token");
+    }
+
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, role: true, status: true, tokenVersion: true },
+    });
+
+    if (!dbUser) {
+      throw new UnauthorizedException("Account not found");
+    }
+
+    if (dbUser.status === "BANNED") {
+      throw new UnauthorizedException("Votre compte a été suspendu.");
+    }
+
+    if (payload.ver !== dbUser.tokenVersion) {
+      throw new UnauthorizedException("Session révoquée. Reconnectez-vous.");
+    }
+
+    request.user = {
+      ...payload,
+      role: dbUser.role,
+      status: dbUser.status,
+    };
 
     return true;
   }

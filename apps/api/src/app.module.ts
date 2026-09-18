@@ -6,6 +6,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { SyncModule } from "./sync/sync.module";
 import { AltchaModule } from "./altcha/altcha.module";
 import { CryptoModule } from "./common/crypto.module";
+import { RedisModule } from "./common/redis.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { AerodromeModule } from "./aerodrome/aerodrome.module";
@@ -47,6 +48,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
         limit: 200,
       },
     ]),
+    RedisModule,
     AltchaModule,
     CryptoModule,
     PrismaModule,

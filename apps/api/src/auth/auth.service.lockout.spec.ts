@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { UnauthorizedException } from "@nestjs/common";
 import * as argon2 from "argon2";
 import { AuthService } from "./auth.service";
+import { RefreshTokenStore } from "./refresh-token.store";
 
 // argon2 is an ESM export, so it has to be mocked at module level rather than
 // spied on per test.
@@ -31,6 +32,7 @@ type UserRow = {
   emailVerified: Date | null;
   totpEnabled: boolean;
   role: string;
+  tokenVersion: number;
 };
 
 const baseUser: UserRow = {
@@ -43,6 +45,7 @@ const baseUser: UserRow = {
   emailVerified: new Date("2026-01-01"),
   totpEnabled: false,
   role: "MEMBER",
+  tokenVersion: 0,
 };
 
 function buildService(user: UserRow | null) {
@@ -66,6 +69,7 @@ function buildService(user: UserRow | null) {
     {} as never, // mail
     {} as never, // storage
     {} as never, // crypto
+    new RefreshTokenStore(null),
   );
 
   return { service, prisma, audit };

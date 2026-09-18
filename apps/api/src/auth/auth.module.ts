@@ -7,6 +7,7 @@ import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
+import { RefreshTokenStore } from "./refresh-token.store";
 import { MailModule } from "../mail/mail.module";
 import { AltchaModule } from "../altcha/altcha.module";
 import { PhotoModule } from "../photo/photo.module";
@@ -29,6 +30,7 @@ import { PhotoModule } from "../photo/photo.module";
   ],
   providers: [
     AuthService,
+    RefreshTokenStore,
     // Global guards — apply to all routes
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

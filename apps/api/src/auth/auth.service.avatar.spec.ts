@@ -42,6 +42,7 @@ function buildService(user: UserRow | null) {
     {} as never, // mail
     storage as never,
     {} as never, // crypto
+    {} as never, // sessions
   );
 
   return { service, prisma, storage };

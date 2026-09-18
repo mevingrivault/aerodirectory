@@ -45,6 +45,9 @@ export default function ProfilePage() {
   const [totpCode, setTotpCode] = useState("");
   const [totpAlert, setTotpAlert] = useState<{ type: AlertType; msg: string } | null>(null);
   const [totpLoading, setTotpLoading] = useState(false);
+  const [totpDisableOpen, setTotpDisableOpen] = useState(false);
+  const [totpDisablePassword, setTotpDisablePassword] = useState("");
+  const [totpDisableCode, setTotpDisableCode] = useState("");
 
   // Edit display name state
   const [editingName, setEditingName] = useState(false);
@@ -268,6 +271,30 @@ export default function ProfilePage() {
       await refreshProfile();
     } catch {
       setTotpAlert({ type: "error", msg: "Code invalide. Veuillez réessayer." });
+    }
+  };
+
+  const handleDisableTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTotpLoading(true);
+    setTotpAlert(null);
+    try {
+      await apiClient.post("/auth/totp/disable", {
+        currentPassword: totpDisablePassword,
+        code: totpDisableCode,
+      });
+      setTotpAlert({ type: "success", msg: "Authentification à deux facteurs désactivée." });
+      setTotpDisableOpen(false);
+      setTotpDisablePassword("");
+      setTotpDisableCode("");
+      await refreshProfile();
+    } catch (err: unknown) {
+      setTotpAlert({
+        type: "error",
+        msg: err instanceof Error ? err.message : "Impossible de désactiver la 2FA.",
+      });
+    } finally {
+      setTotpLoading(false);
     }
   };
 
@@ -696,11 +723,54 @@ export default function ProfilePage() {
           {totpAlert && <Alert type={totpAlert.type} msg={totpAlert.msg} />}
 
           {user.totpEnabled ? (
-            <div className="flex items-center gap-2">
-              <Key className="h-4 w-4 text-green-600" />
-              <span className="text-green-700 font-medium">
-                L&apos;authentification TOTP est activée sur votre compte
-              </span>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-green-600" />
+                <span className="text-green-700 font-medium">
+                  L&apos;authentification TOTP est activée sur votre compte
+                </span>
+              </div>
+              {totpDisableOpen ? (
+                <form onSubmit={handleDisableTotp} className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Pour désactiver la 2FA, confirmez votre mot de passe et un code valide.
+                  </p>
+                  <Input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Mot de passe actuel"
+                    value={totpDisablePassword}
+                    onChange={(e) => setTotpDisablePassword(e.target.value)}
+                    required
+                  />
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="Code à 6 chiffres"
+                    value={totpDisableCode}
+                    onChange={(e) => setTotpDisableCode(e.target.value.replace(/\D/g, ""))}
+                    maxLength={6}
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <Button type="submit" variant="destructive" disabled={totpLoading}>
+                      {totpLoading ? "Désactivation..." : "Désactiver la 2FA"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTotpDisableOpen(false)}
+                      disabled={totpLoading}
+                    >
+                      Annuler
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setTotpDisableOpen(true)}>
+                  Désactiver la 2FA
+                </Button>
+              )}
             </div>
           ) : totpSetup ? (
             <div className="space-y-4">

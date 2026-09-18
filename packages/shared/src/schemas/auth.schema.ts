@@ -40,6 +40,14 @@ export const TotpVerifySchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+export const TotpDisableSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  code: z
+    .string()
+    .length(6)
+    .regex(/^\d{6}$/, "TOTP code must be 6 digits"),
+});
+
 export const ForgotPasswordSchema = z.object({
   email: emailSchema,
 });
@@ -85,6 +93,7 @@ export const UpdateProfileSchema = z.object({
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;
+export type TotpDisableInput = z.infer<typeof TotpDisableSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResendVerificationInput = z.infer<typeof ResendVerificationSchema>;
 export type CheckEmailInput = z.infer<typeof CheckEmailSchema>;
