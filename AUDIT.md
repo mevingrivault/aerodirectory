@@ -23,7 +23,21 @@ Convention : chaque constat porte un identifiant (`C` critique, `E` élevée, `M
 | E6 | Scan via `clamd` (INSTREAM TCP) avec sémaphore (`CLAMAV_MAX_CONCURRENT`, `CLAMAV_MAX_QUEUE`) et délestage en 503 ; service `clamav` (clamd + freshclam) dans le compose ; paquet ClamAV retiré de l'image API ; mode CLI conservé en option (`CLAMAV_MODE=clamscan`). | `scan.service.spec.ts` (faux clamd TCP) |
 | E7 | Workflow : build local → scan Trivy → push (`:sha` puis `:latest`) ; Trivy installé par action épinglée ; service `migrate` one-shot dont `api` et `sync-worker` dépendent (M9) ; `entrypoint.sh` aligné sur `migrate.mjs`. | validé par `docker compose config` |
 
-Non traité dans cette phase (volontairement) : codes de récupération TOTP, points Moyens et Faibles de la section 6.
+Non traité dans cette phase (volontairement) : codes de récupération TOTP.
+
+## Lot 1 — points Moyens de sécurité (branche `fix/audit-lot-1`)
+
+| # | Correctif appliqué | Tests |
+|---|---|---|
+| M1 | Solution ALTCHA à usage unique : la signature du challenge est marquée consommée (`ReplayStore`, Redis `SET NX EX`, mémoire sans Redis). Rejouer une solution échoue. | `altcha.service.spec.ts`, `replay-store.spec.ts` |
+| M2 | Fenêtre TOTP par défaut à ±1 pas (`TOTP_WINDOW=1`) ; un code accepté ne peut plus être réutilisé pendant sa durée de validité. | `auth.service.session.spec.ts` |
+| M3 | Endpoint `POST /auth/check-email` supprimé, ainsi que la vérification en direct sur la page d'inscription. Le doublon est signalé à la soumission (409), derrière le captcha à usage unique. | `admin.controller.routes.spec.ts` (routes), typecheck |
+| M4 | Verrouillage en deux niveaux : 5 échecs par couple (compte, IP) bloquent cette IP 15 min ; le compte entier n'est verrouillé qu'après 25 échecs répartis sur plusieurs IP. Un attaquant seul ne peut plus bloquer une victime. | `auth.service.lockout.spec.ts` |
+| M5 | Tokens de vérification et de réinitialisation stockés hachés (SHA-256) ; migration `20260919090000` hache les tokens encore valides. | `auth.service.session.spec.ts` |
+| M6 | Content-Security-Policy posée par Next sur toutes les pages (scripts et connexions limités à l'origine et aux fournisseurs de tuiles, `object-src 'none'`, `frame-ancestors 'none'`, workers en `blob:`). Limite : `script-src` garde `'unsafe-inline'` car les pages sont prérendues sans nonce. HSTS est déjà posé par le reverse proxy. | build Next |
+| M7 | `AccountDeletionService` partagé entre l'auto-suppression et la suppression admin : anonymisation des logs, suppression des photos **et de l'avatar** en S3, puis de la ligne ; abandon si un objet ne peut pas être supprimé. | `account-deletion.service.spec.ts`, `admin.service.moderation.spec.ts` |
+
+Reste après le lot 1 : points Moyens fonctionnels (M11, M15, M16, M17, M18), dette (M12, M13, M14, M19), performance (P1 à P7) et Faibles.
 
 ---
 
