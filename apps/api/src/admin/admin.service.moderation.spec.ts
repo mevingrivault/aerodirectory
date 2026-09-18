@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 
+vi.mock("argon2", () => ({
+  hash: vi.fn().mockResolvedValue("hashed"),
+  verify: vi.fn().mockResolvedValue(true),
+  argon2id: 2,
+}));
+
 /**
  * Moderation of community content.
  *
@@ -36,8 +42,15 @@ function build() {
   };
   const audit = { log: vi.fn().mockResolvedValue(undefined) };
   const notifications = { notifyUser: vi.fn().mockResolvedValue(undefined), notifyUsers: vi.fn() };
-  const service = new AdminService(prisma as never, audit as never, notifications as never, {} as never);
-  return { service, prisma, audit, notifications };
+  const deletion = { purge: vi.fn().mockResolvedValue({ deletedObjects: 2 }) };
+  const service = new AdminService(
+    prisma as never,
+    audit as never,
+    notifications as never,
+    {} as never,
+    deletion as never,
+  );
+  return { service, prisma, audit, notifications, deletion };
 }
 
 const pendingComment = {
@@ -120,6 +133,30 @@ describe("AdminService comment moderation", () => {
     prisma.comment.findUnique.mockResolvedValue(null);
 
     await expect(service.approveComment("admin", "nope", {})).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe("AdminService.deleteUser", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("goes through the shared purge so stored files are removed too", async () => {
+    const { service, prisma, deletion, audit } = build();
+    const userDelegate = {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === "admin"
+          ? { id: "admin", passwordHash: "hash" }
+          : { id: "victim", role: "MEMBER", email: "v@example.fr", displayName: "V" }),
+      delete: vi.fn(),
+    };
+    (prisma as Record<string, unknown>)["user"] = userDelegate;
+
+    await service.deleteUser("admin", "victim", { currentPassword: "correct-password" });
+
+    expect(deletion.purge).toHaveBeenCalledWith("victim");
+    expect(userDelegate.delete).not.toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ deletedObjects: 2 }) }),
+    );
   });
 });
 

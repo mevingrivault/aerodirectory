@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
 import { NotificationService } from "../notification/notification.service";
+import { AccountDeletionService } from "../auth/account-deletion.service";
 import { parseOpenAirFile } from "../services/airspace/openair-parser";
 import type {
   AdminImportOpenAirInput,
@@ -48,6 +49,7 @@ export class AdminService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
     private readonly mail: MailService,
+    private readonly deletion: AccountDeletionService,
   ) {}
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
@@ -327,7 +329,9 @@ export class AdminService {
 
     const reason = input.reason?.trim() || null;
 
-    await this.prisma.user.delete({ where: { id: userId } });
+    // Same purge as self-service deletion: audit logs anonymised, S3 objects
+    // (photos, avatar) removed, then the row.
+    const { deletedObjects } = await this.deletion.purge(userId);
 
     await this.logCommunityAdminAction({
       adminId,
@@ -342,6 +346,7 @@ export class AdminService {
         targetUserId: target.id,
         targetEmail: target.email,
         targetDisplayName: target.displayName,
+        deletedObjects,
       },
     });
   }

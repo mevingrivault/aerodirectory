@@ -4,9 +4,10 @@ import { AdminService } from "./admin.service";
 import { PhotoModule } from "../photo/photo.module";
 import { MailModule } from "../mail/mail.module";
 import { NotificationModule } from "../notification/notification.module";
+import { AuthModule } from "../auth/auth.module";
 
 @Module({
-  imports: [PhotoModule, MailModule, NotificationModule],
+  imports: [PhotoModule, MailModule, NotificationModule, AuthModule],
   controllers: [AdminController],
   providers: [AdminService],
 })
