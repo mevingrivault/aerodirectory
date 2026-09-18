@@ -29,9 +29,6 @@ CVE-2026-39409
 CVE-2026-39410
 GHSA-26pp-8wgv-hjvm
 
-# nodemailer — SMTP CRLF injection (updated to 8.0.5)
-GHSA-vvjj-xcjg-gr5g
-
 # zlib@1.3.1-r2 — buffer overflow in untgz CLI utility (not libz used by Node.js)
 CVE-2026-22184
 

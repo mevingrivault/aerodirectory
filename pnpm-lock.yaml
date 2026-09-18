@@ -16,7 +16,6 @@ overrides:
   fast-uri: '>=3.1.3'
   fast-xml-builder: '>=1.1.7'
   undici: 8.9.0
-  hono: 4.12.27
   browserslist: '>=4.28.7'
   find-my-way: '>=9.7.0'
   js-yaml: '>=4.2.0'
@@ -63,9 +62,6 @@ importers:
       '@fastify/cors':
         specifier: ^11.2.0
         version: 11.2.0
-      '@fastify/csrf-protection':
-        specifier: ^7.1.0
-        version: 7.1.0
       '@fastify/helmet':
         specifier: ^13.0.2
         version: 13.0.2
@@ -107,7 +103,7 @@ importers:
         version: 7.7.0
       altcha-lib:
         specifier: ^2.0.2
-        version: 2.0.2(patch_hash=54e0137580719563b02d46f00434ea0bab082317d6a9e42dc54b93f6a9f1e724)(@fastify/cookie@11.0.2)(@fastify/cors@11.2.0)(@fastify/formbody@8.0.2)(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(fastify@5.12.1)(hono@4.12.27)
+        version: 2.0.2(patch_hash=54e0137580719563b02d46f00434ea0bab082317d6a9e42dc54b93f6a9f1e724)(@fastify/cookie@11.0.2)(@fastify/cors@11.2.0)(@fastify/formbody@8.0.2)(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(fastify@5.12.1)(hono@4.13.8)
       argon2:
         specifier: ^0.41.1
         version: 0.41.1
@@ -124,8 +120,8 @@ importers:
         specifier: ^5.10.1
         version: 5.10.1
       nodemailer:
-        specifier: ^9.1.0
-        version: 9.1.0
+        specifier: ^9.1.1
+        version: 9.1.1
       otplib:
         specifier: ^13.4.0
         version: 13.4.0
@@ -725,12 +721,6 @@ packages:
   '@fastify/cors@11.2.0':
     resolution: {integrity: sha512-LbLHBuSAdGdSFZYTLVA3+Ch2t+sA6nq3Ejc6XLAKiQ6ViS2qFnvicpj0htsx03FyYeLs04HfRNBsz/a8SvbcUw==}
 
-  '@fastify/csrf-protection@7.1.0':
-    resolution: {integrity: sha512-I2TDd4SRRYQivKCMHdB/8py+CPO9DT0e63lh4DO8MDCJh8NROq8HD/iO0IjYtwhsD3bZhr0cBXsFdfPvyTmzNw==}
-
-  '@fastify/csrf@8.0.1':
-    resolution: {integrity: sha512-dAmCrdfJ3CV/A/hHHK/rRBjjLRRSIltgJB0BxiVfbhr/31G6fgF8l2I8evtH8mjS5kTIvd0JOh7MOA3HA6eYDw==}
-
   '@fastify/deepmerge@3.2.1':
     resolution: {integrity: sha512-N5Oqvltoa2r9z1tbx4xjky0oRR60v+T47Ic4J1ukoVQcptLOrIdRnCSdTGmOmajZuHVKlTnfcmrjyqsGEW1ztA==}
 
@@ -777,7 +767,7 @@ packages:
     resolution: {integrity: sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: 4.12.27
+      hono: ^4
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2399,7 +2389,7 @@ packages:
       express: ^4.0.0 || ^5.0.0
       fastify: 5.12.1
       h3: ^2.0.0
-      hono: 4.12.27
+      hono: ^4.0.0
     peerDependenciesMeta:
       '@fastify/cookie':
         optional: true
@@ -3048,8 +3038,8 @@ packages:
     resolution: {integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==}
     engines: {node: '>=18.0.0'}
 
-  hono@4.12.27:
-    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
+  hono@4.13.8:
+    resolution: {integrity: sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -3424,8 +3414,8 @@ packages:
     resolution: {integrity: sha512-x0InOIyzgdk+eyaWaRJFH5snEtiImgBgblZ2CyPrLmqqcuMQkEvcDPHbzqbD8eDsSeJbVOjn+crzyzHaM4D+/A==}
     engines: {node: '>=18'}
 
-  nodemailer@9.1.0:
-    resolution: {integrity: sha512-xj1Ri5Sau3qpPffHJwi2bY0oWVVWYq62Ph17l+2v1xXpxjqTls3YPc3L8dub9mcJpxj+1ucNnuYVqLlgh4pmDA==}
+  nodemailer@9.1.1:
+    resolution: {integrity: sha512-izw9mVKFix6YSnC9eLgV6g1opl9DUlRio9ZNcq+Wu9Ujn2UwF+8Nl0B8nz22kEC+CTZCvinkxwJ0DeFbb6NwcQ==}
     engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
@@ -4978,14 +4968,6 @@ snapshots:
       fastify-plugin: 5.1.0
       toad-cache: 3.7.0
 
-  '@fastify/csrf-protection@7.1.0':
-    dependencies:
-      '@fastify/csrf': 8.0.1
-      '@fastify/error': 4.2.0
-      fastify-plugin: 5.1.0
-
-  '@fastify/csrf@8.0.1': {}
-
   '@fastify/deepmerge@3.2.1': {}
 
   '@fastify/error@4.2.0': {}
@@ -5040,9 +5022,9 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@hono/node-server@1.19.11(hono@4.12.27)':
+  '@hono/node-server@1.19.11(hono@4.13.8)':
     dependencies:
-      hono: 4.12.27
+      hono: 4.13.8
 
   '@img/colour@1.1.0': {}
 
@@ -5611,13 +5593,13 @@ snapshots:
       '@electric-sql/pglite': 0.4.1
       '@electric-sql/pglite-socket': 0.1.1(@electric-sql/pglite@0.4.1)
       '@electric-sql/pglite-tools': 0.3.1(@electric-sql/pglite@0.4.1)
-      '@hono/node-server': 1.19.11(hono@4.12.27)
+      '@hono/node-server': 1.19.11(hono@4.13.8)
       '@prisma/get-platform': 7.2.0
       '@prisma/query-plan-executor': 7.2.0
       '@prisma/streams-local': 0.1.2
       foreground-child: 3.3.1
       get-port-please: 3.2.0
-      hono: 4.12.27
+      hono: 4.13.8
       http-status-codes: 2.3.0
       pathe: 2.0.3
       proper-lockfile: 4.1.2
@@ -6756,7 +6738,7 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  altcha-lib@2.0.2(patch_hash=54e0137580719563b02d46f00434ea0bab082317d6a9e42dc54b93f6a9f1e724)(@fastify/cookie@11.0.2)(@fastify/cors@11.2.0)(@fastify/formbody@8.0.2)(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(fastify@5.12.1)(hono@4.12.27):
+  altcha-lib@2.0.2(patch_hash=54e0137580719563b02d46f00434ea0bab082317d6a9e42dc54b93f6a9f1e724)(@fastify/cookie@11.0.2)(@fastify/cors@11.2.0)(@fastify/formbody@8.0.2)(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(fastify@5.12.1)(hono@4.13.8):
     optionalDependencies:
       '@fastify/cookie': 11.0.2
       '@fastify/cors': 11.2.0
@@ -6764,7 +6746,7 @@ snapshots:
       '@nestjs/common': 11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
       fastify: 5.12.1
-      hono: 4.12.27
+      hono: 4.13.8
 
   altcha@3.0.2:
     dependencies:
@@ -7377,7 +7359,7 @@ snapshots:
 
   helmet@8.1.0: {}
 
-  hono@4.12.27: {}
+  hono@4.13.8: {}
 
   html-escaper@2.0.2: {}
 
@@ -7739,7 +7721,7 @@ snapshots:
 
   node-releases@2.0.56: {}
 
-  nodemailer@9.1.0: {}
+  nodemailer@9.1.1: {}
 
   normalize-path@3.0.0: {}
 
