@@ -1,6 +1,7 @@
 import { Global, Logger, Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
+import { ReplayStore } from "./replay-store";
 
 /** Injection token for the shared ioredis client (or `null` when REDIS_URL is unset). */
 export const REDIS_CLIENT = "REDIS_CLIENT";
@@ -30,7 +31,8 @@ export type RedisClient = Redis | null;
         return client;
       },
     },
+    ReplayStore,
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT, ReplayStore],
 })
 export class RedisModule {}
