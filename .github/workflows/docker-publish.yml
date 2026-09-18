@@ -81,6 +81,9 @@ jobs:
       - name: Build API
         run: pnpm --filter @aerodirectory/api build
 
+      - name: DI smoke check API (compiles the whole Nest module graph)
+        run: pnpm --filter @aerodirectory/api test:di
+
       - name: Restore Next.js build cache
         uses: actions/cache@v5
         with:

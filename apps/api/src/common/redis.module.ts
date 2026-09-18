@@ -1,12 +1,10 @@
 import { Global, Logger, Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
+import { REDIS_CLIENT, type RedisClient } from "./redis.constants";
 import { ReplayStore } from "./replay-store";
 
-/** Injection token for the shared ioredis client (or `null` when REDIS_URL is unset). */
-export const REDIS_CLIENT = "REDIS_CLIENT";
-
-export type RedisClient = Redis | null;
+export { REDIS_CLIENT, type RedisClient } from "./redis.constants";
 
 @Global()
 @Module({

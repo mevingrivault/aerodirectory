@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { REDIS_CLIENT, type RedisClient } from "./redis.module";
+import { REDIS_CLIENT, type RedisClient } from "./redis.constants";
 
 /**
  * Backend contract: the subset of ioredis used here. Tests pass an in-memory

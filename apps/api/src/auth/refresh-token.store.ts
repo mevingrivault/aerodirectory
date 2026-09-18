@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { REDIS_CLIENT, type RedisClient } from "../common/redis.module";
+import { REDIS_CLIENT, type RedisClient } from "../common/redis.constants";
 
 /**
  * Minimal key/value contract the store needs. ioredis satisfies it; tests use
