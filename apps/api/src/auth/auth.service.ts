@@ -40,7 +40,7 @@ import type {
   ResendVerificationInput,
   ResetPasswordInput,
 } from "@aerodirectory/shared";
-import { BADGES } from "@aerodirectory/shared";
+import { BADGES, haversineNm } from "@aerodirectory/shared";
 
 const totp = new TOTP({
   crypto: new NobleCryptoPlugin(),
@@ -53,6 +53,16 @@ const ARGON2_OPTIONS = {
   timeCost: 3,
   parallelism: 4,
 } as const;
+
+/** Prisma error for a unique-constraint violation (P2002). */
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
 
 /** Lifetime of the partial token issued between password and TOTP steps. */
 export const TOTP_PENDING_TTL_SECONDS = 5 * 60;
@@ -173,14 +183,24 @@ export class AuthService {
     // Argon2id with OWASP-recommended parameters
     const passwordHash = await argon2.hash(input.password, ARGON2_OPTIONS);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: input.email,
-        passwordHash,
-        displayName: input.displayName,
-        communityConsentAt: new Date(),
-      },
-    });
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email: input.email,
+          passwordHash,
+          displayName: input.displayName,
+          communityConsentAt: new Date(),
+        },
+      });
+    } catch (error) {
+      // Two sign-ups racing on the same e-mail or display name: the unique
+      // index wins, and the caller gets a conflict instead of a 500.
+      if (isUniqueViolation(error)) {
+        throw new ConflictException("Email or display name already registered");
+      }
+      throw error;
+    }
 
     // Create email verification token
     const token = randomBytes(32).toString("hex");
@@ -1370,7 +1390,7 @@ export class AuthService {
     for (let index = 1; index < visits.length; index += 1) {
       const previous = visits[index - 1]!.aerodrome;
       const current = visits[index]!.aerodrome;
-      total += this.haversineNm(
+      total += haversineNm(
         previous.latitude,
         previous.longitude,
         current.latitude,
@@ -1381,24 +1401,6 @@ export class AuthService {
     return total;
   }
 
-  private haversineNm(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ): number {
-    const earthRadiusNm = 3440.065;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return earthRadiusNm * c;
-  }
 
   // ─── RGPD : export des données (Article 20) ────────────────
   async exportData(userId: string): Promise<Record<string, unknown>> {

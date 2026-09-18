@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+import { CacheService } from "../common/cache.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { haversineMeters } from "@aerodirectory/shared";
 import type { OverpassElement } from "../services/overpass/overpass.client";
 
 // ─── Public types ──────────────────────────────────────────────────────────
@@ -39,16 +39,8 @@ export interface NearbyAccommodationResult {
   };
 }
 
-// ─── Cache types ───────────────────────────────────────────────────────────
-
-interface MemoryCacheEntry {
-  data: NearbyAccommodationResult;
-  cachedAt: number;
-}
-
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const CACHE_TTL_SECONDS = 12 * 60 * 60;
 const DEFAULT_RADIUS_METERS = 10_000;
 const WALKABLE_THRESHOLD_METERS = 3_000;
@@ -70,34 +62,10 @@ function classifyAccommodation(tags: Record<string, string>): AccommodationCateg
 @Injectable()
 export class AccommodationService {
   private readonly logger = new Logger(AccommodationService.name);
-  private readonly memoryCache = new Map<string, MemoryCacheEntry>();
-  private readonly redis: Redis | null;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {
-    const redisUrl = this.config.get<string>("REDIS_URL");
-    if (redisUrl) {
-      try {
-        this.redis = new Redis(redisUrl, {
-          lazyConnect: true,
-          maxRetriesPerRequest: 1,
-          enableReadyCheck: false,
-        });
-        this.redis.on("error", (err: Error) =>
-          this.logger.warn(`Erreur Redis : ${err.message}`),
-        );
-        this.logger.log("Cache hébergements : Redis activé");
-      } catch {
-        this.redis = null;
-        this.logger.warn("Connexion Redis échouée — cache mémoire utilisé");
-      }
-    } else {
-      this.redis = null;
-      this.logger.log("Cache hébergements : mémoire (REDIS_URL non défini)");
-    }
-  }
+    private readonly cache: CacheService,
+  ) {}
 
   async getNearbyAccommodations(
     aerodromeId: string,
@@ -110,7 +78,7 @@ export class AccommodationService {
     if (!aerodrome) throw new NotFoundException("Aerodrome not found");
 
     const cacheKey = `accommodation:v1:${aerodromeId}:${radiusMeters}`;
-    const cached = await this.cacheGet(cacheKey);
+    const cached = await this.cache.get<NearbyAccommodationResult>(cacheKey);
     if (cached) {
       this.logger.debug(`Cache trouvé — ${cacheKey}`);
       return cached;
@@ -150,37 +118,10 @@ export class AccommodationService {
       },
     };
 
-    await this.cacheSet(cacheKey, result);
+    await this.cache.set(cacheKey, result, CACHE_TTL_SECONDS);
     return result;
   }
 
-  // ─── Cache helpers ────────────────────────────────────────────────────────
-
-  private async cacheGet(key: string): Promise<NearbyAccommodationResult | null> {
-    if (this.redis) {
-      try {
-        const raw = await this.redis.get(key);
-        return raw ? (JSON.parse(raw) as NearbyAccommodationResult) : null;
-      } catch {
-        // Redis indisponible — repli sur le cache mémoire
-      }
-    }
-    const entry = this.memoryCache.get(key);
-    if (entry && Date.now() - entry.cachedAt < CACHE_TTL_MS) return entry.data;
-    return null;
-  }
-
-  private async cacheSet(key: string, data: NearbyAccommodationResult): Promise<void> {
-    if (this.redis) {
-      try {
-        await this.redis.setex(key, CACHE_TTL_SECONDS, JSON.stringify(data));
-        return;
-      } catch {
-        // Écriture Redis échouée — repli sur le cache mémoire
-      }
-    }
-    this.memoryCache.set(key, { data, cachedAt: Date.now() });
-  }
 }
 
 // ─── OSM DB query ──────────────────────────────────────────────────────────
@@ -230,19 +171,6 @@ function parseBool(val: string | undefined): boolean | null {
   return null;
 }
 
-function haversineMeters(
-  lat1: number, lon1: number, lat2: number, lon2: number,
-): number {
-  const R = 6_371_000;
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function normalizeAccommodation(
   el: OverpassElement,

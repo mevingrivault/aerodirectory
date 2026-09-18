@@ -1,4 +1,4 @@
-import { Controller, Get, Query, BadRequestException } from "@nestjs/common";
+import { Controller, Get, Header, Query, BadRequestException } from "@nestjs/common";
 import { Public } from "../common/decorators";
 import { ok } from "../common/api-response";
 import { AirspaceService } from "./airspace.service";
@@ -17,6 +17,7 @@ export class AirspaceController {
    */
   @Public()
   @Get()
+  @Header("Cache-Control", "public, max-age=3600")
   async list(
     @Query("icaoClass") icaoClass?: string,
     @Query("type") typeStr?: string,

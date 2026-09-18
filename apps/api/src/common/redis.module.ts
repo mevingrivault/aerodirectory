@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
 import { REDIS_CLIENT, type RedisClient } from "./redis.constants";
 import { ReplayStore } from "./replay-store";
+import { CacheService } from "./cache.service";
 
 export { REDIS_CLIENT, type RedisClient } from "./redis.constants";
 
@@ -30,7 +31,8 @@ export { REDIS_CLIENT, type RedisClient } from "./redis.constants";
       },
     },
     ReplayStore,
+    CacheService,
   ],
-  exports: [REDIS_CLIENT, ReplayStore],
+  exports: [REDIS_CLIENT, ReplayStore, CacheService],
 })
 export class RedisModule {}

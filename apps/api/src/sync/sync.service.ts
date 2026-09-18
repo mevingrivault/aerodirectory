@@ -1,9 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, type SyncRun, type SyncRunStatus, type SyncSource } from "@aerodirectory/database";
-import Redis from "ioredis";
 import { PrismaService } from "../prisma/prisma.service";
+import { REDIS_CLIENT, type RedisClient } from "../common/redis.constants";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
 import { SyncLockService } from "./sync-lock.service";
@@ -64,7 +64,7 @@ export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private readonly workerEnabled: boolean;
   private readonly workerId: string;
-  private readonly redis: Redis | null;
+  private readonly redis: RedisClient;
   private dispatching = false;
 
   constructor(
@@ -73,14 +73,14 @@ export class SyncService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly syncLock: SyncLockService,
+    @Inject(REDIS_CLIENT) redis: RedisClient,
   ) {
     this.workerEnabled = asBoolean(this.config.get<string>("SYNC_ENABLED"), false);
     this.workerId =
       this.config.get<string>("SYNC_WORKER_ID") ??
       process.env["HOSTNAME"] ??
       "sync-worker";
-    const redisUrl = this.config.get<string>("REDIS_URL");
-    this.redis = redisUrl ? new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
+    this.redis = redis;
   }
 
   async onModuleInit() {

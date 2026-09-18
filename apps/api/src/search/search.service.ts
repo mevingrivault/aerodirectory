@@ -5,11 +5,12 @@ import {
   ForbiddenException,
   NotFoundException,
 } from "@nestjs/common";
-import type {
-  AerodromeSearchInput,
-  PublicSavedSearchListQueryInput,
-  SavedSearchCreateInput,
-  SavedSearchVisibilityInput,
+import {
+  haversineKm,
+  type AerodromeSearchInput,
+  type PublicSavedSearchListQueryInput,
+  type SavedSearchCreateInput,
+  type SavedSearchVisibilityInput,
 } from "@aerodirectory/shared";
 import { Prisma } from "@aerodirectory/database";
 import { StorageService } from "../photo/storage.service";
@@ -344,67 +345,66 @@ export class SearchService {
     }
     // For distance sorting, we sort in-memory after query
 
-    const [rawData, total] = await Promise.all([
-      this.prisma.aerodrome.findMany({
-        where,
-        skip: sortBy === "distance" ? 0 : (page - 1) * limit,
-        take: sortBy === "distance" ? undefined : limit,
-        orderBy,
-        include: {
-          runways: true,
-          fuels: { where: { available: true } },
-          _count: {
-            select: {
-              visits: true,
-              comments: {
-                where: {
-                  deletedAt: null,
-                  contentStatus: "APPROVED",
-                  user: { showCommunityContributions: true },
-                },
-              },
+    const include = {
+      runways: true,
+      fuels: { where: { available: true } },
+      _count: {
+        select: {
+          visits: true,
+          comments: {
+            where: {
+              deletedAt: null,
+              contentStatus: "APPROVED" as const,
+              user: { showCommunityContributions: true },
             },
           },
         },
+      },
+    };
+
+    // Distance sort: rank on a lightweight projection (id + coordinates),
+    // then load the full rows for the requested page only.
+    if (sortBy === "distance" && lat !== undefined && lng !== undefined) {
+      const candidates = await this.prisma.aerodrome.findMany({
+        where,
+        select: { id: true, latitude: true, longitude: true },
+      });
+
+      const ranked = candidates
+        .map((a) => ({ id: a.id, distanceKm: haversineKm(lat, lng, a.latitude, a.longitude) }))
+        .sort((a, b) => a.distanceKm - b.distanceKm);
+
+      const pageIds = ranked.slice((page - 1) * limit, page * limit);
+      const rows = pageIds.length
+        ? await this.prisma.aerodrome.findMany({
+            where: { id: { in: pageIds.map((r) => r.id) } },
+            include,
+          })
+        : [];
+      const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+      const data = pageIds
+        .map((r) => {
+          const row = rowsById.get(r.id);
+          return row ? { ...row, distanceKm: r.distanceKm } : null;
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      return { data, total: ranked.length };
+    }
+
+    const [rawData, total] = await Promise.all([
+      this.prisma.aerodrome.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy,
+        include,
       }),
       this.prisma.aerodrome.count({ where }),
     ]);
-
-    // If distance sort requested, compute distances and sort
-    if (
-      sortBy === "distance" &&
-      lat !== undefined &&
-      lng !== undefined
-    ) {
-      const withDistance = rawData.map((a) => ({
-        ...a,
-        distanceKm: haversineKm(lat, lng, a.latitude, a.longitude),
-      }));
-      withDistance.sort((a, b) => a.distanceKm - b.distanceKm);
-      const paged = withDistance.slice((page - 1) * limit, page * limit);
-      return { data: paged, total };
-    }
 
     return { data: rawData, total };
   }
 }
 
-/** Haversine distance in km */
-function haversineKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}

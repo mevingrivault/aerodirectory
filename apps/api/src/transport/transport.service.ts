@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+import { CacheService } from "../common/cache.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { haversineMeters } from "@aerodirectory/shared";
 import type { OverpassElement } from "../services/overpass/overpass.client";
 
 // ─── OSM DB query ──────────────────────────────────────────────────────────
@@ -89,16 +89,8 @@ export interface NearbyTransportResult {
   };
 }
 
-// ─── Cache types ───────────────────────────────────────────────────────────
-
-interface MemoryCacheEntry {
-  data: NearbyTransportResult;
-  cachedAt: number;
-}
-
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const CACHE_TTL_SECONDS = 12 * 60 * 60;
 const DEFAULT_RADIUS_METERS = 3_000;
 const WALKABLE_THRESHOLD_METERS = 1_000;
@@ -109,34 +101,10 @@ const CLUSTER_RADIUS_METERS = 30;
 @Injectable()
 export class TransportService {
   private readonly logger = new Logger(TransportService.name);
-  private readonly memoryCache = new Map<string, MemoryCacheEntry>();
-  private readonly redis: Redis | null;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {
-    const redisUrl = this.config.get<string>("REDIS_URL");
-    if (redisUrl) {
-      try {
-        this.redis = new Redis(redisUrl, {
-          lazyConnect: true,
-          maxRetriesPerRequest: 1,
-          enableReadyCheck: false,
-        });
-        this.redis.on("error", (err: Error) =>
-          this.logger.warn(`Erreur Redis : ${err.message}`),
-        );
-        this.logger.log("Cache transports : Redis activé");
-      } catch {
-        this.redis = null;
-        this.logger.warn("Connexion Redis échouée — cache mémoire utilisé");
-      }
-    } else {
-      this.redis = null;
-      this.logger.log("Cache transports : mémoire (REDIS_URL non défini)");
-    }
-  }
+    private readonly cache: CacheService,
+  ) {}
 
   async getNearbyTransport(
     aerodromeId: string,
@@ -149,7 +117,7 @@ export class TransportService {
     if (!aerodrome) throw new NotFoundException("Aerodrome not found");
 
     const cacheKey = `transport:v3:${aerodromeId}:${radiusMeters}`;
-    const cached = await this.cacheGet(cacheKey);
+    const cached = await this.cache.get<NearbyTransportResult>(cacheKey);
     if (cached) {
       this.logger.debug(`Cache trouvé — ${cacheKey}`);
       return cached;
@@ -193,38 +161,11 @@ export class TransportService {
       },
     };
 
-    await this.cacheSet(cacheKey, result);
+    await this.cache.set(cacheKey, result, CACHE_TTL_SECONDS);
 
     return result;
   }
 
-  // ─── Cache helpers ─────────────────────────────────────────────────────────
-
-  private async cacheGet(key: string): Promise<NearbyTransportResult | null> {
-    if (this.redis) {
-      try {
-        const raw = await this.redis.get(key);
-        return raw ? (JSON.parse(raw) as NearbyTransportResult) : null;
-      } catch {
-        // Redis indisponible — repli sur le cache mémoire
-      }
-    }
-    const entry = this.memoryCache.get(key);
-    if (entry && Date.now() - entry.cachedAt < CACHE_TTL_MS) return entry.data;
-    return null;
-  }
-
-  private async cacheSet(key: string, data: NearbyTransportResult): Promise<void> {
-    if (this.redis) {
-      try {
-        await this.redis.setex(key, CACHE_TTL_SECONDS, JSON.stringify(data));
-        return;
-      } catch {
-        // Écriture Redis échouée — repli sur le cache mémoire
-      }
-    }
-    this.memoryCache.set(key, { data, cachedAt: Date.now() });
-  }
 }
 
 // ─── Clustering / deduplication ────────────────────────────────────────────
@@ -367,19 +308,6 @@ function fallbackName(type: TransportType): string {
   return "Arrêt";
 }
 
-function haversineMeters(
-  lat1: number, lon1: number, lat2: number, lon2: number,
-): number {
-  const R = 6_371_000;
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function normalizeTransport(
   el: OverpassElement,

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+import { CacheService } from "../common/cache.service";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -87,29 +87,12 @@ function computeTtlSeconds(observedAt: string | null | undefined): number {
 export class MetarService {
   private readonly logger = new Logger(MetarService.name);
   private readonly apiKey: string | null;
-  private readonly redis: Redis | null;
-  private readonly memoryCache = new Map<string, { data: WeatherResult; cachedAt: number; ttlMs: number }>();
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly cache: CacheService,
+  ) {
     this.apiKey = this.config.get<string>("CHECKWX_API_KEY") ?? null;
-
-    const redisUrl = this.config.get<string>("REDIS_URL");
-    if (redisUrl) {
-      try {
-        this.redis = new Redis(redisUrl, {
-          lazyConnect: true,
-          maxRetriesPerRequest: 1,
-          enableReadyCheck: false,
-        });
-        this.redis.on("error", (err: Error) =>
-          this.logger.warn(`Redis error: ${err.message}`),
-        );
-      } catch {
-        this.redis = null;
-      }
-    } else {
-      this.redis = null;
-    }
   }
 
   async getWeather(
@@ -123,7 +106,7 @@ export class MetarService {
     }
 
     const cacheKey = `weather:${icaoCode ?? `${lat.toFixed(4)},${lon.toFixed(4)}`}`;
-    const cached = await this.cacheGet(cacheKey);
+    const cached = await this.cache.get<WeatherResult>(cacheKey);
     if (cached) {
       this.logger.debug(`Cache météo trouvé — ${cacheKey}`);
       return cached;
@@ -175,7 +158,7 @@ export class MetarService {
 
     const ttl = computeTtlSeconds(result.metar?.observedAt);
     this.logger.debug(`Cache météo TTL=${ttl}s pour ${cacheKey}`);
-    await this.cacheSet(cacheKey, result, ttl);
+    await this.cache.set(cacheKey, result, ttl);
     return result;
   }
 
@@ -322,36 +305,4 @@ export class MetarService {
     };
   }
 
-  // ─── Cache helpers ────────────────────────────────────────────────────────
-
-  private async cacheGet(key: string): Promise<WeatherResult | null> {
-    if (this.redis) {
-      try {
-        const raw = await this.redis.get(key);
-        return raw ? (JSON.parse(raw) as WeatherResult) : null;
-      } catch {
-        // fallback to memory
-      }
-    }
-    const entry = this.memoryCache.get(key);
-    if (!entry) return null;
-    // Memory cache: reuse the same TTL logic — expire when entry is older than max TTL
-    if (Date.now() - entry.cachedAt > entry.ttlMs) {
-      this.memoryCache.delete(key);
-      return null;
-    }
-    return entry.data;
-  }
-
-  private async cacheSet(key: string, data: WeatherResult, ttlSeconds: number): Promise<void> {
-    if (this.redis) {
-      try {
-        await this.redis.setex(key, ttlSeconds, JSON.stringify(data));
-        return;
-      } catch {
-        // fallback to memory
-      }
-    }
-    this.memoryCache.set(key, { data, cachedAt: Date.now(), ttlMs: ttlSeconds * 1000 });
-  }
 }

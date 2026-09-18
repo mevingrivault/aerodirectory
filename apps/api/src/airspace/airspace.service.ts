@@ -1,9 +1,49 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { CacheService } from "../common/cache.service";
+
+/** Airspaces change once a night (openAIP sync); the map asks for them on every pan. */
+const AIRSPACES_CACHE_KEY = "airspaces:fr:v1";
+const AIRSPACES_CACHE_TTL_SECONDS = 60 * 60;
+
+const AIRSPACE_SELECT = {
+  id: true,
+  name: true,
+  type: true,
+  icaoClass: true,
+  lowerLimit: true,
+  upperLimit: true,
+  lowerLimitFt: true,
+  upperLimitFt: true,
+  geometry: true,
+  activity: true,
+  onDemand: true,
+  onRequest: true,
+  remarks: true,
+} as const;
+
+type AirspaceRow = {
+  id: string;
+  name: string;
+  type: number;
+  icaoClass: string;
+  lowerLimit: string;
+  upperLimit: string;
+  lowerLimitFt: number | null;
+  upperLimitFt: number | null;
+  geometry: unknown;
+  activity: number | null;
+  onDemand: boolean;
+  onRequest: boolean;
+  remarks: string | null;
+};
 
 @Injectable()
 export class AirspaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   /**
    * Returns all airspaces within a bounding box, optionally filtered by ICAO class or type.
@@ -17,67 +57,41 @@ export class AirspaceService {
     icaoClass?: string,
     type?: number,
   ) {
-    const airspaces = await this.prisma.airspace.findMany({
-      where: {
-        countryCode: "FR",
-        ...(icaoClass ? { icaoClass } : {}),
-        ...(type !== undefined ? { type } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        icaoClass: true,
-        lowerLimit: true,
-        upperLimit: true,
-        lowerLimitFt: true,
-        upperLimitFt: true,
-        geometry: true,
-        activity: true,
-        onDemand: true,
-        onRequest: true,
-        remarks: true,
-      },
-    });
-
-    // Post-filter by bbox: check if geometry bbox overlaps the requested bbox
-    // geometry is GeoJSON — we check the bounding box of each polygon
-    return airspaces.filter((a) => geometryOverlapsBbox(a.geometry, minLat, minLng, maxLat, maxLng));
+    const all = await this.loadAll();
+    return all
+      .filter((a) => matchesFilters(a, icaoClass, type))
+      .filter((a) => geometryOverlapsBbox(a.geometry, minLat, minLng, maxLat, maxLng));
   }
 
-  /** Returns a lightweight list of all airspaces (id + name + class + type) for legend/filter UI */
+  /** Returns all French airspaces, optionally filtered by ICAO class or type. */
   async findAll(icaoClass?: string, type?: number) {
-    return this.prisma.airspace.findMany({
-      where: {
-        countryCode: "FR",
-        ...(icaoClass ? { icaoClass } : {}),
-        ...(type !== undefined ? { type } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        icaoClass: true,
-        lowerLimit: true,
-        upperLimit: true,
-        lowerLimitFt: true,
-        upperLimitFt: true,
-        geometry: true,
-        activity: true,
-        onDemand: true,
-        onRequest: true,
-        remarks: true,
-      },
-      orderBy: { name: "asc" },
-    });
+    const all = await this.loadAll();
+    return all.filter((a) => matchesFilters(a, icaoClass, type));
   }
+
+  /** Whole French set, read from the database at most once per hour per instance. */
+  private loadAll(): Promise<AirspaceRow[]> {
+    return this.cache.getOrSet(AIRSPACES_CACHE_KEY, AIRSPACES_CACHE_TTL_SECONDS, () =>
+      this.prisma.airspace.findMany({
+        where: { countryCode: "FR" },
+        select: AIRSPACE_SELECT,
+        orderBy: { name: "asc" },
+      }),
+    );
+  }
+}
+
+function matchesFilters(a: AirspaceRow, icaoClass?: string, type?: number): boolean {
+  if (icaoClass && a.icaoClass !== icaoClass) return false;
+  if (type !== undefined && a.type !== type) return false;
+  return true;
 }
 
 /**
  * Check if a GeoJSON Polygon/MultiPolygon geometry overlaps a lat/lng bounding box.
  * We compute the envelope of the geometry coordinates and test for overlap.
  */
-function geometryOverlapsBbox(
+export function geometryOverlapsBbox(
   geometry: unknown,
   minLat: number,
   minLng: number,

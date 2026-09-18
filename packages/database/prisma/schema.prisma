@@ -354,6 +354,7 @@ model Aerodrome {
   events      AerodromeEvent[]
 
   @@unique([source, sourceId])
+  @@index([latitude, longitude])
   @@index([icaoCode])
   @@index([name])
   @@index([city])
@@ -462,6 +463,7 @@ model Comment {
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
   @@index([aerodromeId])
+  @@index([aerodromeId, parentId, contentStatus, deletedAt])
   @@index([parentId])
   @@index([deletedAt])
   @@map("comments")

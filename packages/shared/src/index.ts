@@ -10,3 +10,4 @@ export * from "./schemas/notification.schema";
 export * from "./schemas/event.schema";
 export * from "./types/api";
 export * from "./constants";
+export * from "./geo";
