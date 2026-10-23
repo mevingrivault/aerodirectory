@@ -5,7 +5,7 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends ca-certificates openssl && \
     rm -rf /var/lib/apt/lists/* && \
-    corepack enable && corepack prepare pnpm@10.27.0 --activate
+    npm install -g pnpm@10.27.0
 
 FROM base AS fetch
 WORKDIR /app
