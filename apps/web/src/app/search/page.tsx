@@ -63,15 +63,15 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_TONE: Record<string, string> = {
-  SMALL_AIRPORT: "bg-[var(--horizon-100)] text-[var(--horizon-700)]",
-  INTERNATIONAL_AIRPORT: "bg-[var(--horizon-100)] text-[var(--horizon-900)]",
-  ULTRALIGHT_FIELD: "bg-[var(--terrain-100)] text-[var(--terrain-700)]",
+  SMALL_AIRPORT: "bg-(--horizon-100) text-(--horizon-700)",
+  INTERNATIONAL_AIRPORT: "bg-(--horizon-100) text-(--horizon-900)",
+  ULTRALIGHT_FIELD: "bg-(--terrain-100) text-(--terrain-700)",
   GLIDER_SITE: "bg-[oklch(0.94_0.04_220)] text-[oklch(0.40_0.12_220)]",
   ALTIPORT: "bg-[oklch(0.94_0.04_220)] text-[oklch(0.40_0.12_220)]",
   HELIPORT: "bg-[oklch(0.94_0.05_25)] text-[oklch(0.45_0.14_25)]",
   SEAPLANE_BASE: "bg-[oklch(0.93_0.05_200)] text-[oklch(0.40_0.12_200)]",
-  MILITARY: "bg-[var(--ink-100)] text-[var(--ink-800)]",
-  OTHER: "bg-[var(--ink-100)] text-[var(--ink-800)]",
+  MILITARY: "bg-(--ink-100) text-(--ink-800)",
+  OTHER: "bg-(--ink-100) text-(--ink-800)",
 };
 
 const FUEL_LABELS: Record<string, string> = {
@@ -314,18 +314,18 @@ export default function SearchPage() {
   }, [filters]);
 
   return (
-    <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
+    <div className="min-h-[70vh] bg-(--paper-50) text-(--ink-950)">
       <div className="mx-auto max-w-[1400px] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         {/* Title */}
         <div className="mb-4 flex items-start justify-between gap-4 sm:mb-6">
           <div className="min-w-0">
-            <h1 className="m-0 flex items-center gap-2.5 font-[var(--f-serif)] text-[22px] font-medium leading-[1.05] tracking-[-0.015em] sm:gap-3 sm:text-[32px] lg:text-[38px]">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--horizon-100)] text-[var(--horizon-700)] sm:h-10 sm:w-10">
+            <h1 className="m-0 flex items-center gap-2.5 font-(--f-serif) text-[22px] font-medium leading-[1.05] tracking-[-0.015em] sm:gap-3 sm:text-[32px] lg:text-[38px]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-(--horizon-100) text-(--horizon-700) sm:h-10 sm:w-10">
                 <Search className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.6} />
               </span>
               Recherche
             </h1>
-            <p className="mt-1.5 hidden max-w-[560px] pl-12 text-[13px] text-[var(--ink-700)] sm:block sm:text-sm">
+            <p className="mt-1.5 hidden max-w-[560px] pl-12 text-[13px] text-(--ink-700) sm:block sm:text-sm">
               Explore les terrains de France métropolitaine et d'outre-mer. Filtre par type, équipements et commodités.
             </p>
           </div>
@@ -334,7 +334,7 @@ export default function SearchPage() {
               type="button"
               onClick={handleSaveCurrentSearch}
               disabled={saveSearchMutation.isPending}
-              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-[var(--ink-300)] bg-white px-2.5 text-[13px] font-medium text-[var(--ink-950)] transition-colors hover:border-[var(--ink-400)] disabled:opacity-60 sm:h-10 sm:px-3"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-(--ink-300) bg-white px-2.5 text-[13px] font-medium text-(--ink-950) transition-colors hover:border-(--ink-400) disabled:opacity-60 sm:h-10 sm:px-3"
               aria-label="Sauvegarder la recherche"
             >
               <Save className="h-4 w-4" strokeWidth={1.6} />
@@ -344,11 +344,11 @@ export default function SearchPage() {
         </div>
 
         {/* Search bar + filters card */}
-        <div className="mb-4 rounded-xl border border-[var(--ink-200)] bg-white p-3 sm:p-4">
+        <div className="mb-4 rounded-xl border border-(--ink-200) bg-white p-3 sm:p-4">
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_auto]">
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--ink-500)]"
+                className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-(--ink-500)"
                 strokeWidth={1.6}
               />
               <input
@@ -358,7 +358,7 @@ export default function SearchPage() {
                   setPage(1);
                 }}
                 placeholder="Nom du terrain, ville, code OACI…"
-                className="h-12 w-full rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-12 text-[15px] text-[var(--ink-950)] placeholder:text-[var(--ink-500)] transition-all focus:border-[var(--horizon-700)] focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-[var(--horizon-100)]"
+                className="h-12 w-full rounded-md border border-(--ink-200) bg-(--paper-50) px-12 text-[15px] text-(--ink-950) placeholder:text-(--ink-500) transition-all focus:border-(--horizon-700) focus:bg-white focus:outline-hidden focus:ring-[3px] focus:ring-(--horizon-100)"
               />
               {query && (
                 <button
@@ -368,7 +368,7 @@ export default function SearchPage() {
                     setPage(1);
                   }}
                   aria-label="Effacer"
-                  className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full border-0 bg-[var(--ink-100)] text-[var(--ink-700)] transition-colors hover:bg-[var(--ink-200)]"
+                  className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full border-0 bg-(--ink-100) text-(--ink-700) transition-colors hover:bg-(--ink-200)"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
@@ -379,8 +379,8 @@ export default function SearchPage() {
               onClick={handleNearby}
               className={`inline-flex h-12 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-medium transition-all sm:h-12 ${
                 useLocation
-                  ? "border border-[var(--horizon-700)] bg-[var(--horizon-100)] text-[var(--horizon-900)]"
-                  : "border border-[var(--ink-950)] bg-[var(--ink-950)] text-white hover:bg-[oklch(0.10_0.02_250)]"
+                  ? "border border-(--horizon-700) bg-(--horizon-100) text-(--horizon-900)"
+                  : "border border-(--ink-950) bg-(--ink-950) text-white hover:bg-[oklch(0.10_0.02_250)]"
               }`}
             >
               <MapPin className="h-4 w-4" strokeWidth={1.6} />
@@ -392,14 +392,14 @@ export default function SearchPage() {
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className="mt-3 flex w-full items-center justify-between rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-2 text-[13px] font-medium text-[var(--ink-950)] sm:hidden"
+            className="mt-3 flex w-full items-center justify-between rounded-md border border-(--ink-200) bg-(--paper-50) px-3 py-2 text-[13px] font-medium text-(--ink-950) sm:hidden"
             aria-expanded={filtersOpen}
           >
             <span className="inline-flex items-center gap-2">
               <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
               Filtres
               {activeFilterCount > 0 && (
-                <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[var(--ink-950)] px-1.5 text-[11px] font-semibold text-white">
+                <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-(--ink-950) px-1.5 text-[11px] font-semibold text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -415,7 +415,7 @@ export default function SearchPage() {
 
           {/* Type filters */}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:mr-1">
+            <span className="font-(--f-mono) text-[11px] font-semibold uppercase tracking-widest text-(--ink-500) sm:mr-1">
               Type
             </span>
             <div className="-mx-3.5 flex gap-2 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
@@ -428,8 +428,8 @@ export default function SearchPage() {
                   onClick={() => setTypeFilter(def)}
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
                     active
-                      ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-                      : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
+                      ? "border-(--ink-950) bg-(--ink-950) text-white"
+                      : "border-(--ink-300) bg-white text-(--ink-700) hover:border-(--ink-400) hover:text-(--ink-950)"
                   }`}
                 >
                   {def.value && (
@@ -444,7 +444,7 @@ export default function SearchPage() {
 
           {/* Commodity filters */}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <span className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:mr-1">
+            <span className="font-(--f-mono) text-[11px] font-semibold uppercase tracking-widest text-(--ink-500) sm:mr-1">
               Commodités
             </span>
             <div className="-mx-3.5 flex gap-2 overflow-x-auto px-3.5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
@@ -469,8 +469,8 @@ export default function SearchPage() {
                   onClick={() => toggleFilter(key, val)}
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-medium transition-all ${
                     active
-                      ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-                      : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)] hover:text-[var(--ink-950)]"
+                      ? "border-(--ink-950) bg-(--ink-950) text-white"
+                      : "border-(--ink-300) bg-white text-(--ink-700) hover:border-(--ink-400) hover:text-(--ink-950)"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" strokeWidth={1.6} />
@@ -485,9 +485,9 @@ export default function SearchPage() {
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {user && savedSearches.length > 0 && (
               <div className="inline-flex items-center gap-2">
-                <Bookmark className="h-3.5 w-3.5 text-[var(--ink-500)]" strokeWidth={1.6} />
+                <Bookmark className="h-3.5 w-3.5 text-(--ink-500)" strokeWidth={1.6} />
                 <select
-                  className="h-8 cursor-pointer rounded-[6px] border border-[var(--ink-300)] bg-white pl-2.5 pr-7 text-[13px] text-[var(--ink-950)] focus:outline-none focus:ring-2 focus:ring-[var(--horizon-100)]"
+                  className="h-8 cursor-pointer rounded-[6px] border border-(--ink-300) bg-white pl-2.5 pr-7 text-[13px] text-(--ink-950) focus:outline-hidden focus:ring-2 focus:ring-(--horizon-100)"
                   style={{
                     appearance: "none",
                     backgroundImage:
@@ -524,7 +524,7 @@ export default function SearchPage() {
                         });
                       }}
                       disabled={updateSavedSearchVisibilityMutation.isPending}
-                      className="inline-flex h-8 items-center gap-1 rounded-[6px] border border-[var(--ink-300)] bg-white px-2 text-[12px] text-[var(--ink-700)] hover:border-[var(--ink-400)] disabled:opacity-60"
+                      className="inline-flex h-8 items-center gap-1 rounded-[6px] border border-(--ink-300) bg-white px-2 text-[12px] text-(--ink-700) hover:border-(--ink-400) disabled:opacity-60"
                     >
                       {savedSearches.find((item) => item.id === selectedSavedSearchId)?.isPublic ? (
                         <>
@@ -545,7 +545,7 @@ export default function SearchPage() {
                         deleteSavedSearchMutation.mutate(selectedSavedSearchId);
                       }}
                       disabled={deleteSavedSearchMutation.isPending}
-                      className="inline-flex h-8 items-center rounded-[6px] border border-[var(--ink-300)] bg-white px-2 text-[12px] text-[var(--ink-700)] hover:border-[var(--ink-400)] disabled:opacity-60"
+                      className="inline-flex h-8 items-center rounded-[6px] border border-(--ink-300) bg-white px-2 text-[12px] text-(--ink-700) hover:border-(--ink-400) disabled:opacity-60"
                     >
                       Supprimer
                     </button>
@@ -558,7 +558,7 @@ export default function SearchPage() {
               <button
                 type="button"
                 onClick={resetAll}
-                className="cursor-pointer rounded-[6px] border-0 bg-transparent px-1.5 py-1 text-[13px] text-[var(--ink-700)] underline underline-offset-[3px] hover:text-[var(--ink-950)]"
+                className="cursor-pointer rounded-[6px] border-0 bg-transparent px-1.5 py-1 text-[13px] text-(--ink-700) underline underline-offset-[3px] hover:text-(--ink-950)"
               >
                 Réinitialiser
               </button>
@@ -566,7 +566,7 @@ export default function SearchPage() {
 
             <span className="hidden flex-1 sm:block" />
 
-            <span className="ml-auto font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)] sm:ml-0">
+            <span className="ml-auto font-(--f-mono) text-[11px] font-semibold uppercase tracking-widest text-(--ink-500) sm:ml-0">
               Tri
             </span>
             <select
@@ -576,7 +576,7 @@ export default function SearchPage() {
                 setPage(1);
               }}
               disabled={useLocation}
-              className="h-8 cursor-pointer rounded-[6px] border border-[var(--ink-300)] bg-white pl-2.5 pr-7 text-[13px] text-[var(--ink-950)] focus:outline-none focus:ring-2 focus:ring-[var(--horizon-100)] disabled:opacity-60"
+              className="h-8 cursor-pointer rounded-[6px] border border-(--ink-300) bg-white pl-2.5 pr-7 text-[13px] text-(--ink-950) focus:outline-hidden focus:ring-2 focus:ring-(--horizon-100) disabled:opacity-60"
               style={{
                 appearance: "none",
                 backgroundImage:
@@ -596,18 +596,18 @@ export default function SearchPage() {
 
         {/* Results head */}
         <div className="mb-3.5 mt-6 flex items-baseline justify-between gap-3">
-          <div className="text-sm text-[var(--ink-700)]">
+          <div className="text-sm text-(--ink-700)">
             {isLoading ? (
-              <span className="text-[var(--ink-500)]">Recherche en cours…</span>
+              <span className="text-(--ink-500)">Recherche en cours…</span>
             ) : meta ? (
               <>
-                <strong className="font-semibold text-[var(--ink-950)]">{meta.total.toLocaleString("fr-FR")}</strong>{" "}
+                <strong className="font-semibold text-(--ink-950)">{meta.total.toLocaleString("fr-FR")}</strong>{" "}
                 aérodrome{meta.total !== 1 ? "s" : ""} trouvé{meta.total !== 1 ? "s" : ""}
                 {activeCommodityFilters.length > 0 && (
-                  <span className="text-[var(--ink-500)]">
+                  <span className="text-(--ink-500)">
                     {" "}
                     · filtre{activeCommodityFilters.length > 1 ? "s" : ""}{" "}
-                    <em className="not-italic text-[var(--ink-700)]">
+                    <em className="not-italic text-(--ink-700)">
                       {activeCommodityFilters.map((f) => f.label).join(", ")}
                     </em>{" "}
                     actif{activeCommodityFilters.length > 1 ? "s" : ""}
@@ -622,11 +622,11 @@ export default function SearchPage() {
 
         {/* Results list */}
         {isLoading ? (
-          <div className="rounded-xl border border-dashed border-[var(--ink-300)] bg-white py-16 text-center text-[var(--ink-500)]">
+          <div className="rounded-xl border border-dashed border-(--ink-300) bg-white py-16 text-center text-(--ink-500)">
             Recherche en cours…
           </div>
         ) : results.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--ink-300)] bg-white py-16 text-center text-[var(--ink-500)]">
+          <div className="rounded-xl border border-dashed border-(--ink-300) bg-white py-16 text-center text-(--ink-500)">
             Aucun aérodrome trouvé. Modifiez vos critères de recherche.
           </div>
         ) : (
@@ -644,7 +644,7 @@ export default function SearchPage() {
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-[6px] border border-[var(--ink-200)] bg-white px-2.5 text-[13px] text-[var(--ink-700)] hover:border-[var(--ink-300)] hover:text-[var(--ink-950)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-[6px] border border-(--ink-200) bg-white px-2.5 text-[13px] text-(--ink-700) hover:border-(--ink-300) hover:text-(--ink-950) disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
               <span className="hidden sm:inline">Précédent</span>
@@ -654,7 +654,7 @@ export default function SearchPage() {
               type="button"
               disabled={page >= meta.totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-[6px] border border-[var(--ink-200)] bg-white px-2.5 text-[13px] text-[var(--ink-700)] hover:border-[var(--ink-300)] hover:text-[var(--ink-950)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-[6px] border border-(--ink-200) bg-white px-2.5 text-[13px] text-(--ink-700) hover:border-(--ink-300) hover:text-(--ink-950) disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="hidden sm:inline">Suivant</span>
               <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -673,13 +673,13 @@ export default function SearchPage() {
             className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="m-0 font-[var(--f-serif)] text-[20px] font-medium text-[var(--ink-950)]">
+            <h2 className="m-0 font-(--f-serif) text-[20px] font-medium text-(--ink-950)">
               Sauvegarder la recherche
             </h2>
-            <p className="mt-1 text-[13px] text-[var(--ink-700)]">
+            <p className="mt-1 text-[13px] text-(--ink-700)">
               Donnez un nom à cette recherche pour la retrouver facilement.
             </p>
-            <label className="mt-4 block font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink-500)]">
+            <label className="mt-4 block font-(--f-mono) text-[11px] font-semibold uppercase tracking-widest text-(--ink-500)">
               Nom
             </label>
             <input
@@ -692,9 +692,9 @@ export default function SearchPage() {
                 if (e.key === "Escape") setSaveDialogOpen(false);
               }}
               placeholder="Ex. Aérodromes avec restaurant"
-              className="mt-1.5 h-11 w-full rounded-md border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 text-[14px] text-[var(--ink-950)] placeholder:text-[var(--ink-500)] focus:border-[var(--horizon-700)] focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-[var(--horizon-100)]"
+              className="mt-1.5 h-11 w-full rounded-md border border-(--ink-200) bg-(--paper-50) px-3 text-[14px] text-(--ink-950) placeholder:text-(--ink-500) focus:border-(--horizon-700) focus:bg-white focus:outline-hidden focus:ring-[3px] focus:ring-(--horizon-100)"
             />
-            <label className="mt-3 flex items-start gap-2.5 text-[13px] text-[var(--ink-700)]">
+            <label className="mt-3 flex items-start gap-2.5 text-[13px] text-(--ink-700)">
               <input
                 type="checkbox"
                 checked={savePublic}
@@ -707,7 +707,7 @@ export default function SearchPage() {
               <button
                 type="button"
                 onClick={() => setSaveDialogOpen(false)}
-                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-300)] bg-white px-4 text-[13px] font-medium text-[var(--ink-950)] hover:border-[var(--ink-400)]"
+                className="inline-flex h-10 items-center rounded-md border border-(--ink-300) bg-white px-4 text-[13px] font-medium text-(--ink-950) hover:border-(--ink-400)"
               >
                 Annuler
               </button>
@@ -715,7 +715,7 @@ export default function SearchPage() {
                 type="button"
                 onClick={confirmSaveSearch}
                 disabled={!saveName.trim() || saveSearchMutation.isPending}
-                className="inline-flex h-10 items-center rounded-md border border-[var(--ink-950)] bg-[var(--ink-950)] px-4 text-[13px] font-medium text-white hover:bg-[oklch(0.10_0.02_250)] disabled:opacity-60"
+                className="inline-flex h-10 items-center rounded-md border border-(--ink-950) bg-(--ink-950) px-4 text-[13px] font-medium text-white hover:bg-[oklch(0.10_0.02_250)] disabled:opacity-60"
               >
                 Sauvegarder
               </button>
@@ -757,7 +757,7 @@ function PaginationNumbers({
         p === "…" ? (
           <span
             key={`gap-${i}`}
-            className="inline-flex h-9 min-w-9 items-center justify-center px-2 font-[var(--f-mono)] text-[13px] text-[var(--ink-500)]"
+            className="inline-flex h-9 min-w-9 items-center justify-center px-2 font-(--f-mono) text-[13px] text-(--ink-500)"
           >
             …
           </span>
@@ -766,10 +766,10 @@ function PaginationNumbers({
             key={p}
             type="button"
             onClick={() => onSelect(p)}
-            className={`inline-flex h-9 min-w-9 items-center justify-center rounded-[6px] border px-2.5 font-[var(--f-mono)] text-[13px] transition-colors ${
+            className={`inline-flex h-9 min-w-9 items-center justify-center rounded-[6px] border px-2.5 font-(--f-mono) text-[13px] transition-colors ${
               p === page
-                ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-                : "border-[var(--ink-200)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-300)] hover:text-[var(--ink-950)]"
+                ? "border-(--ink-950) bg-(--ink-950) text-white"
+                : "border-(--ink-200) bg-white text-(--ink-700) hover:border-(--ink-300) hover:text-(--ink-950)"
             }`}
           >
             {p}
@@ -800,7 +800,7 @@ function ResultCard({ ad }: { ad: AerodromeResult }) {
   return (
     <Link
       href={`/aerodrome/${ad.id}`}
-      className="group relative grid cursor-pointer items-center gap-4 rounded-xl border border-[var(--ink-200)] bg-white p-4 transition-all [grid-template-columns:48px_1fr] hover:-translate-y-px hover:border-[var(--ink-300)] hover:shadow-[0_1px_2px_rgba(20,30,50,.06)] sm:gap-[18px] sm:p-[18px_22px] sm:[grid-template-columns:64px_1fr_auto]"
+      className="group relative grid cursor-pointer items-center gap-4 rounded-xl border border-(--ink-200) bg-white p-4 transition-all grid-cols-[48px_1fr] hover:-translate-y-px hover:border-(--ink-300) hover:shadow-[0_1px_2px_rgba(20,30,50,.06)] sm:gap-[18px] sm:p-[18px_22px] sm:grid-cols-[64px_1fr_auto]"
     >
       <div
         className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-md sm:h-14 sm:w-14 ${tone}`}
@@ -808,7 +808,7 @@ function ResultCard({ ad }: { ad: AerodromeResult }) {
         <AerodromeTypeIcon type={ad.aerodromeType} className="h-6 w-6 sm:h-6 sm:w-6" />
         {visited && (
           <span
-            className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white bg-[var(--brass-500)]"
+            className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white bg-(--brass-500)"
             aria-label="Visité"
           >
             <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
@@ -818,47 +818,47 @@ function ResultCard({ ad }: { ad: AerodromeResult }) {
 
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-          <span className="font-[var(--f-serif)] text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[var(--ink-950)] sm:text-[19px]">
+          <span className="font-(--f-serif) text-[17px] font-semibold leading-tight tracking-[-0.01em] text-(--ink-950) sm:text-[19px]">
             {ad.name}
           </span>
           {ad.icaoCode && (
-            <span className="inline-flex h-[22px] items-center rounded border border-[var(--ink-300)] bg-[var(--paper-100)] px-2 font-[var(--f-mono)] text-[11px] font-semibold tracking-[0.08em] text-[var(--ink-950)]">
+            <span className="inline-flex h-[22px] items-center rounded border border-(--ink-300) bg-(--paper-100) px-2 font-(--f-mono) text-[11px] font-semibold tracking-[0.08em] text-(--ink-950)">
               {ad.icaoCode}
             </span>
           )}
           <span
-            className={`inline-flex h-[22px] items-center rounded px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] ${tone}`}
+            className={`inline-flex h-[22px] items-center rounded px-2 font-(--f-mono) text-[10px] font-semibold uppercase tracking-[0.08em] ${tone}`}
           >
             {typeLabel}
           </span>
           {ad.status && ad.status !== "OPEN" && (
-            <span className="inline-flex h-[22px] items-center rounded bg-[oklch(0.95_0.06_25)] px-2 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[0.08em] text-[oklch(0.45_0.15_25)]">
+            <span className="inline-flex h-[22px] items-center rounded bg-[oklch(0.95_0.06_25)] px-2 font-(--f-mono) text-[10px] font-semibold uppercase tracking-[0.08em] text-[oklch(0.45_0.15_25)]">
               {ad.status === "CLOSED" ? "Fermé" : ad.status === "RESTRICTED" ? "Restreint" : ad.status === "SEASONAL" ? "Saisonnier" : ad.status}
             </span>
           )}
         </div>
 
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-[var(--ink-700)]">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-(--ink-700)">
           <span>{[ad.region, ad.city].filter(Boolean).join(" · ") || "—"}</span>
           {ad.elevation !== null && ad.elevation !== undefined && (
             <>
-              <span className="text-[var(--ink-300)]">·</span>
-              <span className="font-[var(--f-mono)] text-[12px] text-[var(--ink-500)]">
+              <span className="text-(--ink-300)">·</span>
+              <span className="font-(--f-mono) text-[12px] text-(--ink-500)">
                 {ad.elevation} ft
               </span>
             </>
           )}
         </div>
 
-        <div className="mt-1.5 flex flex-wrap gap-x-3.5 gap-y-1 font-[var(--f-mono)] text-[11px] text-[var(--ink-500)]">
+        <div className="mt-1.5 flex flex-wrap gap-x-3.5 gap-y-1 font-(--f-mono) text-[11px] text-(--ink-500)">
           {mainRunway && (
             <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-px w-3 bg-[var(--ink-400)]" />
+              <span className="inline-block h-px w-3 bg-(--ink-400)" />
               {mainRunway.length} m · {surfaceLabel}
             </span>
           )}
           {ad.distanceKm !== undefined && (
-            <span className="inline-flex items-center gap-1 text-[var(--horizon-700)]">
+            <span className="inline-flex items-center gap-1 text-(--horizon-700)">
               <MapPin className="h-3 w-3" strokeWidth={1.8} />
               {ad.distanceKm.toFixed(0)} km
             </span>
@@ -920,8 +920,8 @@ function CommodityPills({
 
   if (items.length === 0) {
     return (
-      <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed border-[var(--ink-300)] px-2.5 text-[12px] text-[var(--ink-500)]">
-        <span className="font-[var(--f-mono)] text-[var(--ink-400)]">—</span>
+      <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed border-(--ink-300) px-2.5 text-[12px] text-(--ink-500)">
+        <span className="font-(--f-mono) text-(--ink-400)">—</span>
         Aucune commodité
       </span>
     );
@@ -947,11 +947,11 @@ function Pill({
     hotel:
       "bg-[oklch(0.96_0.04_290)] border-[oklch(0.88_0.05_290)] text-[oklch(0.38_0.13_290)] [&>svg]:text-[oklch(0.50_0.15_290)]",
     fuel:
-      "bg-[var(--brass-100)] border-[oklch(0.85_0.06_75)] text-[var(--brass-700)] [&>svg]:text-[var(--brass-700)]",
+      "bg-(--brass-100) border-[oklch(0.85_0.06_75)] text-(--brass-700) [&>svg]:text-(--brass-700)",
     transport:
-      "bg-[var(--horizon-100)] border-[oklch(0.85_0.06_250)] text-[var(--horizon-900)] [&>svg]:text-[var(--horizon-700)]",
+      "bg-(--horizon-100) border-[oklch(0.85_0.06_250)] text-(--horizon-900) [&>svg]:text-(--horizon-700)",
     bike:
-      "bg-[var(--terrain-100)] border-[oklch(0.85_0.05_130)] text-[var(--terrain-800)] [&>svg]:text-[var(--terrain-700)]",
+      "bg-(--terrain-100) border-[oklch(0.85_0.05_130)] text-(--terrain-800) [&>svg]:text-(--terrain-700)",
   }[tone];
 
   return (

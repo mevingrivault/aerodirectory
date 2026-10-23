@@ -60,25 +60,25 @@ const typeMeta: Record<
     label: "Aérodromes",
     shortLabel: "AD",
     icon: Plane,
-    tone: "text-[var(--horizon-700)] bg-[var(--horizon-50)]",
+    tone: "text-(--horizon-700) bg-(--horizon-50)",
   },
   altiport: {
     label: "Altiports",
     shortLabel: "ALP",
     icon: Mountain,
-    tone: "text-[var(--terrain-800)] bg-[var(--terrain-100)]",
+    tone: "text-(--terrain-800) bg-(--terrain-100)",
   },
   ulm: {
     label: "Bases ULM",
     shortLabel: "ULM",
     icon: Compass,
-    tone: "text-[var(--ifr-500)] bg-[var(--ifr-100)]",
+    tone: "text-(--ifr-500) bg-(--ifr-100)",
   },
   heli: {
     label: "Hélistations",
     shortLabel: "HEL",
     icon: MapPin,
-    tone: "text-[var(--ink-700)] bg-[var(--paper-100)]",
+    tone: "text-(--ink-700) bg-(--paper-100)",
   },
 };
 
@@ -149,11 +149,11 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-[var(--ink-200)] bg-white ${className}`}>
-      <div className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--ink-200)] px-4 py-4 sm:px-5">
+    <section className={`rounded-lg border border-(--ink-200) bg-white ${className}`}>
+      <div className="flex min-h-16 items-center justify-between gap-3 border-b border-(--ink-200) px-4 py-4 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Icon className="h-4 w-4 shrink-0 text-[var(--ink-500)]" />
-          <h2 className="truncate font-[var(--f-serif)] text-xl font-medium tracking-normal text-[var(--ink-950)]">
+          <Icon className="h-4 w-4 shrink-0 text-(--ink-500)" />
+          <h2 className="truncate font-(--f-serif) text-xl font-medium tracking-normal text-(--ink-950)">
             {title}
           </h2>
         </div>
@@ -170,8 +170,8 @@ function Hero({ stats }: { stats?: AerodexStats }) {
   const dashOffset = circumference - (progress.percent / 100) * circumference;
 
   return (
-    <section className="relative overflow-hidden rounded-xl bg-[linear-gradient(145deg,var(--ink-950),oklch(0.22_0.05_250)_55%,oklch(0.20_0.08_250))] p-5 text-white shadow-[var(--shadow-pop)] sm:p-8">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.045)_1px,transparent_1px)] bg-[length:40px_40px]" />
+    <section className="relative overflow-hidden rounded-xl bg-[linear-gradient(145deg,var(--ink-950),oklch(0.22_0.05_250)_55%,oklch(0.20_0.08_250))] p-5 text-white shadow-(--shadow-pop) sm:p-8">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.045)_1px,transparent_1px)] bg-size-[40px_40px]" />
       <div className="relative grid gap-6 lg:grid-cols-[150px_1fr_auto] lg:items-center">
         <div className="relative mx-auto h-36 w-36 lg:mx-0">
           <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
@@ -188,10 +188,10 @@ function Hero({ stats }: { stats?: AerodexStats }) {
               strokeWidth="8"
             />
           </svg>
-          <div className="absolute inset-3 grid place-items-center rounded-full border border-white/10 bg-white/[.04] text-center">
+          <div className="absolute inset-3 grid place-items-center rounded-full border border-white/10 bg-white/4 text-center">
             <div>
-              <div className="font-[var(--f-serif)] text-5xl font-semibold leading-none">{progress.level}</div>
-              <div className="mt-1 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[.18em] text-[oklch(0.85_0.08_75)]">
+              <div className="font-(--f-serif) text-5xl font-semibold leading-none">{progress.level}</div>
+              <div className="mt-1 font-(--f-mono) text-[10px] font-semibold uppercase tracking-[.18em] text-[oklch(0.85_0.08_75)]">
                 niveau
               </div>
             </div>
@@ -199,11 +199,11 @@ function Hero({ stats }: { stats?: AerodexStats }) {
         </div>
 
         <div className="min-w-0 text-center lg:text-left">
-          <div className="mb-3 flex items-center justify-center gap-3 font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[.2em] text-[oklch(0.85_0.08_75)] lg:justify-start">
+          <div className="mb-3 flex items-center justify-center gap-3 font-(--f-mono) text-[10px] font-semibold uppercase tracking-[.2em] text-[oklch(0.85_0.08_75)] lg:justify-start">
             <span className="hidden h-px w-7 bg-[oklch(0.75_0.12_75)] sm:block" />
             Carnet de bord
           </div>
-          <h1 className="font-[var(--f-serif)] text-4xl font-medium leading-tight tracking-normal sm:text-5xl">
+          <h1 className="font-(--f-serif) text-4xl font-medium leading-tight tracking-normal sm:text-5xl">
             {progress.rank}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-white/65">
@@ -212,7 +212,7 @@ function Hero({ stats }: { stats?: AerodexStats }) {
           <div className="mt-5 max-w-xl">
             <div className="mb-2 flex items-center justify-between text-xs text-white/65">
               <span>Progression du niveau</span>
-              <span className="font-[var(--f-mono)] font-semibold text-white">
+              <span className="font-(--f-mono) font-semibold text-white">
                 {progress.xp} XP
               </span>
             </div>
@@ -238,10 +238,10 @@ function Hero({ stats }: { stats?: AerodexStats }) {
           ].map((item) => (
             <div
               key={item.label}
-              className="min-w-0 rounded-md border border-white/10 bg-white/[.06] px-3 py-3 text-right"
+              className="min-w-0 rounded-md border border-white/10 bg-white/6 px-3 py-3 text-right"
             >
-              <div className="truncate font-[var(--f-serif)] text-2xl font-medium leading-none">{item.value}</div>
-              <div className="mt-1 font-[var(--f-mono)] text-[9px] uppercase tracking-[.12em] text-white/55">
+              <div className="truncate font-(--f-serif) text-2xl font-medium leading-none">{item.value}</div>
+              <div className="mt-1 font-(--f-mono) text-[9px] uppercase tracking-[.12em] text-white/55">
                 {item.label}
               </div>
             </div>
@@ -279,26 +279,26 @@ function TypeTabs({
             onClick={() => onChange(selected ? "all" : key)}
             className={`min-h-[138px] rounded-lg border p-4 text-left transition hover:-translate-y-0.5 ${
               selected
-                ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-                : "border-[var(--ink-200)] bg-white text-[var(--ink-950)] hover:border-[var(--ink-300)]"
+                ? "border-(--ink-950) bg-(--ink-950) text-white"
+                : "border-(--ink-200) bg-white text-(--ink-950) hover:border-(--ink-300)"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
               <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${selected ? "bg-white/10 text-white" : tone}`}>
                 <Icon className="h-5 w-5" />
               </div>
-              <span className={`font-[var(--f-mono)] text-xs ${selected ? "text-white/55" : "text-[var(--ink-500)]"}`}>
+              <span className={`font-(--f-mono) text-xs ${selected ? "text-white/55" : "text-(--ink-500)"}`}>
                 {percent}%
               </span>
             </div>
             <div className="mt-4 text-sm font-semibold">{label}</div>
-            <div className="mt-1 flex items-baseline gap-1 font-[var(--f-mono)]">
-              <span className="font-[var(--f-serif)] text-3xl font-semibold leading-none">{visited}</span>
-              <span className={selected ? "text-white/55" : "text-[var(--ink-500)]"}>/ {total}</span>
+            <div className="mt-1 flex items-baseline gap-1 font-(--f-mono)">
+              <span className="font-(--f-serif) text-3xl font-semibold leading-none">{visited}</span>
+              <span className={selected ? "text-white/55" : "text-(--ink-500)"}>/ {total}</span>
             </div>
-            <div className={`mt-3 h-1 overflow-hidden rounded-full ${selected ? "bg-white/15" : "bg-[var(--ink-100)]"}`}>
+            <div className={`mt-3 h-1 overflow-hidden rounded-full ${selected ? "bg-white/15" : "bg-(--ink-100)"}`}>
               <div
-                className={`h-full rounded-full ${selected ? "bg-[oklch(0.70_0.12_75)]" : "bg-[var(--horizon-700)]"}`}
+                className={`h-full rounded-full ${selected ? "bg-[oklch(0.70_0.12_75)]" : "bg-(--horizon-700)"}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -324,8 +324,8 @@ function FilterChip({
       onClick={onClick}
       className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
         active
-          ? "border-[var(--ink-950)] bg-[var(--ink-950)] text-white"
-          : "border-[var(--ink-300)] bg-white text-[var(--ink-700)] hover:border-[var(--ink-400)]"
+          ? "border-(--ink-950) bg-(--ink-950) text-white"
+          : "border-(--ink-300) bg-white text-(--ink-700) hover:border-(--ink-400)"
       }`}
     >
       {children}
@@ -339,26 +339,26 @@ function StampCard({ visit }: { visit: VisitEntry }) {
 
   return (
     <Link href={`/aerodrome/${visit.aerodrome.id}`} className="group block min-w-0">
-      <article className="relative min-h-[172px] rounded-lg border border-[var(--ink-200)] bg-[var(--paper-50)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--ink-400)]">
+      <article className="relative min-h-[172px] rounded-lg border border-(--ink-200) bg-(--paper-50) p-4 transition hover:-translate-y-0.5 hover:border-(--ink-400)">
         <div className="mx-auto grid aspect-[1.24] max-w-[160px] place-items-center border-2 border-dashed border-[oklch(0.55_0.10_25)] bg-white/70 p-3 text-center text-[oklch(0.40_0.15_25)] [clip-path:polygon(6%_0,94%_0,100%_6%,100%_94%,94%_100%,6%_100%,0_94%,0_6%)]">
           <div className="min-w-0">
-            <div className="font-[var(--f-mono)] text-xl font-bold uppercase tracking-[.12em]">
+            <div className="font-(--f-mono) text-xl font-bold uppercase tracking-[.12em]">
               {visit.aerodrome.icaoCode ?? meta.shortLabel}
             </div>
-            <div className="mt-1 truncate font-[var(--f-serif)] text-sm font-semibold">
+            <div className="mt-1 truncate font-(--f-serif) text-sm font-semibold">
               {visit.aerodrome.name}
             </div>
-            <div className="mt-2 font-[var(--f-mono)] text-[10px] tracking-[.12em]">
+            <div className="mt-2 font-(--f-mono) text-[10px] tracking-[.12em]">
               {formatStampDate(visit.visitedAt)}
             </div>
           </div>
         </div>
         {visit.status === "FAVORITE" && (
-          <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-[var(--ifr-100)] text-[var(--ifr-500)]">
+          <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-(--ifr-100) text-(--ifr-500)">
             <Heart className="h-4 w-4 fill-current" />
           </div>
         )}
-        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-[var(--ink-500)]">
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-(--ink-500)">
           <span className="truncate">{visit.aerodrome.city ?? "Terrain visité"}</span>
           <ChevronRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-0.5" />
         </div>
@@ -374,29 +374,29 @@ function VisitListRow({ visit }: { visit: VisitEntry }) {
 
   return (
     <Link href={`/aerodrome/${visit.aerodrome.id}`} className="block">
-      <div className="grid min-h-[76px] grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg border border-[var(--ink-200)] bg-white p-3 transition hover:border-[var(--ink-400)] hover:bg-[var(--paper-50)] sm:gap-4 sm:p-4">
-        <div className={`grid h-11 w-11 place-items-center rounded-md border border-[var(--ink-200)] ${meta.tone}`}>
+      <div className="grid min-h-[76px] grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg border border-(--ink-200) bg-white p-3 transition hover:border-(--ink-400) hover:bg-(--paper-50) sm:gap-4 sm:p-4">
+        <div className={`grid h-11 w-11 place-items-center rounded-md border border-(--ink-200) ${meta.tone}`}>
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-semibold text-[var(--ink-950)]">{visit.aerodrome.name}</span>
+            <span className="truncate text-sm font-semibold text-(--ink-950)">{visit.aerodrome.name}</span>
             {visit.aerodrome.icaoCode && (
-              <span className="rounded border border-[var(--ink-300)] bg-[var(--paper-100)] px-2 py-0.5 font-[var(--f-mono)] text-[10px] uppercase tracking-[.08em]">
+              <span className="rounded border border-(--ink-300) bg-(--paper-100) px-2 py-0.5 font-(--f-mono) text-[10px] uppercase tracking-[.08em]">
                 {visit.aerodrome.icaoCode}
               </span>
             )}
-            {visit.status === "FAVORITE" && <Heart className="h-3.5 w-3.5 fill-current text-[var(--ifr-500)]" />}
+            {visit.status === "FAVORITE" && <Heart className="h-3.5 w-3.5 fill-current text-(--ifr-500)" />}
           </div>
-          <div className="mt-1 truncate text-xs text-[var(--ink-500)]">
+          <div className="mt-1 truncate text-xs text-(--ink-500)">
             {visit.aerodrome.city ?? meta.label}
           </div>
         </div>
         <div className="hidden text-right sm:block">
-          <div className="font-[var(--f-mono)] text-xs text-[var(--ink-950)]">{formatStampDate(visit.visitedAt)}</div>
-          <div className="mt-1 text-xs text-[var(--ink-500)]">{meta.label}</div>
+          <div className="font-(--f-mono) text-xs text-(--ink-950)">{formatStampDate(visit.visitedAt)}</div>
+          <div className="mt-1 text-xs text-(--ink-500)">{meta.label}</div>
         </div>
-        <ChevronRight className="h-4 w-4 text-[var(--ink-400)] sm:hidden" />
+        <ChevronRight className="h-4 w-4 text-(--ink-400) sm:hidden" />
       </div>
     </Link>
   );
@@ -427,9 +427,9 @@ function CollectionSection({ items }: { items: VisitEntry[] }) {
     <Panel
       title="Ma collection"
       icon={BookOpen}
-      right={<span className="font-[var(--f-mono)] text-xs text-[var(--ink-500)]">{filtered.length} tampons</span>}
+      right={<span className="font-(--f-mono) text-xs text-(--ink-500)">{filtered.length} tampons</span>}
     >
-      <div className="flex flex-col gap-3 border-b border-[var(--ink-200)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="flex flex-col gap-3 border-b border-(--ink-200) px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="flex flex-wrap gap-2">
           <FilterChip active={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setShowAll(false); }}>
             Tous
@@ -454,7 +454,7 @@ function CollectionSection({ items }: { items: VisitEntry[] }) {
             </FilterChip>
           ))}
         </div>
-        <div className="grid w-full grid-cols-2 rounded-md border border-[var(--ink-200)] bg-[var(--paper-100)] p-1 sm:w-auto">
+        <div className="grid w-full grid-cols-2 rounded-md border border-(--ink-200) bg-(--paper-100) p-1 sm:w-auto">
           {[
             { key: "stamps" as const, label: "Tampons", icon: Grid2X2 },
             { key: "list" as const, label: "Liste", icon: List },
@@ -464,7 +464,7 @@ function CollectionSection({ items }: { items: VisitEntry[] }) {
               type="button"
               onClick={() => setViewMode(key)}
               className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-sm px-3 text-xs font-medium transition ${
-                viewMode === key ? "bg-white text-[var(--ink-950)] shadow-[var(--shadow-lift)]" : "text-[var(--ink-700)]"
+                viewMode === key ? "bg-white text-(--ink-950) shadow-(--shadow-lift)" : "text-(--ink-700)"
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -476,10 +476,10 @@ function CollectionSection({ items }: { items: VisitEntry[] }) {
 
       <div className="p-4 sm:p-5">
         {filtered.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[var(--ink-300)] bg-[var(--paper-50)] p-8 text-center">
-            <BookOpen className="mx-auto h-10 w-10 text-[var(--ink-400)]" />
-            <p className="mt-3 text-sm font-medium text-[var(--ink-950)]">Aucun tampon pour ces filtres.</p>
-            <p className="mt-1 text-sm text-[var(--ink-500)]">Change les filtres ou marque un terrain comme visité.</p>
+          <div className="rounded-lg border border-dashed border-(--ink-300) bg-(--paper-50) p-8 text-center">
+            <BookOpen className="mx-auto h-10 w-10 text-(--ink-400)" />
+            <p className="mt-3 text-sm font-medium text-(--ink-950)">Aucun tampon pour ces filtres.</p>
+            <p className="mt-1 text-sm text-(--ink-500)">Change les filtres ou marque un terrain comme visité.</p>
           </div>
         ) : viewMode === "stamps" ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -489,11 +489,11 @@ function CollectionSection({ items }: { items: VisitEntry[] }) {
             {Array.from({ length: Math.max(0, EMPTY_STAMP_COUNT - Math.min(EMPTY_STAMP_COUNT, visible.length)) }).map((_, index) => (
               <div
                 key={`empty-${index}`}
-                className="grid min-h-[172px] place-items-center rounded-lg border border-dashed border-[var(--ink-200)] bg-[var(--paper-100)] p-4 text-center text-[var(--ink-400)]"
+                className="grid min-h-[172px] place-items-center rounded-lg border border-dashed border-(--ink-200) bg-(--paper-100) p-4 text-center text-(--ink-400)"
               >
                 <div>
                   <MapPin className="mx-auto h-6 w-6" />
-                  <div className="mt-2 font-[var(--f-mono)] text-[10px] uppercase tracking-[.12em]">À découvrir</div>
+                  <div className="mt-2 font-(--f-mono) text-[10px] uppercase tracking-[.12em]">À découvrir</div>
                 </div>
               </div>
             ))}
@@ -531,25 +531,25 @@ function BadgeMedal({ badge, visitedCount }: { badge: AerodexBadge; visitedCount
       className={`relative rounded-lg border p-4 transition hover:-translate-y-0.5 ${
         badge.earned
           ? "border-[oklch(0.85_0.08_75)] bg-[linear-gradient(160deg,oklch(0.95_0.04_75),white)]"
-          : "border-[var(--ink-200)] bg-[var(--paper-100)] opacity-70"
+          : "border-(--ink-200) bg-(--paper-100) opacity-70"
       }`}
     >
-      <div className="absolute right-2 top-2 rounded-sm bg-black/[.04] px-1.5 py-0.5 font-[var(--f-mono)] text-[9px] font-semibold uppercase tracking-[.1em] text-[var(--ink-700)]">
+      <div className="absolute right-2 top-2 rounded-sm bg-black/4 px-1.5 py-0.5 font-(--f-mono) text-[9px] font-semibold uppercase tracking-widest text-(--ink-700)">
         {badge.earned ? "Validé" : "Objectif"}
       </div>
-      <div className="mx-auto mt-2 grid h-16 w-16 place-items-center rounded-full border bg-white text-[var(--terrain-800)]">
-        {badge.earned ? <Trophy className="h-8 w-8" /> : <Lock className="h-7 w-7 text-[var(--ink-500)]" />}
+      <div className="mx-auto mt-2 grid h-16 w-16 place-items-center rounded-full border bg-white text-(--terrain-800)">
+        {badge.earned ? <Trophy className="h-8 w-8" /> : <Lock className="h-7 w-7 text-(--ink-500)" />}
       </div>
       <div className="mt-3 text-center">
-        <div className="font-[var(--f-serif)] text-base font-semibold text-[var(--ink-950)]">{badge.name}</div>
-        <p className="mt-1 min-h-10 text-xs text-[var(--ink-500)]">{badge.description}</p>
+        <div className="font-(--f-serif) text-base font-semibold text-(--ink-950)">{badge.name}</div>
+        <p className="mt-1 min-h-10 text-xs text-(--ink-500)">{badge.description}</p>
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <span className="w-12 shrink-0 font-[var(--f-mono)] text-[10px] text-[var(--ink-700)]">
+        <span className="w-12 shrink-0 font-(--f-mono) text-[10px] text-(--ink-700)">
           {current}/{target}
         </span>
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--ink-200)]">
-          <div className="h-full rounded-full bg-[var(--horizon-700)]" style={{ width: `${progressPercent(current, target)}%` }} />
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-(--ink-200)">
+          <div className="h-full rounded-full bg-(--horizon-700)" style={{ width: `${progressPercent(current, target)}%` }} />
         </div>
       </div>
     </div>
@@ -566,7 +566,7 @@ function BadgesPanel({ stats }: { stats?: AerodexStats }) {
           <BadgeMedal key={badge.id} badge={badge} visitedCount={stats?.visitedCount ?? 0} />
         ))}
         {badges.length === 0 && (
-          <p className="col-span-full text-sm text-[var(--ink-500)]">Les badges apparaîtront après tes premières visites.</p>
+          <p className="col-span-full text-sm text-(--ink-500)">Les badges apparaîtront après tes premières visites.</p>
         )}
       </div>
     </Panel>
@@ -605,26 +605,26 @@ function GoalsPanel({ stats }: { stats?: AerodexStats }) {
     <Panel title="Prochains objectifs" icon={Target}>
       <div className="space-y-4 p-4 sm:p-5">
         {goals.map(({ name, icon: Icon, current, target, xp, hint }) => (
-          <div key={name} className="rounded-lg border border-[var(--ink-200)] bg-[var(--paper-50)] p-4">
+          <div key={name} className="rounded-lg border border-(--ink-200) bg-(--paper-50) p-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2 font-semibold text-[var(--ink-950)]">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--terrain-100)] text-[var(--terrain-800)]">
+              <div className="flex min-w-0 items-center gap-2 font-semibold text-(--ink-950)">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-(--terrain-100) text-(--terrain-800)">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="truncate">{name}</span>
               </div>
-              <span className="shrink-0 rounded-full bg-[var(--horizon-50)] px-2 py-1 font-[var(--f-mono)] text-[10px] font-semibold text-[var(--horizon-700)]">
+              <span className="shrink-0 rounded-full bg-(--horizon-50) px-2 py-1 font-(--f-mono) text-[10px] font-semibold text-(--horizon-700)">
                 +{xp} XP
               </span>
             </div>
             <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-              <span className="font-[var(--f-mono)] text-[10px] text-[var(--ink-700)]">{Math.min(current, target)} / {target}</span>
-              <div className="h-1.5 overflow-hidden rounded-full bg-[var(--ink-200)]">
-                <div className="h-full rounded-full bg-[var(--horizon-700)]" style={{ width: `${progressPercent(current, target)}%` }} />
+              <span className="font-(--f-mono) text-[10px] text-(--ink-700)">{Math.min(current, target)} / {target}</span>
+              <div className="h-1.5 overflow-hidden rounded-full bg-(--ink-200)">
+                <div className="h-full rounded-full bg-(--horizon-700)" style={{ width: `${progressPercent(current, target)}%` }} />
               </div>
-              <span className="font-[var(--f-mono)] text-[10px] text-[var(--ink-500)]">{progressPercent(current, target)}%</span>
+              <span className="font-(--f-mono) text-[10px] text-(--ink-500)">{progressPercent(current, target)}%</span>
             </div>
-            <p className="mt-2 text-xs text-[var(--ink-500)]">{hint}</p>
+            <p className="mt-2 text-xs text-(--ink-500)">{hint}</p>
           </div>
         ))}
       </div>
@@ -655,7 +655,7 @@ function ActivityPanel({ visits, badges }: { visits: VisitEntry[]; badges: Aerod
     <Panel title="Activité" icon={Clock3}>
       <div className="p-4 sm:p-5">
         {items.length === 0 ? (
-          <p className="text-sm text-[var(--ink-500)]">Aucune activité pour le moment.</p>
+          <p className="text-sm text-(--ink-500)">Aucune activité pour le moment.</p>
         ) : (
           <div className="space-y-4">
             {items.map((item) => {
@@ -665,15 +665,15 @@ function ActivityPanel({ visits, badges }: { visits: VisitEntry[]; badges: Aerod
                   <div
                     className={`grid h-8 w-8 place-items-center rounded-full ${
                       item.type === "badge"
-                        ? "bg-[var(--terrain-100)] text-[var(--terrain-800)]"
-                        : "bg-[var(--horizon-50)] text-[var(--horizon-700)]"
+                        ? "bg-(--terrain-100) text-(--terrain-800)"
+                        : "bg-(--horizon-50) text-(--horizon-700)"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-[var(--ink-950)]">{item.title}</div>
-                    <div className="mt-0.5 text-xs text-[var(--ink-500)]">{item.meta}</div>
+                    <div className="truncate text-sm font-medium text-(--ink-950)">{item.title}</div>
+                    <div className="mt-0.5 text-xs text-(--ink-500)">{item.meta}</div>
                   </div>
                 </div>
               );
@@ -712,11 +712,11 @@ export default function AerodexPage() {
 
   if (!user) {
     return (
-      <div className="min-h-[70vh] bg-[var(--paper-50)] px-4 py-16">
-        <div className="mx-auto max-w-lg rounded-xl border border-[var(--ink-200)] bg-white p-8 text-center shadow-[var(--shadow-lift)]">
-          <BookOpen className="mx-auto h-12 w-12 text-[var(--horizon-700)]" />
-          <h1 className="mt-4 font-[var(--f-serif)] text-3xl font-medium text-[var(--ink-950)]">Aérodex</h1>
-          <p className="mt-2 text-sm text-[var(--ink-500)]">
+      <div className="min-h-[70vh] bg-(--paper-50) px-4 py-16">
+        <div className="mx-auto max-w-lg rounded-xl border border-(--ink-200) bg-white p-8 text-center shadow-(--shadow-lift)">
+          <BookOpen className="mx-auto h-12 w-12 text-(--horizon-700)" />
+          <h1 className="mt-4 font-(--f-serif) text-3xl font-medium text-(--ink-950)">Aérodex</h1>
+          <p className="mt-2 text-sm text-(--ink-500)">
             Connecte-toi pour suivre tes visites, collectionner tes tampons et débloquer tes badges.
           </p>
           <Button asChild className="mt-6">
@@ -734,23 +734,23 @@ export default function AerodexPage() {
 
         <div className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="font-[var(--f-mono)] text-[11px] font-semibold uppercase tracking-[.14em] text-[var(--terrain-700)]">
+            <div className="font-(--f-mono) text-[11px] font-semibold uppercase tracking-[.14em] text-(--terrain-700)">
               Progression par terrain
             </div>
-            <h1 className="mt-2 flex items-center gap-3 font-[var(--f-serif)] text-3xl font-medium tracking-normal text-[var(--ink-950)] sm:text-4xl">
-              <span className="grid h-10 w-10 place-items-center rounded-md bg-[var(--brass-100)] text-[var(--brass-700)]">
+            <h1 className="mt-2 flex items-center gap-3 font-(--f-serif) text-3xl font-medium tracking-normal text-(--ink-950) sm:text-4xl">
+              <span className="grid h-10 w-10 place-items-center rounded-md bg-(--brass-100) text-(--brass-700)">
                 <BookOpen className="h-5 w-5" />
               </span>
               Aérodex
             </h1>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-[var(--ink-500)]">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ink-200)] bg-white px-3 py-1.5">
-              <Route className="h-3.5 w-3.5 text-[var(--terrain-700)]" />
+          <div className="flex flex-wrap gap-2 text-xs text-(--ink-500)">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-(--ink-200) bg-white px-3 py-1.5">
+              <Route className="h-3.5 w-3.5 text-(--terrain-700)" />
               {formatNm(stats?.estimatedDistanceNm ?? 0)} estimés
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ink-200)] bg-white px-3 py-1.5">
-              <CalendarDays className="h-3.5 w-3.5 text-[var(--horizon-700)]" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-(--ink-200) bg-white px-3 py-1.5">
+              <CalendarDays className="h-3.5 w-3.5 text-(--horizon-700)" />
               {visits.length} tampons
             </span>
           </div>
@@ -765,23 +765,23 @@ export default function AerodexPage() {
             <Panel
               title="Carte de progression"
               icon={Map}
-              right={<span className="text-xs text-[var(--ink-500)]">Vue synthèse</span>}
+              right={<span className="text-xs text-(--ink-500)">Vue synthèse</span>}
             >
               <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[1fr_260px]">
-                <div className="grid min-h-[260px] place-items-center rounded-lg border border-dashed border-[var(--ink-200)] bg-[var(--paper-50)] p-6 text-center">
+                <div className="grid min-h-[260px] place-items-center rounded-lg border border-dashed border-(--ink-200) bg-(--paper-50) p-6 text-center">
                   <div>
-                    <Map className="mx-auto h-12 w-12 text-[var(--horizon-700)]" />
-                    <p className="mt-3 font-[var(--f-serif)] text-xl font-medium text-[var(--ink-950)]">
+                    <Map className="mx-auto h-12 w-12 text-(--horizon-700)" />
+                    <p className="mt-3 font-(--f-serif) text-xl font-medium text-(--ink-950)">
                       Couverture nationale
                     </p>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-[var(--ink-500)]">
+                    <p className="mx-auto mt-1 max-w-md text-sm text-(--ink-500)">
                       La carte détaillée arrivera quand les visites exposeront les régions. Pour l'instant,
                       cette vue conserve la progression par type et la collection réelle.
                     </p>
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <div className="font-[var(--f-mono)] text-[10px] font-semibold uppercase tracking-[.12em] text-[var(--ink-500)]">
+                  <div className="font-(--f-mono) text-[10px] font-semibold uppercase tracking-[.12em] text-(--ink-500)">
                     Légende
                   </div>
                   {(Object.keys(typeMeta) as Exclude<TypeFilter, "all">[]).map((key) => {
@@ -791,10 +791,10 @@ export default function AerodexPage() {
                         key={key}
                         type="button"
                         onClick={() => setActiveType(activeType === key ? "all" : key)}
-                        className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-dashed border-[var(--ink-200)] py-2 text-left text-xs"
+                        className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-dashed border-(--ink-200) py-2 text-left text-xs"
                       >
-                        <span className="truncate text-[var(--ink-800)]">{typeMeta[key].label}</span>
-                        <span className="font-[var(--f-mono)] text-[var(--ink-700)]">
+                        <span className="truncate text-(--ink-800)">{typeMeta[key].label}</span>
+                        <span className="font-(--f-mono) text-(--ink-700)">
                           {entry.visited}/{entry.total}
                         </span>
                       </button>
@@ -814,8 +814,8 @@ export default function AerodexPage() {
           </aside>
         </div>
 
-        <div className="mt-6 flex items-start gap-2 rounded-lg border border-[var(--ink-200)] bg-white px-4 py-3 text-xs text-[var(--ink-500)]">
-          <Eye className="mt-0.5 h-4 w-4 shrink-0 text-[var(--horizon-700)]" />
+        <div className="mt-6 flex items-start gap-2 rounded-lg border border-(--ink-200) bg-white px-4 py-3 text-xs text-(--ink-500)">
+          <Eye className="mt-0.5 h-4 w-4 shrink-0 text-(--horizon-700)" />
           <span>
             Les tampons et l'XP se mettent à jour avec tes visites. Les objectifs utilisent les données déjà
             disponibles dans Navventura.

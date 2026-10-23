@@ -290,7 +290,7 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-border/70 bg-gradient-to-br from-background via-background to-muted/30 p-6 shadow-sm">
+      <div className="mb-8 flex flex-col gap-4 rounded-3xl border border-border/70 bg-linear-to-br from-background via-background to-muted/30 p-6 shadow-xs">
         <div className="flex items-start gap-3">
           <div className="rounded-2xl bg-primary/10 p-3 text-primary">
             <Shield className="h-6 w-6" />
@@ -322,7 +322,7 @@ export default function AdminPage() {
 
       {stats && (
         <div className="mb-8 grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
-          <Card className="border-border/80 shadow-sm">
+          <Card className="border-border/80 shadow-xs">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">À traiter maintenant</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -335,11 +335,11 @@ export default function AdminPage() {
                 return (
                   <Link key={item.href} href={item.href}>
                     <div
-                      className={`group rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm ${item.tone}`}
+                      className={`group rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xs ${item.tone}`}
                     >
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-start gap-3">
-                          <div className="rounded-2xl bg-background/80 p-2.5 shadow-sm ring-1 ring-black/5">
+                          <div className="rounded-2xl bg-background/80 p-2.5 shadow-xs ring-1 ring-black/5">
                             <Icon className={`h-5 w-5 ${item.accent}`} />
                           </div>
                           <div className="space-y-1">
@@ -367,7 +367,7 @@ export default function AdminPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/80 shadow-sm">
+          <Card className="border-border/80 shadow-xs">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">État rapide</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -405,7 +405,7 @@ export default function AdminPage() {
               const Icon = item.icon;
               return (
                 <Link key={item.href} href={item.href}>
-                  <Card className="h-full border-border/80 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm">
+                  <Card className="h-full border-border/80 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xs">
                     <CardContent className="flex h-full flex-col gap-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="rounded-2xl bg-muted/50 p-2.5">

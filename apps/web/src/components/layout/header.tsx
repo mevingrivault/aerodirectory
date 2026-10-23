@@ -131,7 +131,7 @@ export function Header() {
   return (
     <>
       {shouldPromptCommunityConsent && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-130 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg rounded-xl border bg-background p-6 shadow-xl">
             <h2 className="text-xl font-semibold">Confidentialite communautaire</h2>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -242,7 +242,7 @@ export function Header() {
         </div>
       )}
 
-      <header className="sticky top-0 z-[100] isolate" style={{ background: "rgba(253, 252, 249, .85)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--ink-200)" }}>
+      <header className="sticky top-0 z-100 isolate" style={{ background: "rgba(253, 252, 249, .85)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--ink-200)" }}>
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link
           href="/"
@@ -301,7 +301,7 @@ export function Header() {
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border bg-background shadow-lg z-[110]">
+                <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border bg-background shadow-lg z-110">
                   <div className="flex items-center justify-between border-b px-4 py-3">
                     <span className="font-semibold text-sm">Notifications</span>
                     {unreadCount > 0 && (

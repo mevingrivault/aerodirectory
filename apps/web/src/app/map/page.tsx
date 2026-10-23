@@ -699,7 +699,7 @@ function MapPageInner() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="pl-10 bg-background/95 backdrop-blur shadow-md"
+              className="pl-10 bg-background/95 backdrop-blur-sm shadow-md"
               placeholder="Rechercher..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -707,7 +707,7 @@ function MapPageInner() {
           </div>
           <button
             onClick={() => setShowFilters((v) => !v)}
-            className={`relative flex items-center justify-center rounded-md border px-3 shadow-md bg-background/95 backdrop-blur transition-colors ${showFilters ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            className={`relative flex items-center justify-center rounded-md border px-3 shadow-md bg-background/95 backdrop-blur-sm transition-colors ${showFilters ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
           >
             <SlidersHorizontal className="h-4 w-4" />
             {activeFilterCount > 0 && (
@@ -720,7 +720,7 @@ function MapPageInner() {
 
         {/* Filter panel */}
         {showFilters && (
-          <div className="mt-2 rounded-md bg-background/95 backdrop-blur shadow-md p-3 text-xs space-y-3">
+          <div className="mt-2 rounded-md bg-background/95 backdrop-blur-sm shadow-md p-3 text-xs space-y-3">
             {/* Piste minimale */}
             <div>
               <div className="font-semibold mb-1.5">Piste minimale</div>
@@ -836,11 +836,11 @@ function MapPageInner() {
           </div>
         )}
 
-        <div className="mt-1 rounded-md bg-background/95 backdrop-blur shadow-md p-2 text-xs text-muted-foreground">
+        <div className="mt-1 rounded-md bg-background/95 backdrop-blur-sm shadow-md p-2 text-xs text-muted-foreground">
           {filtered.length} aérodrome{filtered.length !== 1 ? "s" : ""} affiché{filtered.length !== 1 ? "s" : ""}
         </div>
         {highlightedAerodrome && (
-          <div className="mt-2 rounded-md border border-primary/25 bg-background/95 p-2 text-xs text-foreground shadow-md backdrop-blur">
+          <div className="mt-2 rounded-md border border-primary/25 bg-background/95 p-2 text-xs text-foreground shadow-md backdrop-blur-sm">
             <span className="font-medium">Mise en évidence :</span>{" "}
             {highlightedAerodrome.name}
             {highlightedAerodrome.icaoCode ? ` (${highlightedAerodrome.icaoCode})` : ""}
@@ -849,7 +849,7 @@ function MapPageInner() {
       </div>
 
       {/* Legend */}
-      <div className="absolute right-4 bottom-8 z-10 rounded-md bg-background/95 backdrop-blur shadow-md p-3 text-xs">
+      <div className="absolute right-4 bottom-8 z-10 rounded-md bg-background/95 backdrop-blur-sm shadow-md p-3 text-xs">
         <div className="font-semibold mb-1.5">Types</div>
         {Object.entries(TYPE_COLORS).map(([type, color]) => {
           const hidden = hiddenTypes.has(type);
@@ -939,7 +939,7 @@ function MapPageInner() {
       </div>
 
       {/* Map style switcher */}
-      <div className="absolute left-4 bottom-8 z-10 flex rounded-md shadow-md overflow-hidden border bg-background/95 backdrop-blur text-xs font-medium">
+      <div className="absolute left-4 bottom-8 z-10 flex rounded-md shadow-md overflow-hidden border bg-background/95 backdrop-blur-sm text-xs font-medium">
         {(["osm", "satellite", "hybrid"] as const).map((style, i) => (
           <button
             key={style}

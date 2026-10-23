@@ -308,7 +308,7 @@ export function PhotoUpload({
                     className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                     loading="lazy"
                   />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-white">
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-3 py-2 text-white">
                     <p className="truncate text-xs font-medium">
                       {photo.user.displayName || "Membre Navventura"}
                     </p>
@@ -451,7 +451,7 @@ export function PhotoUpload({
 
       {currentLightboxPhoto && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-120 flex items-center justify-center bg-black/90 p-4"
           onClick={closeLightbox}
         >
           <div

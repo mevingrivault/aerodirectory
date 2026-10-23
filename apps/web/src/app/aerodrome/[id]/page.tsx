@@ -1011,10 +1011,10 @@ export default function AerodromeDetailPage() {
   const contactValue: CSSProperties = { fontSize: 13, color: "var(--ink-950)", marginTop: 2 };
 
   return (
-    <div className="min-h-[70vh] bg-[var(--paper-50)] text-[var(--ink-950)]">
+    <div className="min-h-[70vh] bg-(--paper-50) text-(--ink-950)">
 
       {/* BREADCRUMB */}
-      <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-3.5 text-[13px] text-[var(--ink-500)] sm:px-6 lg:px-8">
+      <nav className="mx-auto flex max-w-[1400px] items-center gap-2 px-4 pt-3.5 text-[13px] text-(--ink-500) sm:px-6 lg:px-8">
         <Link href="/search" style={{ color: "var(--ink-700)" }}>Recherche</Link>
         <ChevronRight className="h-3 w-3 opacity-50" strokeWidth={2} />
         <span className="truncate">{ad.name}{ad.icaoCode ? ` (${ad.icaoCode})` : ""}</span>
@@ -1022,7 +1022,7 @@ export default function AerodromeDetailPage() {
 
       {/* HERO — carte aéronautique CSS */}
       <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="relative aspect-[16/10] min-h-[260px] overflow-hidden rounded-xl border border-[var(--ink-200)] bg-[var(--horizon-50)] sm:aspect-[16/8] sm:rounded-2xl md:aspect-[16/7] md:min-h-[360px]">
+        <div className="relative aspect-16/10 min-h-[260px] overflow-hidden rounded-xl border border-(--ink-200) bg-(--horizon-50) sm:aspect-16/8 sm:rounded-2xl md:aspect-16/7 md:min-h-[360px]">
           {/* Gradient map */}
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 38% 30% at 46% 52%, oklch(0.86 0.045 128) 0%, oklch(0.83 0.05 128) 52%, transparent 74%), radial-gradient(ellipse 50% 40% at 46% 52%, oklch(0.90 0.035 210) 0%, oklch(0.90 0.035 210) 56%, transparent 78%), linear-gradient(170deg, oklch(0.93 0.03 215) 0%, oklch(0.88 0.045 220) 45%, oklch(0.83 0.06 225) 100%)" }} />
           {/* Runway overlay */}
@@ -1057,7 +1057,7 @@ export default function AerodromeDetailPage() {
       <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
 
         {/* TABS */}
-        <div role="tablist" className="sticky top-16 z-20 -mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-[var(--ink-200)] bg-[var(--paper-50)] px-4 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div role="tablist" className="sticky top-16 z-20 -mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-(--ink-200) bg-(--paper-50) px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           {([
             { key: "infos",      label: "Infos" },
             { key: "pistes",     label: "Pistes & Frq",    count: ad.runways.length + ad.frequencies.length },
@@ -1660,10 +1660,10 @@ export default function AerodromeDetailPage() {
       </div>
 
       {/* MOBILE BOTTOM BAR */}
-      <div className="fixed bottom-0 left-0 right-0 flex gap-2 border-t border-[var(--ink-200)] bg-[rgba(253,252,249,.96)] p-2.5 backdrop-blur-md sm:hidden" style={{ zIndex: 30 }}>
-        <Link href={`/planner?to=${ad.id}`} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--ink-950)] px-4 py-2.5 text-[13px] font-medium text-white"><Send className="h-4 w-4" /> Planifier</Link>
-        {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--ink-300)] bg-white px-4 py-2.5 text-[13px] font-medium text-[var(--ink-950)] disabled:opacity-60"><CheckCircle2 className="h-4 w-4" /> Aérodex</button>}
-        <button type="button" onClick={() => { if (navigator.share) navigator.share({ title: ad.name, url: window.location.href }).catch(() => {}); else navigator.clipboard.writeText(window.location.href).catch(() => {}); }} className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--ink-300)] bg-white text-[var(--ink-950)]"><Share2 className="h-4 w-4" /></button>
+      <div className="fixed bottom-0 left-0 right-0 flex gap-2 border-t border-(--ink-200) bg-[rgba(253,252,249,.96)] p-2.5 backdrop-blur-md sm:hidden" style={{ zIndex: 30 }}>
+        <Link href={`/planner?to=${ad.id}`} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-(--ink-950) px-4 py-2.5 text-[13px] font-medium text-white"><Send className="h-4 w-4" /> Planifier</Link>
+        {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-(--ink-300) bg-white px-4 py-2.5 text-[13px] font-medium text-(--ink-950) disabled:opacity-60"><CheckCircle2 className="h-4 w-4" /> Aérodex</button>}
+        <button type="button" onClick={() => { if (navigator.share) navigator.share({ title: ad.name, url: window.location.href }).catch(() => {}); else navigator.clipboard.writeText(window.location.href).catch(() => {}); }} className="flex h-11 w-11 items-center justify-center rounded-lg border border-(--ink-300) bg-white text-(--ink-950)"><Share2 className="h-4 w-4" /></button>
       </div>
 
       {/* NEW LIST DIALOG */}
