@@ -3,7 +3,7 @@
 # These CVEs are ignored because they affect packages bundled inside the Node.js
 # base image tooling (npm CLI at usr/local/lib/node_modules/npm/) that are NOT
 # executed at runtime in production containers.
-# They will be resolved automatically when a new node:24-alpine base image is
+# They will be resolved automatically when a new node:26-alpine base image is
 # published with an updated npm version.
 
 # tar@7.5.9 — path traversal via hardlinks/symlinks (npm bundled only)

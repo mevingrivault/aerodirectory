@@ -1,5 +1,5 @@
 # ─── Stage 1: Base ───────────────────────────────────────────────────────────
-FROM node:24-alpine AS base
+FROM node:26.12.1-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.27.0 --activate && \
@@ -32,7 +32,7 @@ RUN pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/web build
 
 # ─── Stage 4: Runner ─────────────────────────────────────────────────────────
-FROM node:24-alpine AS runner
+FROM node:26.12.1-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

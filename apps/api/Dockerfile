@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS base
+FROM node:26.12.1-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update && \
@@ -26,7 +26,7 @@ RUN pnpm --filter @aerodirectory/database prisma:generate && \
     pnpm --filter @aerodirectory/shared build && \
     pnpm --filter @aerodirectory/api build
 
-FROM node:24-bookworm-slim AS runner
+FROM node:26.12.1-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
