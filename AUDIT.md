@@ -61,6 +61,14 @@ Non traité dans cette phase (volontairement) : codes de récupération TOTP.
 | M10 | Override `hono` supprimé et paquet mis à jour, `nodemailer` ≥ 9.1.1, `@fastify/csrf-protection` retiré ; `.trivyignore` nettoyé. | `pnpm audit` |
 | F2 / F3 | `verify-email` validé par Zod ; course sur l'unicité e-mail/pseudo à l'inscription renvoie 409 au lieu de 500. | — |
 
+## Lot 4 — sources externes et cartes (branche `feat/photo-headers`)
+
+| # | Correctif appliqué | Tests |
+|---|---|---|
+| F6 | Timeout de 8 s sur chaque appel CheckWX ; une panne n'est plus mise en cache, un METAR sans TAF (TAF en échec) n'est gardé que 5 min. Téléchargement Geofabrik borné à 3 h. | `metar.service.spec.ts` |
+| M20 | **Nouveau constat, corrigé.** Les popups MapLibre (carte, fiche, planificateur) inséraient noms d'aérodromes, d'espaces aériens et de villes via `setHTML`, sans échappement. Ces noms viennent d'openAIP, OSM et Nominatim (éditables par tous) et la CSP autorise `'unsafe-inline'` : XSS stockée possible. Les popups sont désormais construits en nœuds DOM (`textContent`). | build Next |
+| — | Suppression d'une fiche manuelle : les fichiers S3 des photos membres et de la photo Commons sont supprimés après la ligne (la cascade ne supprimait que les lignes). | `aerodrome.service.spec.ts` |
+
 Non traité (volontairement) : M19 (découpage des gros services et pages), M14 partiel (stats Aerodex dupliquées), P4/P6/P7, F12 (renommage `aerodirectory` → `navventura` : il change les noms d'images GHCR, de bucket et de packages, à planifier comme une opération à part), tests front (aucun harnais en place).
 
 ---
@@ -520,6 +528,7 @@ Correctif : (1) tests d'intégration Nest (`@nestjs/testing` + Fastify inject) s
 | M17 | Moyenne | Fonctionnel | « Signaler la fiche » envoie un type refusé, erreur avalée | `aerodrome/[id]/page.tsx:1590` |
 | M18 | Moyenne | Intégrité | Sync régions écrit `null` sur erreur Nominatim | `regions-sync.task.ts:63-65` |
 | M19 | Moyenne | Qualité | Services/pages monolithiques (2 000+ lignes) | `admin.service.ts` |
+| M20 | Moyenne | Front | XSS stockée via les popups MapLibre (`setHTML` sur des noms openAIP/OSM) — corrigé (lot 4) | `map/page.tsx` |
 | P1 | Moyenne | Perf | Espaces aériens : table entière par déplacement de carte | `airspace.service.ts:20-45` |
 | P2 | Moyenne | Perf | Dump carte sans cache | `aerodrome.service.ts:220-253` |
 | P3 | Moyenne | Perf | Tri distance : pagination en mémoire | `search.service.ts:347-386` |
@@ -528,7 +537,7 @@ Correctif : (1) tests d'intégration Nest (`@nestjs/testing` + Fastify inject) s
 | F3 | Faible | Auth | Course `displayName` → 500 au lieu de 409 | `auth.service.ts:90-119` |
 | F4 | Faible | Fuite | `...comment`, `storedKey` dans les réponses publiques | `comment.service.ts:194` |
 | F5 | Faible | Upload | Lignes `Photo` fantômes `REJECTED` | `photo.service.ts:43-54` |
-| F6 | Faible | Externe | `fetch` sans timeout (CheckWX, Geofabrik) | `metar.service.ts:187` |
+| F6 | Faible | Externe | `fetch` sans timeout (CheckWX, Geofabrik) — corrigé (lot 4) | `metar.service.ts:187` |
 | F7 | Faible | Validation | Query params parsés à la main | `aerodrome.controller.ts:141` |
 | F8 | Faible | Docker | `.dockerignore` n'exclut pas `.env*` | `.dockerignore` |
 | F9 | Faible | Secrets | `S3_*_KEY=any_value` dans l'exemple prod | `.env.prod.example:23` |

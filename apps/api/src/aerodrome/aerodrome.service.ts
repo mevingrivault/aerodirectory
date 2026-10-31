@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { StorageService } from "../photo/storage.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CacheService } from "../common/cache.service";
@@ -36,7 +37,10 @@ export class AerodromeService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly cache: CacheService,
+    private readonly storage: StorageService,
   ) {}
+
+  private readonly logger = new Logger(AerodromeService.name);
 
   /** The full marker set changes once a night; every map load asks for it. */
   private static readonly MARKERS_CACHE_KEY = "aerodromes:markers:v2";
@@ -321,7 +325,24 @@ export class AerodromeService {
   async delete(id: string, actor: AdminActor) {
     const aerodrome = await this.assertEditable(id);
 
+    // The rows go with the aerodrome (cascade); their files in S3 do not.
+    const [photos, commonsPhoto] = await Promise.all([
+      this.prisma.photo.findMany({ where: { aerodromeId: id }, select: { storedKey: true } }),
+      this.prisma.commonsPhoto.findUnique({ where: { aerodromeId: id }, select: { storedKey: true, thumbKey: true } }),
+    ]);
+    const keys = [
+      ...photos.map((p) => p.storedKey),
+      ...(commonsPhoto ? [commonsPhoto.storedKey, commonsPhoto.thumbKey] : []),
+    ].filter((key): key is string => !!key);
+
     await this.prisma.aerodrome.delete({ where: { id } });
+
+    // After the delete: a failure leaves an orphan file, never a row pointing nowhere.
+    for (const key of keys) {
+      await this.storage.delete(key).catch((error: Error) => {
+        this.logger.warn(`Fichier ${key} non supprimé après la suppression de l'aérodrome ${id} : ${error.message}`);
+      });
+    }
 
     await this.audit.log({
       userId: actor.adminId,

@@ -19,10 +19,13 @@ function build(existing: Record<string, unknown> | null) {
       update: vi.fn().mockResolvedValue({ id: "a1" }),
       delete: vi.fn().mockResolvedValue({}),
     },
+    photo: { findMany: vi.fn().mockResolvedValue([]) },
+    commonsPhoto: { findUnique: vi.fn().mockResolvedValue(null) },
   };
   const audit = { log: vi.fn().mockResolvedValue(undefined) };
-  const service = new AerodromeService(prisma as never, audit as never, {} as never);
-  return { service, prisma, audit };
+  const storage = { delete: vi.fn().mockResolvedValue(undefined) };
+  const service = new AerodromeService(prisma as never, audit as never, {} as never, storage as never);
+  return { service, prisma, audit, storage };
 }
 
 const actor = { adminId: "admin", ip: "1.2.3.4" };
@@ -80,6 +83,19 @@ describe("AerodromeService writes", () => {
     await service.delete("a1", actor);
 
     expect(prisma.aerodrome.delete).toHaveBeenCalledWith({ where: { id: "a1" } });
+  });
+
+  it("removes the sheet's photo files from storage after the delete", async () => {
+    const { service, prisma, storage } = build({ id: "a1", name: "Terrain", source: "manual" });
+    prisma.photo.findMany.mockResolvedValue([{ storedKey: "photos/u1.webp" }]);
+    prisma.commonsPhoto.findUnique.mockResolvedValue({ storedKey: "commons/c.jpg", thumbKey: "commons/c-t.jpg" });
+    storage.delete.mockRejectedValueOnce(new Error("S3 down"));
+
+    await service.delete("a1", actor);
+
+    expect(prisma.aerodrome.delete).toHaveBeenCalledBefore(storage.delete);
+    // One file failing does not stop the others.
+    expect(storage.delete.mock.calls.map((c) => c[0])).toEqual(["photos/u1.webp", "commons/c.jpg", "commons/c-t.jpg"]);
   });
 
   it("404s on an unknown sheet", async () => {

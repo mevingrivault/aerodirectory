@@ -6,9 +6,10 @@ import { TransportModule } from "../transport/transport.module";
 import { AccommodationModule } from "../accommodation/accommodation.module";
 import { MetarModule } from "../metar/metar.module";
 import { AuditModule } from "../audit/audit.module";
+import { PhotoModule } from "../photo/photo.module";
 
 @Module({
-  imports: [RestaurantModule, TransportModule, AccommodationModule, MetarModule, AuditModule],
+  imports: [RestaurantModule, TransportModule, AccommodationModule, MetarModule, AuditModule, PhotoModule],
   providers: [AerodromeService],
   controllers: [AerodromeController],
   exports: [AerodromeService],

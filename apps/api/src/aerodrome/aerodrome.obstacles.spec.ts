@@ -14,7 +14,7 @@ function build(aerodrome: typeof TOUSSUS | null, obstacles: Record<string, unkno
     aerodrome: { findUnique: vi.fn().mockResolvedValue(aerodrome) },
     obstacle: { findMany: vi.fn().mockResolvedValue(obstacles) },
   };
-  const service = new AerodromeService(prisma as never, {} as never, {} as never);
+  const service = new AerodromeService(prisma as never, {} as never, {} as never, {} as never);
   return { service, prisma };
 }
 
@@ -67,7 +67,7 @@ describe("AerodromeService.findProtectedAreasNear", () => {
         ]),
       },
     };
-    const service = new AerodromeService(prisma as never, {} as never, {} as never);
+    const service = new AerodromeService(prisma as never, {} as never, {} as never, {} as never);
 
     const result = await service.findProtectedAreasNear("a1", 5000);
 

@@ -9,8 +9,9 @@
 #   ./scripts/run-imports.sh --ourairports # Seulement liens OurAirports (site web, Wikipédia)
 #   ./scripts/run-imports.sh --commons    # Seulement photos Wikimedia Commons
 #
-# Cron (tous les dimanches à 3h) :
-#   0 3 * * 0 /opt/aerodirectory/scripts/run-imports.sh >> /var/log/aerodirectory-import.log 2>&1
+# Pour le développement local uniquement. En production, Postgres et S3 ne
+# sont joignables que depuis le réseau Docker interne : les imports tournent
+# dans le sync-worker (planifiés, ou lancés depuis la page admin).
 
 set -euo pipefail
 

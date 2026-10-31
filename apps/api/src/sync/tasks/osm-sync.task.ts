@@ -99,8 +99,12 @@ function runCommand(command: string, args: string[]) {
   });
 }
 
+// The France extract is several GB: generous, but a stalled download no
+// longer holds the sync worker forever.
+const DOWNLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+
 async function downloadFile(url: string, targetPath: string) {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
   if (!response.ok || !response.body) {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`);
   }
