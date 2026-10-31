@@ -5,6 +5,20 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Copy, Crosshair, ExternalLink, Map } from "lucide-react";
+import {
+  OBSTACLE_COLORS,
+  OBSTACLE_LABELS,
+  formatObstacleDistance,
+  formatObstacleElevation,
+  formatObstacleHeight,
+  type NearbyObstacle,
+} from "@/lib/obstacles";
+import {
+  PROTECTED_AREA_COLORS,
+  PROTECTED_AREA_LABELS,
+  formatAreaDistance,
+  type NearbyProtectedArea,
+} from "@/lib/protected-areas";
 
 type MapStyleKey = "default" | "satellite" | "hybrid";
 
@@ -15,6 +29,60 @@ interface AerodromeLocationMapProps {
   latitude: number;
   longitude: number;
   elevation: number | null;
+  obstacles?: NearbyObstacle[];
+  protectedAreas?: NearbyProtectedArea[];
+}
+
+const OBSTACLES_SOURCE = "obstacles";
+const AREAS_SOURCE = "protected-areas";
+
+function areasGeoJson(areas: NearbyProtectedArea[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: areas.map((a) => ({
+      type: "Feature" as const,
+      geometry: a.geometry,
+      properties: { id: a.id, color: PROTECTED_AREA_COLORS[a.kind] },
+    })),
+  };
+}
+
+function areaPopupContent(a: NearbyProtectedArea): HTMLElement {
+  const root = document.createElement("div");
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = a.name ?? PROTECTED_AREA_LABELS[a.kind];
+  const details = document.createElement("div");
+  details.style.fontSize = "12px";
+  details.style.color = "#64748b";
+  details.textContent = `${a.detail ?? PROTECTED_AREA_LABELS[a.kind]} · ${formatAreaDistance(a.distanceM)}`;
+  root.append(title, details);
+  return root;
+}
+
+function obstaclesGeoJson(obstacles: NearbyObstacle[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: obstacles.map((o) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [o.longitude, o.latitude] },
+      properties: { id: o.id, color: OBSTACLE_COLORS[o.type] },
+    })),
+  };
+}
+
+/** Popup built from DOM nodes: obstacle names come from OSM and are never parsed as HTML. */
+function obstaclePopupContent(o: NearbyObstacle): HTMLElement {
+  const root = document.createElement("div");
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = o.name ? `${OBSTACLE_LABELS[o.type]} · ${o.name}` : OBSTACLE_LABELS[o.type];
+  const details = document.createElement("div");
+  details.style.fontSize = "12px";
+  details.style.color = "#64748b";
+  details.textContent = `Hauteur ${formatObstacleHeight(o.heightM)} · sommet ${formatObstacleElevation(o.elevationM)} · ${formatObstacleDistance(o.distanceM)} au ${String(o.bearingDeg).padStart(3, "0")}°`;
+  root.append(title, details);
+  return root;
 }
 
 const MAP_STYLE_OPTIONS: Array<{ key: MapStyleKey; label: string }> = [
@@ -87,9 +155,16 @@ export function AerodromeLocationMap({
   latitude,
   longitude,
   elevation,
+  obstacles,
+  protectedAreas,
 }: AerodromeLocationMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  // Read when the map (re)loads, since changing the base style rebuilds it.
+  const obstaclesRef = useRef<NearbyObstacle[]>(obstacles ?? []);
+  obstaclesRef.current = obstacles ?? [];
+  const areasRef = useRef<NearbyProtectedArea[]>(protectedAreas ?? []);
+  areasRef.current = protectedAreas ?? [];
   const markerRef = useRef<any>(null);
   const popupRef = useRef<any>(null);
   const [mapStyle, setMapStyle] = useState<MapStyleKey>("default");
@@ -143,6 +218,56 @@ export function AerodromeLocationMap({
 
       map.on("load", () => {
         popupRef.current?.addTo(map);
+
+        // Areas first, so obstacles are drawn on top of them.
+        map.addSource(AREAS_SOURCE, { type: "geojson", data: areasGeoJson(areasRef.current) });
+        map.addLayer({
+          id: "protected-areas-fill",
+          type: "fill",
+          source: AREAS_SOURCE,
+          paint: { "fill-color": ["get", "color"], "fill-opacity": 0.15 },
+        });
+        map.addLayer({
+          id: "protected-areas-line",
+          type: "line",
+          source: AREAS_SOURCE,
+          paint: { "line-color": ["get", "color"], "line-width": 1.5, "line-dasharray": [3, 2] },
+        });
+        map.on("click", "protected-areas-fill", (event: any) => {
+          // An obstacle click inside an area takes precedence.
+          if (map.queryRenderedFeatures(event.point, { layers: ["obstacles"] }).length > 0) return;
+          const id = event.features?.[0]?.properties?.id;
+          const area = areasRef.current.find((a) => a.id === id);
+          if (!area) return;
+          new maplibregl.Popup({ offset: 8 })
+            .setLngLat(event.lngLat)
+            .setDOMContent(areaPopupContent(area))
+            .addTo(map);
+        });
+
+        map.addSource(OBSTACLES_SOURCE, { type: "geojson", data: obstaclesGeoJson(obstaclesRef.current) });
+        map.addLayer({
+          id: "obstacles",
+          type: "circle",
+          source: OBSTACLES_SOURCE,
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 6],
+            "circle-color": ["get", "color"],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.5,
+          },
+        });
+        map.on("click", "obstacles", (event: any) => {
+          const id = event.features?.[0]?.properties?.id;
+          const obstacle = obstaclesRef.current.find((o) => o.id === id);
+          if (!obstacle) return;
+          new maplibregl.Popup({ offset: 8 })
+            .setLngLat([obstacle.longitude, obstacle.latitude])
+            .setDOMContent(obstaclePopupContent(obstacle))
+            .addTo(map);
+        });
+        map.on("mouseenter", "obstacles", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "obstacles", () => { map.getCanvas().style.cursor = ""; });
       });
 
       mapRef.current = map;
@@ -160,6 +285,27 @@ export function AerodromeLocationMap({
       mapRef.current = null;
     };
   }, [center, coordinatesLabel, elevation, icaoCode, mapStyle, name]);
+
+  // Obstacles usually arrive after the map: push them into the loaded source.
+  useEffect(() => {
+    const source = mapRef.current?.getSource?.(OBSTACLES_SOURCE);
+    source?.setData?.(obstaclesGeoJson(obstacles ?? []));
+  }, [obstacles]);
+
+  useEffect(() => {
+    const source = mapRef.current?.getSource?.(AREAS_SOURCE);
+    source?.setData?.(areasGeoJson(protectedAreas ?? []));
+  }, [protectedAreas]);
+
+  const presentKinds = useMemo(
+    () => (Object.keys(PROTECTED_AREA_LABELS) as NearbyProtectedArea["kind"][]).filter((k) => protectedAreas?.some((a) => a.kind === k)),
+    [protectedAreas],
+  );
+
+  const presentTypes = useMemo(
+    () => (Object.keys(OBSTACLE_LABELS) as NearbyObstacle["type"][]).filter((t) => obstacles?.some((o) => o.type === t)),
+    [obstacles],
+  );
 
   useEffect(() => {
     if (!copied) return;
@@ -245,6 +391,28 @@ export function AerodromeLocationMap({
           className="h-[360px] overflow-hidden rounded-xl border bg-muted/20"
           data-aerodrome-id={aerodromeId}
         />
+        {presentKinds.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span>Zones :</span>
+            {presentKinds.map((kind) => (
+              <span key={kind} className="inline-flex items-center gap-1">
+                <span className="inline-block h-2 w-3 rounded-sm border" style={{ background: `${PROTECTED_AREA_COLORS[kind]}33`, borderColor: PROTECTED_AREA_COLORS[kind] }} />
+                {PROTECTED_AREA_LABELS[kind]}
+              </span>
+            ))}
+          </div>
+        )}
+        {presentTypes.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span>Obstacles :</span>
+            {presentTypes.map((type) => (
+              <span key={type} className="inline-flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: OBSTACLE_COLORS[type] }} />
+                {OBSTACLE_LABELS[type]}
+              </span>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

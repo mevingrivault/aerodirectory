@@ -62,6 +62,20 @@ import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
 import { commonsPhotoUrl } from "@/lib/commons-photo";
+import {
+  OBSTACLE_COLORS,
+  OBSTACLE_LABELS,
+  formatObstacleDistance,
+  formatObstacleElevation,
+  formatObstacleHeight,
+  type NearbyObstacle,
+} from "@/lib/obstacles";
+import {
+  PROTECTED_AREA_COLORS,
+  PROTECTED_AREA_LABELS,
+  formatAreaDistance,
+  type NearbyProtectedArea,
+} from "@/lib/protected-areas";
 import type { CorrectionItem, EventItem } from "@aerodirectory/shared";
 import { EVENT_TYPES } from "@aerodirectory/shared";
 
@@ -602,6 +616,20 @@ export default function AerodromeDetailPage() {
     queryFn: () => apiClient.get<WeatherResult | null>(`/aerodromes/${id}/weather`),
     enabled: !!ad && !!user,
     staleTime: 30 * 60 * 1000,
+  });
+
+  const { data: obstaclesRes } = useQuery({
+    queryKey: ["obstacles", id],
+    queryFn: () => apiClient.get<NearbyObstacle[]>(`/aerodromes/${id}/obstacles`, { radiusMeters: "10000" }),
+    enabled: !!ad,
+    staleTime: 60 * 60 * 1000,
+  });
+
+  const { data: areasRes } = useQuery({
+    queryKey: ["protected-areas", id],
+    queryFn: () => apiClient.get<NearbyProtectedArea[]>(`/aerodromes/${id}/protected-areas`, { radiusMeters: "10000" }),
+    enabled: !!ad,
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: sunRes, isLoading: sunLoading } = useQuery({
@@ -1200,7 +1228,9 @@ export default function AerodromeDetailPage() {
                 )}
 
                 <section style={{ marginBottom: 20 }}>
-                  <AerodromeLocationMap aerodromeId={ad.id} name={ad.name} icaoCode={ad.icaoCode} latitude={ad.latitude} longitude={ad.longitude} elevation={ad.elevation} />
+                  <AerodromeLocationMap aerodromeId={ad.id} name={ad.name} icaoCode={ad.icaoCode} latitude={ad.latitude} longitude={ad.longitude} elevation={ad.elevation} obstacles={obstaclesRes?.data} protectedAreas={areasRes?.data} />
+                  {obstaclesRes?.data && <ObstacleList obstacles={obstaclesRes.data} />}
+                  {areasRes?.data && areasRes.data.length > 0 && <ProtectedAreaList areas={areasRes.data} />}
                 </section>
               </div>
             )}
@@ -1747,6 +1777,104 @@ export default function AerodromeDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── ObstacleList ──────────────────────────────────────────────────────────
+
+const OBSTACLE_LIST_RADIUS_M = 5000;
+const OBSTACLE_LIST_MAX = 12;
+
+/** Nearest obstacles within 5 km; the map shows everything up to 10 km. */
+function ObstacleList({ obstacles }: { obstacles: NearbyObstacle[] }) {
+  const near = obstacles.filter((o) => o.distanceM <= OBSTACLE_LIST_RADIUS_M);
+  const shown = near.slice(0, OBSTACLE_LIST_MAX);
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg"><TriangleAlert className="h-5 w-5" /> Obstacles à moins de 5 km</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {near.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Aucun obstacle connu à moins de 5 km{obstacles.length > 0 ? ` (${obstacles.length} entre 5 et 10 km, sur la carte)` : ""}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th className="py-1.5 pr-3">Type</th>
+                  <th className="py-1.5 pr-3">Hauteur</th>
+                  <th className="py-1.5 pr-3">Sommet</th>
+                  <th className="py-1.5 pr-3">Distance</th>
+                  <th className="py-1.5">Relèvement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((o) => (
+                  <tr key={o.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: OBSTACLE_COLORS[o.type] }} />
+                        {OBSTACLE_LABELS[o.type]}{o.name ? <span className="text-muted-foreground"> · {o.name}</span> : null}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{formatObstacleHeight(o.heightM)}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{formatObstacleElevation(o.elevationM)}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{formatObstacleDistance(o.distanceM)}</td>
+                    <td className="py-2 whitespace-nowrap font-mono">{String(o.bearingDeg).padStart(3, "0")}°</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {near.length > shown.length && (
+              <p className="mt-2 text-[11px] text-muted-foreground">Et {near.length - shown.length} autres, visibles sur la carte.</p>
+            )}
+          </div>
+        )}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Source : openAIP (données OpenStreetMap), non exhaustive et sans valeur réglementaire. Consultez la VAC et la carte OACI.
+          Relèvement vrai depuis le point de référence de l&apos;aérodrome.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── ProtectedAreaList ─────────────────────────────────────────────────────
+
+/** Protected areas within 10 km: shown because they often carry overflight restrictions. */
+function ProtectedAreaList({ areas }: { areas: NearbyProtectedArea[] }) {
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg"><Info className="h-5 w-5" /> Zones sensibles à moins de 10 km</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="divide-y text-sm">
+          {areas.map((a) => (
+            <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <span className="inline-block h-2.5 w-3.5 shrink-0 rounded-sm border" style={{ background: `${PROTECTED_AREA_COLORS[a.kind]}33`, borderColor: PROTECTED_AREA_COLORS[a.kind] }} />
+                <span className="min-w-0">
+                  <span className="font-medium">{a.name ?? PROTECTED_AREA_LABELS[a.kind]}</span>
+                  <span className="text-muted-foreground"> · {a.detail ?? PROTECTED_AREA_LABELS[a.kind]}</span>
+                </span>
+              </span>
+              <span className={`whitespace-nowrap text-xs ${a.distanceM === 0 ? "font-semibold text-orange-700" : "text-muted-foreground"}`}>
+                {formatAreaDistance(a.distanceM)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Ces zones peuvent faire l&apos;objet d&apos;une hauteur minimale de survol ou d&apos;une interdiction : vérifiez la carte OACI,
+          la VAC et les SUP AIP avant le vol. Source : IGN BD TOPO (Licence Ouverte), contours simplifiés.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

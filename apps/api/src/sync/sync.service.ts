@@ -15,6 +15,8 @@ import {
 } from "../services/importers/ourairports/ourairports.importer";
 import { wikimediaApi } from "../services/importers/wikimedia/wikimedia.client";
 import { syncCommonsPhotos } from "../services/importers/wikimedia/wikimedia.importer";
+import { syncOpenAipObstacles } from "../services/importers/openaip/openaip-obstacles.importer";
+import { syncProtectedAreas } from "../services/importers/ign/protected-areas.importer";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
 import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
@@ -37,6 +39,9 @@ const REGIONS_FULL_CRON = process.env["SYNC_REGIONS_FULL_CRON"] ?? "0 5 1 * *";
 // Weekly, after the Sunday OSM run; Commons needs the Wikipedia links OurAirports sets.
 const OURAIRPORTS_CRON = process.env["SYNC_OURAIRPORTS_CRON"] ?? "0 4 * * 0";
 const COMMONS_CRON = process.env["SYNC_COMMONS_CRON"] ?? "30 5 * * 0";
+const OBSTACLES_CRON = process.env["SYNC_OBSTACLES_CRON"] ?? "0 3 * * 1";
+// Monthly: the inventory changes a few times a year.
+const PROTECTED_AREAS_CRON = process.env["SYNC_PROTECTED_AREAS_CRON"] ?? "0 4 2 * *";
 const SYNC_TIMEZONE = process.env["SYNC_TIMEZONE"] ?? "Europe/Paris";
 const WORKER_HEARTBEAT_KEY = "navventura:sync:worker-heartbeat";
 const WORKER_HEARTBEAT_TTL_SECONDS = 120;
@@ -188,6 +193,24 @@ export class SyncService implements OnModuleInit {
   async scheduleCommons() {
     if (!this.workerEnabled) return;
     await this.enqueueRun("COMMONS", "SCHEDULED");
+  }
+
+  @Cron(OBSTACLES_CRON, {
+    name: "sync-enqueue-obstacles",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleObstacles() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("OBSTACLES", "SCHEDULED");
+  }
+
+  @Cron(PROTECTED_AREAS_CRON, {
+    name: "sync-enqueue-protected-areas",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleProtectedAreas() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("PROTECTED_AREAS", "SCHEDULED");
   }
 
   @Cron("0 * * * * *", {
@@ -475,6 +498,10 @@ export class SyncService implements OnModuleInit {
         return this.executeOurAirports(run);
       case "COMMONS":
         return this.executeCommons(run);
+      case "OBSTACLES":
+        return this.executeObstacles(run);
+      case "PROTECTED_AREAS":
+        return this.executeProtectedAreas(run);
       default:
         throw new Error(`Source non supportée: ${run.source}`);
     }
@@ -755,6 +782,49 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  private async executeObstacles(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "obstacles_import", 1);
+
+    try {
+      const apiKey = this.config.getOrThrow<string>("OPENAIP_API_KEY");
+      const result = await syncOpenAipObstacles(this.prisma as never, apiKey);
+      await this.completeStep(run.id, "obstacles_import", {
+        metrics: { fetched: result.fetched, imported: result.imported, skipped: result.skipped, ...result.byType },
+        logSummary: `Obstacles importés: ${result.imported}, ignorés: ${result.skipped}`,
+      });
+
+      return {
+        source: "OBSTACLES" as const,
+        status: "SUCCESS" as const,
+        summary: toInputJsonValue(result),
+      };
+    } catch (error) {
+      await this.failStep(run.id, "obstacles_import", error);
+      throw error;
+    }
+  }
+
+  private async executeProtectedAreas(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "protected_areas_import", 1);
+
+    try {
+      const result = await syncProtectedAreas(this.prisma as never);
+      await this.completeStep(run.id, "protected_areas_import", {
+        metrics: { fetched: result.fetched, imported: result.imported, points: result.pointsAfterSimplification, ...result.byKind },
+        logSummary: `Zones protégées importées: ${result.imported} sur ${result.fetched} reçues`,
+      });
+
+      return {
+        source: "PROTECTED_AREAS" as const,
+        status: "SUCCESS" as const,
+        summary: toInputJsonValue(result),
+      };
+    } catch (error) {
+      await this.failStep(run.id, "protected_areas_import", error);
+      throw error;
+    }
+  }
+
   private async startStep(runId: string, stepKey: string, stepOrder: number) {
     await this.prisma.syncRunStep.upsert({
       where: { runId_stepKey: { runId, stepKey } },
@@ -972,6 +1042,10 @@ export class SyncService implements OnModuleInit {
         return OURAIRPORTS_CRON;
       case "COMMONS":
         return COMMONS_CRON;
+      case "OBSTACLES":
+        return OBSTACLES_CRON;
+      case "PROTECTED_AREAS":
+        return PROTECTED_AREAS_CRON;
       default:
         return "";
     }

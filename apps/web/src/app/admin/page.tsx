@@ -39,6 +39,8 @@ const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
   RGPD: "Nettoyage RGPD",
   OURAIRPORTS: "Liens OurAirports",
   COMMONS: "Photos Commons",
+  OBSTACLES: "Obstacles",
+  PROTECTED_AREAS: "Zones protégées",
 };
 
 export default function AdminPage() {

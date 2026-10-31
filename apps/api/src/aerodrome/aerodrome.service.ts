@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CacheService } from "../common/cache.service";
 import { Prisma } from "@aerodirectory/database";
+import { distanceToArea, type AreaGeometry } from "../services/importers/ign/protected-areas.geometry";
 import {
   haversineKm,
   type AerodromeCreateInput,
@@ -11,6 +12,17 @@ import {
 
 /** Sheets created through the API carry this source; imported ones carry the importer's name. */
 export const MANUAL_SOURCE = "manual";
+
+/** Initial great-circle bearing from A to B, in whole degrees true (0–359). */
+export function initialBearing(latA: number, lonA: number, latB: number, lonB: number): number {
+  const rad = Math.PI / 180;
+  const φ1 = latA * rad;
+  const φ2 = latB * rad;
+  const Δλ = (lonB - lonA) * rad;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return Math.round(((Math.atan2(y, x) / rad) + 360) % 360) % 360;
+}
 
 export interface AdminActor {
   adminId: string;
@@ -32,6 +44,76 @@ export class AerodromeService {
 
   async findById(id: string) {
     return this.findOne({ id });
+  }
+
+  /**
+   * Obstacles within `radiusMeters` of the aerodrome reference point,
+   * nearest first, with distance and true bearing from the aerodrome.
+   */
+  async findObstaclesNear(id: string, radiusMeters: number) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id },
+      select: { latitude: true, longitude: true },
+    });
+    if (!aerodrome) {
+      throw new NotFoundException("Aerodrome not found");
+    }
+
+    const { latitude: lat, longitude: lon } = aerodrome;
+    const dLat = radiusMeters / 111_320;
+    const dLon = radiusMeters / (111_320 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+    const candidates = await this.prisma.obstacle.findMany({
+      where: {
+        latitude: { gte: lat - dLat, lte: lat + dLat },
+        longitude: { gte: lon - dLon, lte: lon + dLon },
+      },
+      select: { id: true, name: true, type: true, latitude: true, longitude: true, heightM: true, elevationM: true },
+    });
+
+    return candidates
+      .map((o) => ({
+        ...o,
+        distanceM: Math.round(haversineKm(lat, lon, o.latitude, o.longitude) * 1000),
+        bearingDeg: initialBearing(lat, lon, o.latitude, o.longitude),
+      }))
+      .filter((o) => o.distanceM <= radiusMeters)
+      .sort((a, b) => a.distanceM - b.distanceM)
+      .slice(0, AerodromeService.MAX_OBSTACLES);
+  }
+
+  private static readonly MAX_OBSTACLES = 500;
+
+  /**
+   * Protected areas within `radiusMeters` of the aerodrome reference point
+   * (0 m when it lies inside one), nearest first, with their geometry.
+   */
+  async findProtectedAreasNear(id: string, radiusMeters: number) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id },
+      select: { latitude: true, longitude: true },
+    });
+    if (!aerodrome) {
+      throw new NotFoundException("Aerodrome not found");
+    }
+
+    const { latitude: lat, longitude: lon } = aerodrome;
+    const dLat = radiusMeters / 111_320;
+    const dLon = radiusMeters / (111_320 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+    // Areas whose bounding box meets the search box; the exact distance sorts them out.
+    const candidates = await this.prisma.protectedArea.findMany({
+      where: {
+        minLat: { lte: lat + dLat },
+        maxLat: { gte: lat - dLat },
+        minLon: { lte: lon + dLon },
+        maxLon: { gte: lon - dLon },
+      },
+      select: { id: true, name: true, kind: true, detail: true, geometry: true },
+    });
+
+    return candidates
+      .map((area) => ({ ...area, distanceM: distanceToArea(lat, lon, area.geometry as unknown as AreaGeometry) }))
+      .filter((area) => area.distanceM <= radiusMeters)
+      .sort((a, b) => a.distanceM - b.distanceM);
   }
 
   async findByIcao(icaoCode: string) {

@@ -127,6 +127,8 @@ enum SyncSource {
   RGPD
   OURAIRPORTS
   COMMONS
+  OBSTACLES
+  PROTECTED_AREAS
 
   @@schema("public")
 }
@@ -738,6 +740,69 @@ model Photo {
 }
 
 // ─── Airspace ────────────────────────────────────────────
+
+enum ObstacleType {
+  OBSTACLE
+  CHIMNEY
+  BUILDING
+  WIND_TURBINE
+  TOWER
+
+  @@schema("public")
+}
+
+// Vertical obstacles (wind turbines, towers, chimneys…) from openAIP, shown
+// around each aerodrome. Replaced as a whole by each sync.
+model Obstacle {
+  id         String       @id @default(cuid())
+  source     String       // "openaip"
+  sourceId   String
+  name       String?
+  type       ObstacleType
+  latitude   Float
+  longitude  Float
+  heightM    Int?         // above ground
+  elevationM Int?         // above mean sea level, as openAIP gives it
+  createdAt  DateTime     @default(now())
+
+  @@unique([source, sourceId])
+  @@index([latitude, longitude])
+  @@map("obstacles")
+  @@schema("public")
+}
+
+enum ProtectedAreaKind {
+  NATIONAL_PARK      // core area only
+  NATURE_RESERVE
+  BIOTOPE_PROTECTION // arrêté de protection de biotope
+  BIRD_SPA           // Natura 2000, Birds Directive
+  SILENCE_ZONE
+
+  @@schema("public")
+}
+
+// Protected areas that matter when overflying (IGN BD TOPO, Licence
+// Ouverte). Geometries are simplified for display; the bounding box finds
+// the areas around an aerodrome. Replaced as a whole by each sync.
+model ProtectedArea {
+  id        String            @id @default(cuid())
+  source    String            // "ign-bdtopo"
+  sourceId  String            // BD TOPO cleabs
+  name      String?
+  kind      ProtectedAreaKind
+  detail    String?           // nature_detaillee, e.g. "Réserve naturelle nationale"
+  geometry  Json              // GeoJSON Polygon or MultiPolygon, WGS 84
+  minLat    Float
+  maxLat    Float
+  minLon    Float
+  maxLon    Float
+  createdAt DateTime          @default(now())
+
+  @@unique([source, sourceId])
+  @@index([minLat, maxLat, minLon, maxLon])
+  @@map("protected_areas")
+  @@schema("public")
+}
 
 // Main photo of an aerodrome, from its Wikidata item (P18) on Wikimedia
 // Commons. A re-encoded copy is kept in our storage so that visitors never

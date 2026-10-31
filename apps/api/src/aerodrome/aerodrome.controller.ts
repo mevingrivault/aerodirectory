@@ -39,6 +39,11 @@ const DEFAULT_TRANSPORT_RADIUS = 3_000;
 const MAX_ACCOMMODATION_RADIUS = 20_000;
 const DEFAULT_ACCOMMODATION_RADIUS = 10_000;
 
+// Search radius around the aerodrome, for obstacles and protected areas.
+const ObstaclesQuerySchema = z.object({
+  radiusMeters: z.coerce.number().int().min(500).max(20_000).default(10_000),
+});
+
 const SunQuerySchema = z.object({
   // A UTC calendar day; defaults to today.
   date: z.iso.date().optional(),
@@ -220,6 +225,26 @@ export class AerodromeController {
       aerodrome.longitude,
     );
     return ok(result);
+  }
+
+  @Public()
+  @Get(":id/obstacles")
+  @Header("Cache-Control", "public, max-age=3600")
+  async getObstacles(
+    @Param("id") id: string,
+    @Query(new ZodValidationPipe(ObstaclesQuerySchema)) query: z.infer<typeof ObstaclesQuerySchema>,
+  ) {
+    return ok(await this.aerodromes.findObstaclesNear(id, query.radiusMeters));
+  }
+
+  @Public()
+  @Get(":id/protected-areas")
+  @Header("Cache-Control", "public, max-age=3600")
+  async getProtectedAreas(
+    @Param("id") id: string,
+    @Query(new ZodValidationPipe(ObstaclesQuerySchema)) query: z.infer<typeof ObstaclesQuerySchema>,
+  ) {
+    return ok(await this.aerodromes.findProtectedAreasNear(id, query.radiusMeters));
   }
 
   @Public()

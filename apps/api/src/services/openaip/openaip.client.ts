@@ -105,6 +105,19 @@ export interface OpenAipAirspace {
   remarks?: string;
 }
 
+/** Height and elevation are always in metres (unit 0); height is above ground, elevation above MSL. */
+export interface OpenAipObstacle {
+  _id: string;
+  name?: string;
+  type: number; // 0=obstacle, 1=chimney, 2=building, 3=wind turbine, 4=tower
+  geometry: { type: "Point"; coordinates: [number, number] };
+  height?: { value: number; unit: number };
+  elevation?: { value: number; unit: number };
+}
+
+// Obstacles run to tens of thousands per country: larger pages, fewer calls.
+const OBSTACLES_PAGE_LIMIT = 1000;
+
 // ─── Client ──────────────────────────────────────────────
 
 export class OpenAipClient {
@@ -172,6 +185,33 @@ export class OpenAipClient {
 
       console.log(
         `  [openAIP] Airspaces page ${page}/${totalPages} — ${response.items.length} items (total: ${allItems.length})`,
+      );
+
+      page++;
+    } while (page <= totalPages);
+
+    return allItems;
+  }
+
+  /**
+   * Fetch all obstacles for a given country, handling pagination automatically.
+   */
+  async getObstacles(country = "FR"): Promise<OpenAipObstacle[]> {
+    const allItems: OpenAipObstacle[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const response = await this.fetchPage<OpenAipObstacle>(
+        "/obstacles",
+        { country, page: String(page), limit: String(OBSTACLES_PAGE_LIMIT) },
+      );
+
+      allItems.push(...response.items);
+      totalPages = response.totalPages;
+
+      console.log(
+        `  [openAIP] Obstacles page ${page}/${totalPages} — ${response.items.length} items (total: ${allItems.length})`,
       );
 
       page++;
