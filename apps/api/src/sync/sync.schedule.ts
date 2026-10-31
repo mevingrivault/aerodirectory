@@ -1,5 +1,8 @@
 import type { SyncSource } from "@aerodirectory/database";
 
+/** Every source the worker runs, in the order the admin page lists them. */
+export const SYNC_SOURCES: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD", "OURAIRPORTS", "COMMONS"];
+
 function matchesCronField(value: number, token: string) {
   if (token === "*") return true;
   return Number(token) === value;
@@ -50,6 +53,10 @@ export function getSourceScheduleDescription(source: SyncSource) {
       return "Delta quotidien après openAIP + sweep complet mensuel";
     case "RGPD":
       return "Nettoyage RGPD quotidien à 04:30";
+    case "OURAIRPORTS":
+      return "Sites web et liens Wikipédia OurAirports, chaque dimanche à 04:00";
+    case "COMMONS":
+      return "Photos Wikimedia Commons, chaque dimanche à 05:30";
     default:
       return "Planification inconnue";
   }

@@ -125,6 +125,8 @@ enum SyncSource {
   OSM
   REGIONS
   RGPD
+  OURAIRPORTS
+  COMMONS
 
   @@schema("public")
 }
@@ -321,6 +323,7 @@ model Aerodrome {
   aipLink          String?
   vacLink          String?
   websiteUrl       String?
+  wikipediaUrl     String?
   description      String?
   handlingFacilities  Int[]        @default([])
   passengerFacilities Int[]        @default([])
@@ -351,6 +354,7 @@ model Aerodrome {
   listItems   AerodromeListItem[]
   homeUsers   User[]       @relation("UserHomeAerodrome")
   photos      Photo[]
+  commonsPhoto CommonsPhoto?
   events      AerodromeEvent[]
 
   @@unique([source, sourceId])
@@ -734,6 +738,32 @@ model Photo {
 }
 
 // ─── Airspace ────────────────────────────────────────────
+
+// Main photo of an aerodrome, from its Wikidata item (P18) on Wikimedia
+// Commons. A re-encoded copy is kept in our storage so that visitors never
+// load anything from Wikimedia; the credit is shown with the photo.
+model CommonsPhoto {
+  id          String   @id @default(cuid())
+  aerodromeId String   @unique
+  wikidataId  String   // e.g. "Q2886463"
+  fileTitle   String   // "File:…" on Commons
+  pageUrl     String   // Commons description page, linked in the credit
+  sourceSha1  String   // unchanged on Commons → no new download
+  author      String?  // plain text, HTML stripped
+  license     String   // short name as on Commons, e.g. "CC BY-SA 4.0"
+  licenseUrl  String?
+  storedKey   String   // S3 object key of our copy
+  mimeType    String
+  width       Int
+  height      Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@map("commons_photos")
+  @@schema("public")
+}
 
 model Airspace {
   id          String  @id @default(cuid())

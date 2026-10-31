@@ -15,7 +15,9 @@ import { AerodromeService } from "./aerodrome.service";
 import { RestaurantService } from "../restaurant/restaurant.service";
 import { TransportService } from "../transport/transport.service";
 import { AccommodationService } from "../accommodation/accommodation.service";
+import { z } from "zod";
 import { MetarService } from "../metar/metar.service";
+import { computeSunTimes } from "../metar/sun";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { Public, Roles, CurrentUser } from "../common/decorators";
@@ -36,6 +38,11 @@ const MAX_TRANSPORT_RADIUS = 10_000;
 const DEFAULT_TRANSPORT_RADIUS = 3_000;
 const MAX_ACCOMMODATION_RADIUS = 20_000;
 const DEFAULT_ACCOMMODATION_RADIUS = 10_000;
+
+const SunQuerySchema = z.object({
+  // A UTC calendar day; defaults to today.
+  date: z.iso.date().optional(),
+});
 
 @Controller("aerodromes")
 export class AerodromeController {
@@ -213,5 +220,17 @@ export class AerodromeController {
       aerodrome.longitude,
     );
     return ok(result);
+  }
+
+  @Public()
+  @Get(":id/sun")
+  @Header("Cache-Control", "public, max-age=3600")
+  async getSun(
+    @Param("id") id: string,
+    @Query(new ZodValidationPipe(SunQuerySchema)) query: z.infer<typeof SunQuerySchema>,
+  ) {
+    const aerodrome = await this.aerodromes.findById(id);
+    const date = query.date ?? new Date().toISOString().slice(0, 10);
+    return ok(computeSunTimes(date, aerodrome.latitude, aerodrome.longitude));
   }
 }

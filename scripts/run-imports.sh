@@ -6,6 +6,8 @@
 #   ./scripts/run-imports.sh --openaip    # Seulement aérodromes OpenAIP
 #   ./scripts/run-imports.sh --osm        # Seulement POI OSM
 #   ./scripts/run-imports.sh --regions    # Seulement régions
+#   ./scripts/run-imports.sh --ourairports # Seulement liens OurAirports (site web, Wikipédia)
+#   ./scripts/run-imports.sh --commons    # Seulement photos Wikimedia Commons
 #
 # Cron (tous les dimanches à 3h) :
 #   0 3 * * 0 /opt/aerodirectory/scripts/run-imports.sh >> /var/log/aerodirectory-import.log 2>&1
@@ -46,6 +48,8 @@ pnpm --filter @aerodirectory/database build
 RUN_OPENAIP=false
 RUN_OSM=false
 RUN_REGIONS=false
+RUN_OURAIRPORTS=false
+RUN_COMMONS=false
 RUN_ALL=true
 
 for arg in "$@"; do
@@ -53,6 +57,8 @@ for arg in "$@"; do
     --openaip) RUN_OPENAIP=true; RUN_ALL=false ;;
     --osm)     RUN_OSM=true;     RUN_ALL=false ;;
     --regions) RUN_REGIONS=true; RUN_ALL=false ;;
+    --ourairports) RUN_OURAIRPORTS=true; RUN_ALL=false ;;
+    --commons) RUN_COMMONS=true; RUN_ALL=false ;;
   esac
 done
 
@@ -60,6 +66,8 @@ if $RUN_ALL; then
   RUN_OPENAIP=true
   RUN_OSM=true
   RUN_REGIONS=true
+  RUN_OURAIRPORTS=true
+  RUN_COMMONS=true
 fi
 
 if $RUN_OPENAIP; then
@@ -75,6 +83,18 @@ fi
 if $RUN_REGIONS; then
   echo "$LOG_PREFIX Sync régions..."
   pnpm sync:regions && echo "$LOG_PREFIX Sync régions terminé" || echo "$LOG_PREFIX ERREUR sync régions"
+fi
+
+# Après OpenAIP : les nouveaux aérodromes doivent exister pour recevoir leurs liens.
+if $RUN_OURAIRPORTS; then
+  echo "$LOG_PREFIX Import OurAirports (sites web, Wikipédia)..."
+  pnpm import:ourairports && echo "$LOG_PREFIX Import OurAirports terminé" || echo "$LOG_PREFIX ERREUR import OurAirports"
+fi
+
+# Après OurAirports : les liens Wikipédia servent à trouver les aérodromes sans code OACI.
+if $RUN_COMMONS; then
+  echo "$LOG_PREFIX Import photos Wikimedia Commons..."
+  pnpm import:commons && echo "$LOG_PREFIX Import Commons terminé" || echo "$LOG_PREFIX ERREUR import Commons"
 fi
 
 echo "$LOG_PREFIX === Imports terminés ==="

@@ -46,6 +46,9 @@ export class AerodromeService {
         runways: true,
         frequencies: true,
         fuels: true,
+        commonsPhoto: {
+          select: { author: true, license: true, licenseUrl: true, pageUrl: true, width: true, height: true, updatedAt: true },
+        },
         corrections: {
           where: {
             contentStatus: "APPROVED",

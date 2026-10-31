@@ -54,6 +54,30 @@ export class PhotoController {
     return ok(photos);
   }
 
+  // Declared before ":photoId/file"; the router also ranks static segments first.
+  @Public()
+  @Get("commons/file")
+  async serveCommons(
+    @Param("aerodromeId") aerodromeId: string,
+    @Res() res: FastifyReply,
+  ) {
+    const photo = await this.photos.findCommonsPhoto(aerodromeId);
+    if (!photo) {
+      throw new NotFoundException("Photo introuvable.");
+    }
+
+    const { stream, contentType, contentLength } = await this.storage.getObject(photo.storedKey);
+
+    res.header("Content-Type", contentType);
+    // The file can be replaced when it changes on Commons: the page adds a
+    // version parameter, so a day of caching is enough.
+    res.header("Cache-Control", "public, max-age=86400");
+    if (contentLength) {
+      res.header("Content-Length", contentLength);
+    }
+    res.send(stream);
+  }
+
   @Public()
   @Get(":photoId/file")
   async serve(

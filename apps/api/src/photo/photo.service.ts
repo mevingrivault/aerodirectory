@@ -161,6 +161,14 @@ export class PhotoService {
     });
   }
 
+  /** The aerodrome's Wikimedia Commons photo, if it has one. */
+  async findCommonsPhoto(aerodromeId: string) {
+    return this.prisma.commonsPhoto.findUnique({
+      where: { aerodromeId },
+      select: { storedKey: true, mimeType: true },
+    });
+  }
+
   async listForAerodrome(aerodromeId: string) {
     const photos = await this.prisma.photo.findMany({
       where: { aerodromeId, status: PhotoStatus.READY },

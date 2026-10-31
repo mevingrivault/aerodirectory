@@ -168,7 +168,7 @@ export interface AdminDashboardStats {
 
 export interface AdminSyncRunItem {
   id: string;
-  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS";
   runType: "SCHEDULED" | "MANUAL" | "RETRY" | "RECOVERY";
   scope: string | null;
   status: "QUEUED" | "RETRY_SCHEDULED" | "IN_PROGRESS" | "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
@@ -184,7 +184,7 @@ export interface AdminSyncRunItem {
 }
 
 export interface AdminSyncSourceStatus {
-  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS";
   schedule: string;
   description: string;
   nextPlannedAt: string | null;

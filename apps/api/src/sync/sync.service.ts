@@ -7,7 +7,14 @@ import { REDIS_CLIENT, type RedisClient } from "../common/redis.constants";
 import { AuditService } from "../audit/audit.service";
 import { MailService } from "../mail/mail.service";
 import { SyncLockService } from "./sync-lock.service";
-import { computeNextCronOccurrence, getSourceScheduleDescription } from "./sync.schedule";
+import { StorageService } from "../photo/storage.service";
+import { computeNextCronOccurrence, getSourceScheduleDescription, SYNC_SOURCES } from "./sync.schedule";
+import {
+  downloadOurAirportsCsv,
+  syncOurAirportsLinks,
+} from "../services/importers/ourairports/ourairports.importer";
+import { wikimediaApi } from "../services/importers/wikimedia/wikimedia.client";
+import { syncCommonsPhotos } from "../services/importers/wikimedia/wikimedia.importer";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
 import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
@@ -27,6 +34,9 @@ const OSM_CRON = process.env["SYNC_OSM_CRON"] ?? "0 3 * * 0";
 const RGPD_CRON = process.env["SYNC_RGPD_CRON"] ?? "30 4 * * *";
 const REPORT_CRON = process.env["SYNC_REPORT_CRON"] ?? "30 7 * * *";
 const REGIONS_FULL_CRON = process.env["SYNC_REGIONS_FULL_CRON"] ?? "0 5 1 * *";
+// Weekly, after the Sunday OSM run; Commons needs the Wikipedia links OurAirports sets.
+const OURAIRPORTS_CRON = process.env["SYNC_OURAIRPORTS_CRON"] ?? "0 4 * * 0";
+const COMMONS_CRON = process.env["SYNC_COMMONS_CRON"] ?? "30 5 * * 0";
 const SYNC_TIMEZONE = process.env["SYNC_TIMEZONE"] ?? "Europe/Paris";
 const WORKER_HEARTBEAT_KEY = "navventura:sync:worker-heartbeat";
 const WORKER_HEARTBEAT_TTL_SECONDS = 120;
@@ -73,6 +83,7 @@ export class SyncService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly syncLock: SyncLockService,
+    private readonly storage: StorageService,
     @Inject(REDIS_CLIENT) redis: RedisClient,
   ) {
     this.workerEnabled = asBoolean(this.config.get<string>("SYNC_ENABLED"), false);
@@ -161,6 +172,24 @@ export class SyncService implements OnModuleInit {
     });
   }
 
+  @Cron(OURAIRPORTS_CRON, {
+    name: "sync-enqueue-ourairports",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleOurAirports() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("OURAIRPORTS", "SCHEDULED");
+  }
+
+  @Cron(COMMONS_CRON, {
+    name: "sync-enqueue-commons",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleCommons() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("COMMONS", "SCHEDULED");
+  }
+
   @Cron("0 * * * * *", {
     name: "sync-dispatcher",
     timeZone: SYNC_TIMEZONE,
@@ -195,9 +224,8 @@ export class SyncService implements OnModuleInit {
       }),
     ]);
 
-    const sources: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD"];
     const sourceStatuses = await Promise.all(
-      sources.map(async (source) => {
+      SYNC_SOURCES.map(async (source) => {
         const lastRun = await this.prisma.syncRun.findFirst({
           where: {
             source,
@@ -443,6 +471,10 @@ export class SyncService implements OnModuleInit {
         return this.executeRegions(run);
       case "RGPD":
         return this.executeRgpd(run);
+      case "OURAIRPORTS":
+        return this.executeOurAirports(run);
+      case "COMMONS":
+        return this.executeCommons(run);
       default:
         throw new Error(`Source non supportée: ${run.source}`);
     }
@@ -670,6 +702,59 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  private async executeOurAirports(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "ourairports_links", 1);
+
+    try {
+      const result = await syncOurAirportsLinks(this.prisma as never, await downloadOurAirportsCsv());
+      await this.completeStep(run.id, "ourairports_links", {
+        metrics: result as unknown as Record<string, unknown>,
+        logSummary: `Associés: ${result.matchedByCode} par code, ${result.matchedByDistance} par position, mis à jour: ${result.updated}`,
+      });
+
+      return {
+        source: "OURAIRPORTS" as const,
+        status: "SUCCESS" as const,
+        summary: toInputJsonValue(result),
+      };
+    } catch (error) {
+      await this.failStep(run.id, "ourairports_links", error);
+      throw error;
+    }
+  }
+
+  private async executeCommons(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "commons_photos", 1);
+
+    try {
+      const result = await syncCommonsPhotos(this.prisma as never, wikimediaApi, this.storage, {
+        log: (line) => this.logger.log(line),
+      });
+      await this.completeStep(run.id, "commons_photos", {
+        metrics: {
+          accepted: result.accepted,
+          downloaded: result.downloaded,
+          metadataUpdated: result.metadataUpdated,
+          unchanged: result.unchanged,
+          removed: result.removed,
+          errors: result.errors.length,
+        },
+        logSummary: `Photos retenues: ${result.accepted}, téléchargées: ${result.downloaded}, retirées: ${result.removed}, erreurs: ${result.errors.length}`,
+      });
+
+      return {
+        source: "COMMONS" as const,
+        status: result.errors.length > 0 ? ("PARTIAL" as const) : ("SUCCESS" as const),
+        summary: toInputJsonValue(result),
+        errorMessage:
+          result.errors.length > 0 ? `${result.errors.length} erreur(s) lors de l'import des photos Commons.` : null,
+      };
+    } catch (error) {
+      await this.failStep(run.id, "commons_photos", error);
+      throw error;
+    }
+  }
+
   private async startStep(runId: string, stepKey: string, stepOrder: number) {
     await this.prisma.syncRunStep.upsert({
       where: { runId_stepKey: { runId, stepKey } },
@@ -883,6 +968,10 @@ export class SyncService implements OnModuleInit {
         return `${OPENAIP_CRON} + ${REGIONS_FULL_CRON}`;
       case "RGPD":
         return RGPD_CRON;
+      case "OURAIRPORTS":
+        return OURAIRPORTS_CRON;
+      case "COMMONS":
+        return COMMONS_CRON;
       default:
         return "";
     }

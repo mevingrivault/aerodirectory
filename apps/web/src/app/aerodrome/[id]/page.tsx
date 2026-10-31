@@ -51,6 +51,9 @@ import {
   Send,
   Download,
   Check,
+  Sun,
+  Sunrise,
+  Sunset,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
@@ -58,6 +61,7 @@ import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
+import { API_BASE } from "@/lib/public-env";
 import type { CorrectionItem, EventItem } from "@aerodirectory/shared";
 import { EVENT_TYPES } from "@aerodirectory/shared";
 
@@ -69,6 +73,16 @@ interface PhotoEntry {
   height: number | null;
   createdAt: string;
   user: { id: string; displayName: string | null };
+}
+
+interface CommonsPhoto {
+  author: string | null;
+  license: string;
+  licenseUrl: string | null;
+  pageUrl: string;
+  width: number;
+  height: number;
+  updatedAt: string;
 }
 
 interface AerodromeDetail {
@@ -95,6 +109,8 @@ interface AerodromeDetail {
   aipLink: string | null;
   vacLink: string | null;
   websiteUrl: string | null;
+  wikipediaUrl: string | null;
+  commonsPhoto: CommonsPhoto | null;
   handlingFacilities: number[];
   passengerFacilities: number[];
   hasRestaurant: boolean;
@@ -320,6 +336,16 @@ interface WeatherResult {
       conditions?: { code: string; text: string }[];
     }[];
   } | null;
+}
+
+interface SunTimes {
+  date: string;
+  sunrise: string | null;
+  sunset: string | null;
+  civilDawn: string | null;
+  civilDusk: string | null;
+  aeronauticalDayStart: string | null;
+  aeronauticalDayEnd: string | null;
 }
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -576,6 +602,13 @@ export default function AerodromeDetailPage() {
     queryFn: () => apiClient.get<WeatherResult | null>(`/aerodromes/${id}/weather`),
     enabled: !!ad && !!user,
     staleTime: 30 * 60 * 1000,
+  });
+
+  const { data: sunRes, isLoading: sunLoading } = useQuery({
+    queryKey: ["sun", id],
+    queryFn: () => apiClient.get<SunTimes>(`/aerodromes/${id}/sun`),
+    enabled: !!ad,
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: visitsRes, refetch: refetchVisit } = useQuery({
@@ -1065,7 +1098,7 @@ export default function AerodromeDetailPage() {
             { key: "commodites", label: "Commodités" },
             { key: "meteo",      label: "Météo" },
             { key: "avis",       label: "Avis",            count: ad._count.comments },
-            { key: "photos",     label: "Photos",          count: photos.length || undefined },
+            { key: "photos",     label: "Photos",          count: (photos.length + (ad.commonsPhoto ? 1 : 0)) || undefined },
           ] as { key: typeof activeTab; label: string; count?: number }[]).map(({ key, label, count }) => (
             <button key={key} role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)} style={{ padding: "14px 14px 12px", background: "transparent", border: 0, borderBottom: activeTab === key ? "2px solid var(--horizon-700)" : "2px solid transparent", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: activeTab === key ? "var(--ink-950)" : "var(--ink-700)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               {label}{count != null && count > 0 && <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, background: "var(--ink-100)", color: "var(--ink-700)", padding: "2px 6px", borderRadius: 3 }}>{count}</span>}
@@ -1418,6 +1451,7 @@ export default function AerodromeDetailPage() {
                     <h2 style={sectionH2}>Météo aéronautique</h2>
                   </div>
                   <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
+                  <SunCard sun={sunRes?.data ?? null} loading={sunLoading} />
                 </section>
               </div>
             )}
@@ -1548,6 +1582,7 @@ export default function AerodromeDetailPage() {
                     <div style={sectionMark}><ImagePlus className="h-3.5 w-3.5" /></div>
                     <h2 style={sectionH2}>Photos</h2>
                   </div>
+                  {ad.commonsPhoto && <CommonsPhotoFigure aerodromeId={ad.id} name={ad.name} photo={ad.commonsPhoto} />}
                   <PhotoUpload aerodromeId={ad.id} existingPhotos={photos} currentUserId={user?.id} canUpload={!!user} onUploadSuccess={(photo) => setPhotos((prev) => [photo, ...prev])} onDeleteSuccess={(photoId) => setPhotos((prev) => prev.filter((p) => p.id !== photoId))} />
                 </section>
               </div>
@@ -1620,15 +1655,22 @@ export default function AerodromeDetailPage() {
               </div>
             )}
 
-            {/* Liens officiels */}
-            {(ad.websiteUrl || ad.aipLink || ad.vacLink) && (
+            {/* Liens */}
+            {(ad.websiteUrl || ad.wikipediaUrl || ad.aipLink || ad.vacLink) && (
               <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 18 }}>
-                <div style={asideH}><ExternalLink className="h-3 w-3" /> Liens officiels</div>
+                <div style={asideH}><ExternalLink className="h-3 w-3" /> Liens</div>
                 <div>
                   {ad.websiteUrl && (
-                    <a href={ad.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                    <a href={ad.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.wikipediaUrl || ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
                       <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
-                      <div><div style={contactLabel}>Site officiel</div><div style={contactValue}>{(() => { try { return new URL(ad.websiteUrl).hostname; } catch { return ad.websiteUrl; } })()}</div></div>
+                      <div><div style={contactLabel}>Site web</div><div style={contactValue}>{(() => { try { return new URL(ad.websiteUrl).hostname; } catch { return ad.websiteUrl; } })()}</div></div>
+                      <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
+                    </a>
+                  )}
+                  {ad.wikipediaUrl && (
+                    <a href={ad.wikipediaUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                      <FileText className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
+                      <div><div style={contactLabel}>Wikipédia</div><div style={contactValue}>{(() => { try { return decodeURIComponent(new URL(ad.wikipediaUrl).pathname.split("/").pop() ?? "").replace(/_/g, " "); } catch { return "Article"; } })()}</div></div>
                       <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
                     </a>
                   )}
@@ -1684,6 +1726,34 @@ export default function AerodromeDetailPage() {
   );
 }
 
+// ─── CommonsPhotoFigure ────────────────────────────────────────────────────
+
+/** Photo from Wikimedia Commons, served from our storage, with the credit its licence requires. */
+function CommonsPhotoFigure({ aerodromeId, name, photo }: { aerodromeId: string; name: string; photo: CommonsPhoto }) {
+  const src = `${API_BASE}/aerodromes/${aerodromeId}/photos/commons/file?v=${encodeURIComponent(photo.updatedAt)}`;
+  const link = "text-foreground underline underline-offset-2 hover:text-primary";
+
+  return (
+    <figure className="mb-6 overflow-hidden rounded-xl border bg-white">
+      <img
+        src={src}
+        alt={`Photo de ${name}`}
+        width={photo.width}
+        height={photo.height}
+        loading="lazy"
+        className="block h-auto w-full max-h-[480px] object-cover"
+      />
+      <figcaption className="px-4 py-2.5 text-[11px] text-muted-foreground">
+        Photo : {photo.author ?? "auteur inconnu"} ·{" "}
+        {photo.licenseUrl
+          ? <a href={photo.licenseUrl} target="_blank" rel="noopener noreferrer license" className={link}>{photo.license}</a>
+          : photo.license}
+        {" "}· <a href={photo.pageUrl} target="_blank" rel="noopener noreferrer" className={link}>Wikimedia Commons</a>
+      </figcaption>
+    </figure>
+  );
+}
+
 // ─── WeatherCard ───────────────────────────────────────────────────────────
 
 const CAT_STYLES: Record<string, { bg: string; text: string; title: string }> = {
@@ -1729,6 +1799,41 @@ function MetricTile({ label, value, sub }: { label: string; value: string; sub?:
       <p className="text-sm font-bold text-foreground leading-tight">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
+  );
+}
+
+function SunCard({ sun, loading }: { sun: SunTimes | null; loading: boolean }) {
+  const day = sun ? new Date(`${sun.date}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }) : null;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg"><Sun className="h-5 w-5" /> Soleil</CardTitle>
+          {day && <span className="text-xs text-muted-foreground shrink-0">{day}</span>}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Chargement...</p>
+        ) : !sun ? (
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5"><AlertCircle className="h-4 w-4" /> Éphémérides indisponibles.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <MetricTile label="Lever" value={formatUtcTime(sun.sunrise)} sub={sun.civilDawn ? `Aube civile ${formatUtcTime(sun.civilDawn)}` : undefined} />
+              <MetricTile label="Coucher" value={formatUtcTime(sun.sunset)} sub={sun.civilDusk ? `Crépuscule ${formatUtcTime(sun.civilDusk)}` : undefined} />
+              <MetricTile label="Fin de nuit aéro." value={formatUtcTime(sun.aeronauticalDayStart)} sub="Lever − 30 min" />
+              <MetricTile label="Début de nuit aéro." value={formatUtcTime(sun.aeronauticalDayEnd)} sub="Coucher + 30 min" />
+            </div>
+            <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+              <Sunrise className="h-3 w-3 shrink-0 mt-0.5" /><Sunset className="h-3 w-3 shrink-0 mt-0.5" />
+              <span>Heures calculées au niveau de la mer, à titre indicatif. En France, la nuit aéronautique commence 30 min après le coucher et finit 30 min avant le lever du soleil.</span>
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

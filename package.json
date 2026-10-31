@@ -25,6 +25,8 @@
     "db:seed": "pnpm --filter @aerodirectory/database prisma:seed",
     "import:openaip": "pnpm db:generate && tsx scripts/import-openaip.ts",
     "import:openair": "pnpm db:generate && tsx scripts/import-openair.ts",
+    "import:ourairports": "pnpm db:generate && tsx scripts/import-ourairports.ts",
+    "import:commons": "pnpm db:generate && tsx scripts/import-commons-photos.ts",
     "import:osm": "pnpm db:generate && tsx scripts/import-osm.ts && tsx scripts/sync-aerodrome-flags.ts",
     "sync:flags": "pnpm db:generate && tsx scripts/sync-aerodrome-flags.ts",
     "sync:regions": "pnpm db:generate && tsx scripts/sync-aerodrome-regions.ts"

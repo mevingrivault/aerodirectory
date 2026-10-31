@@ -4,9 +4,10 @@ import { SyncController } from "./sync.controller";
 import { AuditModule } from "../audit/audit.module";
 import { MailModule } from "../mail/mail.module";
 import { SyncLockService } from "./sync-lock.service";
+import { PhotoModule } from "../photo/photo.module";
 
 @Module({
-  imports: [AuditModule, MailModule],
+  imports: [AuditModule, MailModule, PhotoModule],
   controllers: [SyncController],
   providers: [SyncService, SyncLockService],
 })

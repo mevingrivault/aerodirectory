@@ -11,8 +11,9 @@ import type { SyncSource } from "@aerodirectory/database";
 import { CurrentUser, Roles } from "../common/decorators";
 import { ok } from "../common/api-response";
 import { SyncService } from "./sync.service";
+import { SYNC_SOURCES } from "./sync.schedule";
 
-const ALLOWED_SOURCES: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD"];
+const ALLOWED_SOURCES: SyncSource[] = SYNC_SOURCES;
 
 @Controller("admin/sync")
 @Roles("ADMIN")

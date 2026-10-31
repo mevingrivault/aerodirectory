@@ -70,6 +70,9 @@ const CHECKWX_BASE = "https://api.checkwx.com/v2";
 const CACHE_TTL_MIN_SECONDS = 5 * 60;   // never cache less than 5 min
 const CACHE_TTL_MAX_SECONDS = 65 * 60;  // cap at 65 min (hourly stations + buffer)
 const METAR_VALIDITY_SECONDS = 35 * 60; // METAR valid ~30 min, +5 min buffer
+const NO_DATA_TTL_SECONDS = 15 * 60;    // no station around: ask again later
+const FETCH_TIMEOUT_MS = 8_000;
+const ICAO_PATTERN = /^[A-Z0-9]{4}$/;
 
 /** Compute TTL until the next METAR is expected, based on observation time. */
 function computeTtlSeconds(observedAt: string | null | undefined): number {
@@ -105,11 +108,13 @@ export class MetarService {
       return null;
     }
 
-    const cacheKey = `weather:${icaoCode ?? `${lat.toFixed(4)},${lon.toFixed(4)}`}`;
-    const cached = await this.cache.get<WeatherResult>(cacheKey);
+    const icao = icaoCode && ICAO_PATTERN.test(icaoCode) ? icaoCode : null;
+    const cacheKey = `weather:v2:${icao ?? `${lat.toFixed(4)},${lon.toFixed(4)}`}`;
+    // Wrapped so that "no station around" can be cached too.
+    const cached = await this.cache.get<{ result: WeatherResult | null }>(cacheKey);
     if (cached) {
       this.logger.debug(`Cache météo trouvé — ${cacheKey}`);
-      return cached;
+      return cached.result;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,36 +122,47 @@ export class MetarService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let rawTaf: any = null;
     let isNearest = false;
-    let stationIcao = icaoCode;
+    let stationIcao = icao;
     let stationName: string | null = null;
     let distanceNm: number | undefined;
     let bearingDeg: number | undefined;
+    let upstreamFailed = false;
+    const track = <T>(value: T | undefined): T | null => {
+      if (value === undefined) upstreamFailed = true;
+      return value ?? null;
+    };
 
     // 1. Try by ICAO
-    if (icaoCode) {
-      rawMetar = await this.fetchMetar(icaoCode);
+    if (icao) {
+      rawMetar = track(await this.fetchFirst(`/metar/${icao}/decoded`));
       if (rawMetar) {
         stationName = rawMetar.station?.name ?? null;
-        rawTaf = await this.fetchTaf(icaoCode);
+        rawTaf = track(await this.fetchFirst(`/taf/${icao}/decoded`));
       }
     }
 
     // 2. Fallback: nearest by coordinates
     if (!rawMetar) {
-      rawMetar = await this.fetchNearestMetar(lat, lon);
+      rawMetar = track(
+        await this.fetchFirst(`/metar/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/decoded`),
+      );
       if (rawMetar) {
         isNearest = true;
         stationIcao = rawMetar.icao ?? null;
         stationName = rawMetar.station?.name ?? null;
         distanceNm = rawMetar.position?.distance?.nautical_miles;
         bearingDeg = rawMetar.position?.bearing?.degrees;
-        if (stationIcao) {
-          rawTaf = await this.fetchTaf(stationIcao);
+        if (stationIcao && ICAO_PATTERN.test(stationIcao)) {
+          rawTaf = track(await this.fetchFirst(`/taf/${stationIcao}/decoded`));
         }
       }
     }
 
-    if (!rawMetar && !rawTaf) return null;
+    if (!rawMetar && !rawTaf) {
+      // An outage is not cached: the next request retries.
+      if (!upstreamFailed) await this.cache.set(cacheKey, { result: null }, NO_DATA_TTL_SECONDS);
+      return null;
+    }
 
     const result = this.buildResult(rawMetar, rawTaf, {
       icao: stationIcao ?? "UNKN",
@@ -156,57 +172,32 @@ export class MetarService {
       bearingDeg,
     });
 
-    const ttl = computeTtlSeconds(result.metar?.observedAt);
+    // A partial result (the TAF call failed) is kept only briefly.
+    const ttl = upstreamFailed ? CACHE_TTL_MIN_SECONDS : computeTtlSeconds(result.metar?.observedAt);
     this.logger.debug(`Cache météo TTL=${ttl}s pour ${cacheKey}`);
-    await this.cache.set(cacheKey, result, ttl);
+    await this.cache.set(cacheKey, { result }, ttl);
     return result;
   }
 
-  // ─── CheckWX fetch helpers ────────────────────────────────────────────────
+  // ─── CheckWX fetch helper ─────────────────────────────────────────────────
 
+  /** First decoded report, null when there is none, undefined when CheckWX failed. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async fetchMetar(icao: string): Promise<any | null> {
+  private async fetchFirst(path: string): Promise<any | null | undefined> {
     try {
-      const res = await fetch(`${CHECKWX_BASE}/metar/${icao}/decoded`, {
+      const res = await fetch(`${CHECKWX_BASE}${path}`, {
         headers: { "X-API-Key": this.apiKey! },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        this.logger.warn(`CheckWX ${path} : HTTP ${res.status}`);
+        return undefined;
+      }
       const json = (await res.json()) as { results: number; data: unknown[] };
       return json.results > 0 ? json.data[0] : null;
     } catch (e) {
-      this.logger.warn(`METAR fetch failed for ${icao}: ${String(e)}`);
-      return null;
-    }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async fetchTaf(icao: string): Promise<any | null> {
-    try {
-      const res = await fetch(`${CHECKWX_BASE}/taf/${icao}/decoded`, {
-        headers: { "X-API-Key": this.apiKey! },
-      });
-      if (!res.ok) return null;
-      const json = (await res.json()) as { results: number; data: unknown[] };
-      return json.results > 0 ? json.data[0] : null;
-    } catch (e) {
-      this.logger.warn(`TAF fetch failed for ${icao}: ${String(e)}`);
-      return null;
-    }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async fetchNearestMetar(lat: number, lon: number): Promise<any | null> {
-    try {
-      const res = await fetch(
-        `${CHECKWX_BASE}/metar/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/decoded`,
-        { headers: { "X-API-Key": this.apiKey! } },
-      );
-      if (!res.ok) return null;
-      const json = (await res.json()) as { results: number; data: unknown[] };
-      return json.results > 0 ? json.data[0] : null;
-    } catch (e) {
-      this.logger.warn(`Nearest METAR fetch failed for ${lat},${lon}: ${String(e)}`);
-      return null;
+      this.logger.warn(`CheckWX ${path} : ${String(e)}`);
+      return undefined;
     }
   }
 
