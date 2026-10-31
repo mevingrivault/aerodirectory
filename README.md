@@ -22,7 +22,7 @@ aerodirectory/
 │   │       ├── openaip/          # openAIP API client
 │   │       ├── importers/openaip/ # openAIP importer + normalizer
 │   │       └── airspace/         # OpenAir parser (placeholder)
-│   └── web/          # Next.js 15 App Router frontend
+│   └── web/          # Next.js 16 App Router frontend
 ├── packages/
 │   ├── shared/       # Zod schemas, TypeScript types, constants
 │   └── database/     # Prisma schema + client + seed data
@@ -46,8 +46,8 @@ The frontend and API **never** call openAIP directly at runtime. All user-facing
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 15, TypeScript, Tailwind, shadcn/ui, MapLibre GL, TanStack Query |
-| Backend | NestJS 10 + Fastify, Zod validation, JWT auth |
+| Frontend | Next.js 16, TypeScript, Tailwind, shadcn/ui, MapLibre GL, TanStack Query |
+| Backend | NestJS 11 + Fastify 5, Zod validation, JWT auth |
 | Database | PostgreSQL 16 + PostGIS |
 | Data source | openAIP (initial import) |
 | Cache | Redis 7 |
@@ -71,8 +71,8 @@ The frontend and API **never** call openAIP directly at runtime. All user-facing
 
 ### Prerequisites
 
-- Node.js >= 20
-- pnpm >= 9
+- Node.js >= 26.12.1 (see `.nvmrc`)
+- pnpm >= 10 (Node 26 ships without corepack: `npm install -g pnpm`)
 - Docker & Docker Compose
 
 ### Quick Setup (automatic)
