@@ -44,6 +44,7 @@ export class VisitService {
             longitude: true,
             city: true,
             aerodromeType: true,
+            commonsPhoto: { select: { author: true, license: true, updatedAt: true } },
           },
         },
       },

@@ -12,6 +12,8 @@ import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
 // dynamically at runtime.
 import type * as GeoJSON from "geojson";
 import type * as maplibregl from "maplibre-gl";
+import { commonsPhotoUrl, type CommonsPhotoCredit } from "@/lib/commons-photo";
+import { POPUP_DETAIL, POPUP_NOTE, POPUP_TITLE, popupContent } from "@/lib/map-popup";
 
 interface AirspaceFeature {
   id: string;
@@ -76,6 +78,7 @@ interface AerodromeMarker {
   hasMaintenance: boolean;
   runways: { identifier: string; length: number; surface: string }[];
   fuels: { type: string }[];
+  commonsPhoto: CommonsPhotoCredit | null;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -425,18 +428,17 @@ function MapPageInner() {
       if (!feature || !popupRef.current) return;
       const p = feature.properties ?? {};
       const typeLabel = AIRSPACE_TYPE_LABELS[p["type"] as number] ?? `Type ${p["type"]}`;
-      const extra = [
-        p["onDemand"] && "Sur demande",
-        p["onRequest"] && "Sur autorisation",
-        p["remarks"] && `<div style="font-size:11px;color:#888;margin-top:3px">${p["remarks"]}</div>`,
-      ].filter(Boolean).join(" · ");
+      const flags = [p["onDemand"] && "Sur demande", p["onRequest"] && "Sur autorisation"].filter(Boolean).join(" · ");
       popupRef.current
         .setLngLat(e.lngLat)
-        .setHTML(
-          `<div style="font-weight:600">${p["name"]}</div>` +
-          `<div style="font-size:12px;color:#555">${typeLabel} · Classe ${p["icaoClass"]}</div>` +
-          `<div style="font-size:12px;color:#666">${p["lowerLimit"]} – ${p["upperLimit"]}</div>` +
-          (extra ? `<div style="font-size:11px;color:#888;margin-top:2px">${extra}</div>` : ""),
+        .setDOMContent(
+          popupContent([
+            { text: String(p["name"] ?? ""), style: POPUP_TITLE },
+            { text: `${typeLabel} · Classe ${p["icaoClass"]}`, style: { ...POPUP_DETAIL, color: "#555" } },
+            { text: `${p["lowerLimit"]} – ${p["upperLimit"]}`, style: POPUP_DETAIL },
+            { text: flags, style: POPUP_NOTE },
+            { text: String(p["remarks"] ?? ""), style: { ...POPUP_NOTE, marginTop: "3px" } },
+          ]),
         )
         .addTo(map);
     };
@@ -500,6 +502,7 @@ function MapPageInner() {
           visitStatus: visitsByAerodrome.get(ad.id) ?? "",
           elevation: ad.elevation ?? "",
           runways: ad.runways?.map((r) => `${r.identifier} (${r.length}m)`).join(", ") ?? "",
+          photoUrl: ad.commonsPhoto ? commonsPhotoUrl(ad.id, ad.commonsPhoto, "thumb") : "",
         },
       })),
     };
@@ -635,13 +638,18 @@ function MapPageInner() {
         const coords = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
         const icao = props["icaoCode"] ? ` (${props["icaoCode"]}${props["iataCode"] ? ` / ${props["iataCode"]}` : ""})` : "";
         const elevation = props["elevation"] ? ` — ${props["elevation"]} ft` : "";
-        const rwy = props["runways"] ? `<div style="font-size:11px;color:#888;margin-top:2px">${props["runways"]}</div>` : "";
+        const photo = props["photoUrl"] ? { src: String(props["photoUrl"]), alt: String(props["name"] ?? "") } : undefined;
         popupRef.current
           .setLngLat(coords)
-          .setHTML(
-            `<div style="font-weight:600">${props["name"]}${icao}</div>` +
-              `<div style="font-size:12px;color:#666">${props["status"]}${elevation}</div>` +
-              rwy,
+          .setDOMContent(
+            popupContent(
+              [
+                { text: `${props["name"]}${icao}`, style: POPUP_TITLE },
+                { text: `${props["status"]}${elevation}`, style: POPUP_DETAIL },
+                { text: String(props["runways"] ?? ""), style: POPUP_NOTE },
+              ],
+              photo,
+            ),
           )
           .addTo(map);
       }
@@ -673,11 +681,14 @@ function MapPageInner() {
 
       popupRef.current
         ?.setLngLat(coords)
-        .setHTML(
-          `<div style="font-weight:600">${highlightedAerodrome.name}${
-            highlightedAerodrome.icaoCode ? ` (${highlightedAerodrome.icaoCode})` : ""
-          }</div>` +
-            `<div style="font-size:12px;color:#666">Terrain mis en évidence</div>`,
+        .setDOMContent(
+          popupContent([
+            {
+              text: `${highlightedAerodrome.name}${highlightedAerodrome.icaoCode ? ` (${highlightedAerodrome.icaoCode})` : ""}`,
+              style: POPUP_TITLE,
+            },
+            { text: "Terrain mis en évidence", style: POPUP_DETAIL },
+          ]),
         )
         .addTo(map);
     }

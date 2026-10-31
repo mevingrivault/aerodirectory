@@ -27,6 +27,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { commonsPhotoCredit, commonsPhotoUrl, type CommonsPhotoCredit } from "@/lib/commons-photo";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { formatNm } from "@/lib/utils";
@@ -45,6 +46,7 @@ interface VisitEntry {
     icaoCode: string | null;
     city: string | null;
     aerodromeType: string;
+    commonsPhoto: CommonsPhotoCredit | null;
   };
 }
 
@@ -375,8 +377,19 @@ function VisitListRow({ visit }: { visit: VisitEntry }) {
   return (
     <Link href={`/aerodrome/${visit.aerodrome.id}`} className="block">
       <div className="grid min-h-[76px] grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg border border-(--ink-200) bg-white p-3 transition hover:border-(--ink-400) hover:bg-(--paper-50) sm:gap-4 sm:p-4">
-        <div className={`grid h-11 w-11 place-items-center rounded-md border border-(--ink-200) ${meta.tone}`}>
-          <Icon className="h-5 w-5" />
+        <div className={`grid h-11 w-11 place-items-center overflow-hidden rounded-md border border-(--ink-200) ${visit.aerodrome.commonsPhoto ? "bg-(--ink-100)" : meta.tone}`}>
+          {visit.aerodrome.commonsPhoto ? (
+            <img
+              src={commonsPhotoUrl(visit.aerodrome.id, visit.aerodrome.commonsPhoto, "thumb")}
+              alt=""
+              title={commonsPhotoCredit(visit.aerodrome.commonsPhoto)}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <Icon className="h-5 w-5" />
+          )}
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">

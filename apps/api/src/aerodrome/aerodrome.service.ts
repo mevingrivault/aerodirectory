@@ -39,7 +39,7 @@ export class AerodromeService {
   ) {}
 
   /** The full marker set changes once a night; every map load asks for it. */
-  private static readonly MARKERS_CACHE_KEY = "aerodromes:markers:v1";
+  private static readonly MARKERS_CACHE_KEY = "aerodromes:markers:v2";
   private static readonly MARKERS_CACHE_TTL_SECONDS = 60 * 60;
 
   async findById(id: string) {
@@ -374,6 +374,9 @@ export class AerodromeService {
         },
         fuels: {
           select: { type: true },
+        },
+        commonsPhoto: {
+          select: { author: true, license: true, updatedAt: true },
         },
       },
     });

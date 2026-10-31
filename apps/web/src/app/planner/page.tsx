@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn, formatNm, formatFlightTime, formatEuros } from "@/lib/utils";
 import Link from "next/link";
 import type { PlannerResult, SavedSearchItem } from "@aerodirectory/shared";
+import { popupContent } from "@/lib/map-popup";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -289,9 +290,11 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
         const el = document.createElement("div");
         el.style.cssText =
           "width:16px;height:16px;border-radius:50%;background:var(--horizon-700);border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4)";
-        const popup = new ml.Popup({ offset: 10, closeButton: false }).setHTML(
-          `<div style="font-size:12px;font-weight:600">${departure.name}</div>
-           <div style="font-size:11px;color:var(--ink-500)">Départ</div>`,
+        const popup = new ml.Popup({ offset: 10, closeButton: false }).setDOMContent(
+          popupContent([
+            { text: departure.name, style: { fontSize: "12px", fontWeight: "600" } },
+            { text: "Départ", style: { fontSize: "11px", color: "var(--ink-500)" } },
+          ]),
         );
         const marker = new ml.Marker({ element: el })
           .setLngLat([departure.longitude, departure.latitude])
@@ -306,17 +309,23 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
         el.style.cssText =
           "width:10px;height:10px;border-radius:50%;background:var(--terrain-500);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:pointer";
 
-        const popup = new ml.Popup({ offset: 8, closeButton: false }).setHTML(
-          `<div style="font-size:12px">
-            <div style="font-weight:600">${r.aerodrome.name}</div>
-            <div style="color:var(--ink-500);font-size:11px">${r.aerodrome.icaoCode ?? ""}${r.aerodrome.city ? ` · ${r.aerodrome.city}` : ""}</div>
-            <div style="margin-top:4px;font-size:11px">
-              ${formatFlightTime(r.timeHours)} · ${formatNm(r.distanceNm)}
-              ${r.estimatedCost > 0 ? ` · ${formatEuros(r.estimatedCost)}` : ""}
-            </div>
-            <a href="/aerodrome/${r.aerodrome.id}" style="color:var(--horizon-700);font-size:11px">Voir la fiche →</a>
-           </div>`,
-        );
+        const content = popupContent([
+          { text: r.aerodrome.name, style: { fontSize: "12px", fontWeight: "600" } },
+          {
+            text: `${r.aerodrome.icaoCode ?? ""}${r.aerodrome.city ? ` · ${r.aerodrome.city}` : ""}`,
+            style: { fontSize: "11px", color: "var(--ink-500)" },
+          },
+          {
+            text: `${formatFlightTime(r.timeHours)} · ${formatNm(r.distanceNm)}${r.estimatedCost > 0 ? ` · ${formatEuros(r.estimatedCost)}` : ""}`,
+            style: { fontSize: "11px", marginTop: "4px" },
+          },
+        ]);
+        const link = document.createElement("a");
+        link.href = `/aerodrome/${encodeURIComponent(r.aerodrome.id)}`;
+        link.textContent = "Voir la fiche →";
+        Object.assign(link.style, { color: "var(--horizon-700)", fontSize: "11px" });
+        content.append(link);
+        const popup = new ml.Popup({ offset: 8, closeButton: false }).setDOMContent(content);
 
         const marker = new ml.Marker({ element: el })
           .setLngLat([r.aerodrome.longitude, r.aerodrome.latitude])

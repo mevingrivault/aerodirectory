@@ -19,6 +19,7 @@ import {
   formatAreaDistance,
   type NearbyProtectedArea,
 } from "@/lib/protected-areas";
+import { POPUP_DETAIL, POPUP_TITLE, popupContent } from "@/lib/map-popup";
 
 type MapStyleKey = "default" | "satellite" | "hybrid";
 
@@ -48,16 +49,10 @@ function areasGeoJson(areas: NearbyProtectedArea[]) {
 }
 
 function areaPopupContent(a: NearbyProtectedArea): HTMLElement {
-  const root = document.createElement("div");
-  const title = document.createElement("div");
-  title.style.fontWeight = "600";
-  title.textContent = a.name ?? PROTECTED_AREA_LABELS[a.kind];
-  const details = document.createElement("div");
-  details.style.fontSize = "12px";
-  details.style.color = "#64748b";
-  details.textContent = `${a.detail ?? PROTECTED_AREA_LABELS[a.kind]} · ${formatAreaDistance(a.distanceM)}`;
-  root.append(title, details);
-  return root;
+  return popupContent([
+    { text: a.name ?? PROTECTED_AREA_LABELS[a.kind], style: POPUP_TITLE },
+    { text: `${a.detail ?? PROTECTED_AREA_LABELS[a.kind]} · ${formatAreaDistance(a.distanceM)}`, style: { ...POPUP_DETAIL, color: "#64748b" } },
+  ]);
 }
 
 function obstaclesGeoJson(obstacles: NearbyObstacle[]) {
@@ -71,18 +66,14 @@ function obstaclesGeoJson(obstacles: NearbyObstacle[]) {
   };
 }
 
-/** Popup built from DOM nodes: obstacle names come from OSM and are never parsed as HTML. */
 function obstaclePopupContent(o: NearbyObstacle): HTMLElement {
-  const root = document.createElement("div");
-  const title = document.createElement("div");
-  title.style.fontWeight = "600";
-  title.textContent = o.name ? `${OBSTACLE_LABELS[o.type]} · ${o.name}` : OBSTACLE_LABELS[o.type];
-  const details = document.createElement("div");
-  details.style.fontSize = "12px";
-  details.style.color = "#64748b";
-  details.textContent = `Hauteur ${formatObstacleHeight(o.heightM)} · sommet ${formatObstacleElevation(o.elevationM)} · ${formatObstacleDistance(o.distanceM)} au ${String(o.bearingDeg).padStart(3, "0")}°`;
-  root.append(title, details);
-  return root;
+  return popupContent([
+    { text: o.name ? `${OBSTACLE_LABELS[o.type]} · ${o.name}` : OBSTACLE_LABELS[o.type], style: POPUP_TITLE },
+    {
+      text: `Hauteur ${formatObstacleHeight(o.heightM)} · sommet ${formatObstacleElevation(o.elevationM)} · ${formatObstacleDistance(o.distanceM)} au ${String(o.bearingDeg).padStart(3, "0")}°`,
+      style: { ...POPUP_DETAIL, color: "#64748b" },
+    },
+  ]);
 }
 
 const MAP_STYLE_OPTIONS: Array<{ key: MapStyleKey; label: string }> = [
@@ -201,11 +192,11 @@ export function AerodromeLocationMap({
         closeButton: false,
         closeOnClick: false,
         offset: 18,
-      }).setHTML(
-        `<div style="font-weight:600">${name}${icaoCode ? ` (${icaoCode})` : ""}</div>` +
-          `<div style="font-size:12px;color:#64748b">${coordinatesLabel}${
-            elevation != null ? ` · ${elevation} ft` : ""
-          }</div>`,
+      }).setDOMContent(
+        popupContent([
+          { text: `${name}${icaoCode ? ` (${icaoCode})` : ""}`, style: POPUP_TITLE },
+          { text: `${coordinatesLabel}${elevation != null ? ` · ${elevation} ft` : ""}`, style: { ...POPUP_DETAIL, color: "#64748b" } },
+        ]),
       );
 
       markerRef.current = new maplibregl.Marker({
