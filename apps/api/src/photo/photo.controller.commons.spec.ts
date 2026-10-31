@@ -9,7 +9,7 @@ import { PhotoController } from "./photo.controller";
  * anything from Wikimedia (no IP sent there, no CSP opening).
  */
 
-function build(photo: { storedKey: string; mimeType: string } | null) {
+function build(photo: { storedKey: string; thumbKey: string | null; mimeType: string } | null) {
   const photos = { findCommonsPhoto: vi.fn().mockResolvedValue(photo) };
   const storage = {
     getObject: vi.fn().mockResolvedValue({ stream: Readable.from(["jpg"]), contentType: "image/jpeg", contentLength: 3 }),
@@ -26,8 +26,23 @@ describe("PhotoController.serveCommons", () => {
     expect(Reflect.getMetadata(METHOD_METADATA, fn)).toBe(RequestMethod.GET);
   });
 
+  it("exposes the thumbnail as GET commons/thumb", () => {
+    const fn = PhotoController.prototype.serveCommonsThumb as unknown as object;
+    expect(Reflect.getMetadata(PATH_METADATA, fn)).toBe("commons/thumb");
+  });
+
+  it("serves the thumbnail, or the full copy until the photo has one", async () => {
+    const withThumb = build({ storedKey: "commons/abc.jpg", thumbKey: "commons/abc-t.jpg", mimeType: "image/jpeg" });
+    await withThumb.controller.serveCommonsThumb("a1", withThumb.res as never);
+    expect(withThumb.storage.getObject).toHaveBeenCalledWith("commons/abc-t.jpg");
+
+    const withoutThumb = build({ storedKey: "commons/abc.jpg", thumbKey: null, mimeType: "image/jpeg" });
+    await withoutThumb.controller.serveCommonsThumb("a1", withoutThumb.res as never);
+    expect(withoutThumb.storage.getObject).toHaveBeenCalledWith("commons/abc.jpg");
+  });
+
   it("streams the stored copy of the aerodrome's photo", async () => {
-    const { controller, storage, res } = build({ storedKey: "commons/abc.jpg", mimeType: "image/jpeg" });
+    const { controller, storage, res } = build({ storedKey: "commons/abc.jpg", thumbKey: "commons/abc-t.jpg", mimeType: "image/jpeg" });
 
     await controller.serveCommons("a1", res as never);
 

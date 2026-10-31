@@ -44,6 +44,7 @@ export interface CommonsImportResult {
 const API_BATCH = 50; // titles/ids per action API request
 const STORAGE_FOLDER = "commons";
 const MAX_WIDTH = 1280;
+const THUMB_WIDTH = 480; // result lists show it at 96 px wide, 2× for dense screens and margin
 const MAX_INPUT_PIXELS = 50_000_000;
 
 function chunks<T>(items: T[], size: number): T[][] {
@@ -52,11 +53,14 @@ function chunks<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** JPEG copy, at most 1280 px wide, without the source metadata. */
-export async function reencodeForWeb(buffer: Buffer): Promise<{ buffer: Buffer; width: number; height: number }> {
+/** JPEG copy, at most `maxWidth` px wide, without the source metadata. */
+export async function reencodeForWeb(
+  buffer: Buffer,
+  maxWidth = MAX_WIDTH,
+): Promise<{ buffer: Buffer; width: number; height: number }> {
   const { data, info } = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error" })
     .rotate()
-    .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+    .resize({ width: maxWidth, withoutEnlargement: true })
     .flatten({ background: "#ffffff" })
     .jpeg({ quality: 82, mozjpeg: true, progressive: true })
     .toBuffer({ resolveWithObject: true });
@@ -78,7 +82,7 @@ export async function syncCommonsPhotos(
       icaoCode: true,
       wikipediaUrl: true,
       commonsPhoto: {
-        select: { id: true, fileTitle: true, sourceSha1: true, storedKey: true, author: true, license: true, licenseUrl: true, pageUrl: true, wikidataId: true },
+        select: { id: true, fileTitle: true, sourceSha1: true, storedKey: true, thumbKey: true, author: true, license: true, licenseUrl: true, pageUrl: true, wikidataId: true },
       },
     },
   });
@@ -175,6 +179,7 @@ export async function syncCommonsPhotos(
           if (!dryRun) {
             await prisma.commonsPhoto.delete({ where: { id: existing.id } });
             await store.delete(existing.storedKey);
+            if (existing.thumbKey) await store.delete(existing.thumbKey);
           }
         }
         continue;
@@ -190,7 +195,8 @@ export async function syncCommonsPhotos(
         licenseUrl: image.licenseUrl,
       };
 
-      if (existing && existing.fileTitle === image.fileTitle && existing.sourceSha1 === image.sha1) {
+      // Photos stored before thumbnails existed are fetched again once to get one.
+      if (existing && existing.fileTitle === image.fileTitle && existing.sourceSha1 === image.sha1 && existing.thumbKey) {
         const same = (Object.keys(credit) as (keyof typeof credit)[]).every((k) => existing[k] === credit[k]);
         if (same) {
           result.unchanged++;
@@ -204,13 +210,17 @@ export async function syncCommonsPhotos(
       result.downloaded++;
       if (dryRun) continue;
 
-      const copy = await reencodeForWeb(await api.download(image.thumbUrl));
+      const source = await api.download(image.thumbUrl);
+      const copy = await reencodeForWeb(source);
+      const thumb = await reencodeForWeb(source, THUMB_WIDTH);
       const { key } = await store.upload(copy.buffer, "jpg", "image/jpeg", STORAGE_FOLDER);
+      const { key: thumbKey } = await store.upload(thumb.buffer, "jpg", "image/jpeg", STORAGE_FOLDER);
       const data = {
         ...credit,
         fileTitle: image.fileTitle,
         sourceSha1: image.sha1,
         storedKey: key,
+        thumbKey,
         mimeType: "image/jpeg",
         width: copy.width,
         height: copy.height,
@@ -220,7 +230,10 @@ export async function syncCommonsPhotos(
         create: { aerodromeId: a.id, ...data },
         update: data,
       });
-      if (existing) await store.delete(existing.storedKey);
+      if (existing) {
+        await store.delete(existing.storedKey);
+        if (existing.thumbKey) await store.delete(existing.thumbKey);
+      }
     } catch (error) {
       const msg = `${a.icaoCode ?? a.id}: ${(error as Error).message}`;
       log(`  ERROR ${msg}`);

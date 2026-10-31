@@ -753,6 +753,7 @@ model CommonsPhoto {
   license     String   // short name as on Commons, e.g. "CC BY-SA 4.0"
   licenseUrl  String?
   storedKey   String   // S3 object key of our copy
+  thumbKey    String?  // small copy for result lists; null until the next import
   mimeType    String
   width       Int
   height      Int

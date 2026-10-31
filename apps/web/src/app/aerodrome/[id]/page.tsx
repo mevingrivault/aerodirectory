@@ -61,7 +61,7 @@ import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
-import { API_BASE } from "@/lib/public-env";
+import { commonsPhotoUrl } from "@/lib/commons-photo";
 import type { CorrectionItem, EventItem } from "@aerodirectory/shared";
 import { EVENT_TYPES } from "@aerodirectory/shared";
 
@@ -1043,6 +1043,33 @@ export default function AerodromeDetailPage() {
   const contactLabel: CSSProperties = { fontSize: 11, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--f-mono)", fontWeight: 600 };
   const contactValue: CSSProperties = { fontSize: 13, color: "var(--ink-950)", marginTop: 2 };
 
+  // Header: the Commons photo as a banner when there is one, a plain block otherwise.
+  const heroPhoto = ad.commonsPhoto;
+  const heroInk = heroPhoto ? "white" : "var(--ink-950)";
+  const heroMuted = heroPhoto ? "rgba(255,255,255,.86)" : "var(--ink-700)";
+  const heroBody = (
+    <>
+      <div className="min-w-0">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          {ad.icaoCode && <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, letterSpacing: "0.08em" }}>{ad.icaoCode}</span>}
+          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: "var(--horizon-100)", color: "var(--horizon-900)" }}>{TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: ad.status === "OPEN" ? "oklch(0.94 0.05 130)" : "oklch(0.94 0.05 25)", color: ad.status === "OPEN" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)" }}>{STATUS_LABELS[ad.status] ?? ad.status}</span>
+          {isVisited && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 22, padding: "0 10px", background: "var(--brass-100)", color: "var(--brass-700)", border: "1px solid oklch(0.85 0.06 75)", borderRadius: 999, fontSize: 12, fontWeight: 600 }}><CheckCircle2 className="h-3 w-3" /> {isFavorite ? "Favori" : "Visité"}</span>}
+        </div>
+        <h1 style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: "clamp(26px,3.2vw,38px)", lineHeight: 1.08, letterSpacing: "-0.02em", margin: 0, color: heroInk, textShadow: heroPhoto ? "0 1px 12px rgba(0,0,0,.35)" : undefined }}>{ad.name}</h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, marginTop: 8, fontSize: 13, color: heroMuted }}>
+          {[ad.city, ad.department, ad.region].filter(Boolean).length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><MapPin className="h-3.5 w-3.5" style={{ color: heroMuted }} />{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ")}</span>}
+          {ad.elevation != null && <span>Élévation <strong style={{ color: heroInk, fontWeight: 600 }}>{ad.elevation} ft</strong></span>}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><strong style={{ color: heroInk, fontWeight: 600 }}>{visitedCount}</strong> visites · <strong style={{ color: heroInk, fontWeight: 600 }}>{ad._count.comments ?? 0}</strong> avis</span>
+        </div>
+      </div>
+      <div className="hidden shrink-0 gap-2 md:flex">
+        <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", borderRadius: 8, background: "var(--ink-950)", color: "white", fontSize: 13, fontWeight: 500, textDecoration: "none", border: heroPhoto ? "1px solid rgba(255,255,255,.25)" : undefined }}><Send className="h-4 w-4" /> Planifier</Link>
+        {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Aérodex"}</button>}
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-[70vh] bg-(--paper-50) text-(--ink-950)">
 
@@ -1053,37 +1080,34 @@ export default function AerodromeDetailPage() {
         <span className="truncate">{ad.name}{ad.icaoCode ? ` (${ad.icaoCode})` : ""}</span>
       </nav>
 
-      {/* HERO — carte aéronautique CSS */}
+      {/* HERO */}
       <section className="mx-auto mt-3 max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="relative aspect-16/10 min-h-[260px] overflow-hidden rounded-xl border border-(--ink-200) bg-(--horizon-50) sm:aspect-16/8 sm:rounded-2xl md:aspect-16/7 md:min-h-[360px]">
-          {/* Gradient map */}
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 38% 30% at 46% 52%, oklch(0.86 0.045 128) 0%, oklch(0.83 0.05 128) 52%, transparent 74%), radial-gradient(ellipse 50% 40% at 46% 52%, oklch(0.90 0.035 210) 0%, oklch(0.90 0.035 210) 56%, transparent 78%), linear-gradient(170deg, oklch(0.93 0.03 215) 0%, oklch(0.88 0.045 220) 45%, oklch(0.83 0.06 225) 100%)" }} />
-          {/* Runway overlay */}
-          <div style={{ position: "absolute", left: "38%", top: "56%", width: 220, height: 14, background: "var(--ink-950)", transform: "rotate(-65deg)", boxShadow: "0 0 0 2px white, 0 6px 24px rgba(0,0,0,.25)", borderRadius: 2 }} />
-          {/* Compass rose */}
-          <div style={{ position: "absolute", bottom: 16, right: 16, width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,.92)", border: "1px solid var(--ink-200)", display: "grid", placeItems: "center", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-950)" }}>N</div>
-          {/* Overlay */}
-          <div className="absolute inset-x-0 bottom-0 grid grid-cols-1 items-end gap-3 bg-[linear-gradient(180deg,transparent_0%,rgba(255,255,255,.96)_70%)] p-4 sm:gap-5 sm:p-6 md:grid-cols-[1fr_auto] md:p-7">
-            <div className="min-w-0">
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                {ad.icaoCode && <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, background: "var(--paper-100)", color: "var(--ink-950)", border: "1px solid var(--ink-300)", borderRadius: 4, letterSpacing: "0.08em" }}>{ad.icaoCode}</span>}
-                <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: "var(--horizon-100)", color: "var(--horizon-900)" }}>{TYPE_LABELS[ad.aerodromeType] || ad.aerodromeType}</span>
-                <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.08em", background: ad.status === "OPEN" ? "oklch(0.94 0.05 130)" : "oklch(0.94 0.05 25)", color: ad.status === "OPEN" ? "var(--terrain-800)" : "oklch(0.40 0.15 25)" }}>{STATUS_LABELS[ad.status] ?? ad.status}</span>
-                {isVisited && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 24, padding: "0 10px", background: "var(--brass-100)", color: "var(--brass-700)", border: "1px solid oklch(0.85 0.06 75)", borderRadius: 999, fontSize: 12, fontWeight: 600 }}><CheckCircle2 className="h-3 w-3" /> {isFavorite ? "Favori" : "Visité"}</span>}
-              </div>
-              <h1 style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: "clamp(28px,4vw,44px)", lineHeight: 1.05, letterSpacing: "-0.02em", margin: 0 }}>{ad.name}</h1>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, marginTop: 10, fontSize: 13, color: "var(--ink-700)" }}>
-                {[ad.city, ad.department, ad.region].filter(Boolean).length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><MapPin className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />{[ad.city, ad.department, ad.region].filter(Boolean).join(" · ")}</span>}
-                {ad.elevation != null && <span>Élévation <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{ad.elevation} ft</strong></span>}
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{visitedCount}</strong> visites · <strong style={{ color: "var(--ink-950)", fontWeight: 600 }}>{ad._count.comments ?? 0}</strong> avis</span>
-              </div>
-            </div>
-            <div className="hidden shrink-0 gap-2 md:flex">
-              <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", borderRadius: 8, background: "var(--ink-950)", color: "white", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><Send className="h-4 w-4" /> Planifier</Link>
-              {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Aérodex"}</button>}
+        {heroPhoto ? (
+          <div className="relative h-[230px] overflow-hidden rounded-xl border border-(--ink-200) bg-(--ink-950) sm:h-[270px] sm:rounded-2xl md:h-[300px]">
+            <img
+              src={commonsPhotoUrl(ad.id, heroPhoto, "file")}
+              alt={`Photo de ${ad.name}`}
+              fetchPriority="high"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,15,25,0)_30%,rgba(10,15,25,.8)_100%)]" />
+            <a
+              href={heroPhoto.pageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute right-2 top-2 max-w-[70%] truncate rounded bg-black/45 px-2 py-0.5 text-[10px] text-white/90 hover:bg-black/60 sm:right-3 sm:top-3"
+            >
+              Photo : {heroPhoto.author ?? "auteur inconnu"} · {heroPhoto.license} · Wikimedia Commons
+            </a>
+            <div className="absolute inset-x-0 bottom-0 grid grid-cols-1 items-end gap-3 p-4 sm:gap-5 sm:p-6 md:grid-cols-[1fr_auto] md:p-7">
+              {heroBody}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 items-end gap-3 rounded-xl border border-(--ink-200) bg-white p-4 sm:gap-5 sm:rounded-2xl sm:p-6 md:grid-cols-[1fr_auto] md:p-7">
+            {heroBody}
+          </div>
+        )}
       </section>
 
       {/* PAGE */}
@@ -1730,7 +1754,7 @@ export default function AerodromeDetailPage() {
 
 /** Photo from Wikimedia Commons, served from our storage, with the credit its licence requires. */
 function CommonsPhotoFigure({ aerodromeId, name, photo }: { aerodromeId: string; name: string; photo: CommonsPhoto }) {
-  const src = `${API_BASE}/aerodromes/${aerodromeId}/photos/commons/file?v=${encodeURIComponent(photo.updatedAt)}`;
+  const src = commonsPhotoUrl(aerodromeId, photo, "file");
   const link = "text-foreground underline underline-offset-2 hover:text-primary";
 
   return (

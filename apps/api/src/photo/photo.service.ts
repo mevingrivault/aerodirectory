@@ -165,7 +165,7 @@ export class PhotoService {
   async findCommonsPhoto(aerodromeId: string) {
     return this.prisma.commonsPhoto.findUnique({
       where: { aerodromeId },
-      select: { storedKey: true, mimeType: true },
+      select: { storedKey: true, thumbKey: true, mimeType: true },
     });
   }
 

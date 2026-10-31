@@ -61,12 +61,27 @@ export class PhotoController {
     @Param("aerodromeId") aerodromeId: string,
     @Res() res: FastifyReply,
   ) {
+    await this.sendCommons(aerodromeId, "full", res);
+  }
+
+  @Public()
+  @Get("commons/thumb")
+  async serveCommonsThumb(
+    @Param("aerodromeId") aerodromeId: string,
+    @Res() res: FastifyReply,
+  ) {
+    await this.sendCommons(aerodromeId, "thumb", res);
+  }
+
+  private async sendCommons(aerodromeId: string, size: "full" | "thumb", res: FastifyReply) {
     const photo = await this.photos.findCommonsPhoto(aerodromeId);
     if (!photo) {
       throw new NotFoundException("Photo introuvable.");
     }
 
-    const { stream, contentType, contentLength } = await this.storage.getObject(photo.storedKey);
+    // Until the next import gives it a thumbnail, a photo serves its full copy.
+    const key = size === "thumb" ? (photo.thumbKey ?? photo.storedKey) : photo.storedKey;
+    const { stream, contentType, contentLength } = await this.storage.getObject(key);
 
     res.header("Content-Type", contentType);
     // The file can be replaced when it changes on Commons: the page adds a

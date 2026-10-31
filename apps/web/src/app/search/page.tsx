@@ -26,6 +26,7 @@ import {
   Check,
 } from "lucide-react";
 import { AerodromeTypeIcon } from "@/components/ui/aerodrome-type-icon";
+import { commonsPhotoCredit, commonsPhotoUrl, type CommonsPhotoCredit } from "@/lib/commons-photo";
 import type { SavedSearchItem } from "@aerodirectory/shared";
 
 interface AerodromeResult {
@@ -47,6 +48,7 @@ interface AerodromeResult {
   runways: { identifier: string; length: number; surface: string }[];
   fuels: { type: string; available: boolean }[];
   _count: { visits: number; comments: number };
+  commonsPhoto: CommonsPhotoCredit | null;
   distanceKm?: number;
 }
 
@@ -800,12 +802,24 @@ function ResultCard({ ad }: { ad: AerodromeResult }) {
   return (
     <Link
       href={`/aerodrome/${ad.id}`}
-      className="group relative grid cursor-pointer items-center gap-4 rounded-xl border border-(--ink-200) bg-white p-4 transition-all grid-cols-[48px_1fr] hover:-translate-y-px hover:border-(--ink-300) hover:shadow-[0_1px_2px_rgba(20,30,50,.06)] sm:gap-[18px] sm:p-[18px_22px] sm:grid-cols-[64px_1fr_auto]"
+      className="group relative grid cursor-pointer items-center gap-4 rounded-xl border border-(--ink-200) bg-white p-4 transition-all grid-cols-[64px_1fr] hover:-translate-y-px hover:border-(--ink-300) hover:shadow-[0_1px_2px_rgba(20,30,50,.06)] sm:gap-[18px] sm:p-[18px_22px] sm:grid-cols-[96px_1fr_auto]"
     >
       <div
-        className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-md sm:h-14 sm:w-14 ${tone}`}
+        className={`relative grid h-12 w-16 shrink-0 place-items-center rounded-md sm:h-[72px] sm:w-24 ${ad.commonsPhoto ? "bg-(--ink-100)" : tone}`}
       >
-        <AerodromeTypeIcon type={ad.aerodromeType} className="h-6 w-6 sm:h-6 sm:w-6" />
+        {ad.commonsPhoto ? (
+          // The full credit is on the sheet; the tooltip carries it here.
+          <img
+            src={commonsPhotoUrl(ad.id, ad.commonsPhoto, "thumb")}
+            alt=""
+            title={commonsPhotoCredit(ad.commonsPhoto)}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full rounded-md object-cover"
+          />
+        ) : (
+          <AerodromeTypeIcon type={ad.aerodromeType} className="h-6 w-6 sm:h-6 sm:w-6" />
+        )}
         {visited && (
           <span
             className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-white bg-(--brass-500)"

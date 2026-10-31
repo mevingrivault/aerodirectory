@@ -65,7 +65,7 @@ async function build(aerodromes: Record<string, unknown>[], license?: string) {
     download: vi.fn().mockResolvedValue(image),
   };
   const store = {
-    upload: vi.fn().mockResolvedValue({ key: "commons/new.jpg" }),
+    upload: vi.fn().mockResolvedValueOnce({ key: "commons/new.jpg" }).mockResolvedValueOnce({ key: "commons/new-thumb.jpg" }),
     delete: vi.fn().mockResolvedValue(undefined),
   };
   const prisma = {
@@ -85,6 +85,7 @@ const stored = {
   fileTitle: "File:Toussus.jpg",
   sourceSha1: SHA1,
   storedKey: "commons/old.jpg",
+  thumbKey: "commons/old-thumb.jpg",
   wikidataId: "Q100",
   pageUrl: "https://commons.wikimedia.org/wiki/File:Toussus.jpg",
   author: "Jean Dupont",
@@ -101,7 +102,10 @@ describe("syncCommonsPhotos", () => {
     expect(api.download).toHaveBeenCalledWith(
       "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Toussus.jpg/1280px-Toussus.jpg",
     );
+    expect(store.upload).toHaveBeenCalledTimes(2);
     expect(store.upload).toHaveBeenCalledWith(expect.any(Buffer), "jpg", "image/jpeg", "commons");
+    const thumb = vi.mocked(store.upload).mock.calls[1]![0] as Buffer;
+    expect((await sharp(thumb).metadata()).width).toBe(480);
     expect(prisma.commonsPhoto.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { aerodromeId: "a1" },
@@ -111,6 +115,7 @@ describe("syncCommonsPhotos", () => {
           author: "Jean Dupont",
           license: "CC BY-SA 4.0",
           storedKey: "commons/new.jpg",
+          thumbKey: "commons/new-thumb.jpg",
           width: 1280,
           height: 640,
         }),
@@ -127,6 +132,19 @@ describe("syncCommonsPhotos", () => {
     expect(api.download).not.toHaveBeenCalled();
     expect(prisma.commonsPhoto.update).not.toHaveBeenCalled();
     expect(result.unchanged).toBe(1);
+  });
+
+  it("fetches a photo stored before thumbnails existed once more, and drops the old files", async () => {
+    const { api, store, prisma } = await build([{ ...toussus, commonsPhoto: { ...stored, thumbKey: null } }]);
+
+    const result = await syncCommonsPhotos(prisma as never, api, store);
+
+    expect(api.download).toHaveBeenCalledTimes(1);
+    expect(prisma.commonsPhoto.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ thumbKey: "commons/new-thumb.jpg" }) }),
+    );
+    expect(store.delete).toHaveBeenCalledWith("commons/old.jpg");
+    expect(result.downloaded).toBe(1);
   });
 
   it("updates the credit alone when only the credit changed", async () => {
@@ -148,6 +166,7 @@ describe("syncCommonsPhotos", () => {
 
     expect(prisma.commonsPhoto.delete).toHaveBeenCalledWith({ where: { id: "p1" } });
     expect(store.delete).toHaveBeenCalledWith("commons/old.jpg");
+    expect(store.delete).toHaveBeenCalledWith("commons/old-thumb.jpg");
     expect(result.rejected).toEqual({ "licence non retenue (GFDL)": 1 });
   });
 

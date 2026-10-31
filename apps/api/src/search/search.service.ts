@@ -348,6 +348,8 @@ export class SearchService {
     const include = {
       runways: true,
       fuels: { where: { available: true } },
+      // Enough to show the thumbnail with its credit; the file is served by the photo routes.
+      commonsPhoto: { select: { author: true, license: true, updatedAt: true } },
       _count: {
         select: {
           visits: true,
