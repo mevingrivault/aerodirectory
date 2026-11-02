@@ -113,7 +113,10 @@ to the code.
   written files (folder sync). Stage explicit paths, and run
   `find . -name "* 2.*" -not -path "*/node_modules/*"` before committing.
 - A push to `main` builds, scans (Trivy) and publishes the `:latest`
-  images. Work on a branch and merge when CI-equivalent checks pass.
+  images, unless it only touches Markdown or `.claude/`, `.codex/`, `.vexp/`
+  (`paths-ignore`). Work on a branch and merge when CI-equivalent checks
+  pass. Dependabot proposes GitHub Actions bumps; npm deps are upgraded by
+  hand.
 
 ## Conventions
 

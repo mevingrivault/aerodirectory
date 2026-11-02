@@ -1,0 +1,11 @@
+# Actions only: npm dependencies are upgraded by hand (see the upgrade-dep
+# and cve-fix skills). Grouped so a runtime bump arrives as one PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
