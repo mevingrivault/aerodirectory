@@ -35,6 +35,7 @@ export function Footer() {
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
           <Link href="/politique-de-confidentialite" style={{ color: "var(--ink-500)" }}>Politique de confidentialité</Link>
           <Link href="/cgu" style={{ color: "var(--ink-500)" }}>CGU</Link>
+          <Link href="/sources-des-donnees" style={{ color: "var(--ink-500)" }}>Sources des données</Link>
           <a
             href="https://creativecommons.org/licenses/by-sa/4.0/"
             target="_blank"
