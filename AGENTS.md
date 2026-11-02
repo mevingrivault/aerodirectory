@@ -46,7 +46,11 @@ newest approved entry per kind and key.
 Runtime calls to outside services: CheckWX (METAR/TAF, `metar/`) and HEAD
 requests to the SIA for the current AIRAC cycle's VAC/AD 2 (`sia/`), both
 cached and with timeouts. Nothing else is fetched at request time, and
-browsers load nothing from third parties except map tiles (CSP).
+browsers load nothing from third parties except map tiles (CSP). Fonts are
+self-hosted from `@fontsource-variable/*` packages: don't add a font, script
+or style from another origin. Site content is all rights reserved (CGU §5,
+`robots.ts`, `tdm-reservation` header); third-party data keeps its licence
+(`/sources-des-donnees`).
 
 ## Toolchain
 

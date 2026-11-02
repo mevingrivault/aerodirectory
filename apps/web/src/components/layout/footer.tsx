@@ -36,12 +36,10 @@ export function Footer() {
           <Link href="/politique-de-confidentialite" style={{ color: "var(--ink-500)" }}>Politique de confidentialité</Link>
           <Link href="/cgu" style={{ color: "var(--ink-500)" }}>CGU</Link>
           <Link href="/sources-des-donnees" style={{ color: "var(--ink-500)" }}>Sources des données</Link>
-          <a
-            href="https://creativecommons.org/licenses/by-sa/4.0/"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/cgu#propriete-intellectuelle"
             style={{ color: "var(--ink-500)", fontFamily: "var(--f-mono)", fontSize: 12 }}
-          >CC BY-SA 4.0</a>
+          >© {new Date().getFullYear()} Navventura · Tous droits réservés</Link>
         </div>
       </div>
     </footer>

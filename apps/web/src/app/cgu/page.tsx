@@ -10,7 +10,7 @@ export default function CguPage() {
   return (
     <div className="container mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Conditions générales d'utilisation</h1>
-      <p className="text-sm text-muted-foreground mb-8">Dernière mise à jour : 6 avril 2025</p>
+      <p className="text-sm text-muted-foreground mb-8">Dernière mise à jour : 3 novembre 2026</p>
 
       <section className="prose prose-sm max-w-none space-y-8 text-foreground">
 
@@ -55,17 +55,51 @@ export default function CguPage() {
             <li>ne pas publier de contenu illicite, diffamatoire, haineux ou trompeur.</li>
           </ul>
           <p className="mt-2">
-            Les contributions textuelles sont publiées sous licence{" "}
-            <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+            Vous restez l'auteur de vos contributions. En les publiant, vous accordez à Navventura, à titre
+            gratuit et non exclusif, pour le monde entier et pour toute la durée des droits, le droit de les
+            reproduire, de les représenter et de les adapter (mise en forme, traduction, regroupement avec
+            d'autres informations) pour les besoins du service. Les contributions textuelles publiées avant
+            le 3 novembre 2026 l'ont été sous licence{" "}
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fr" target="_blank" rel="noopener noreferrer" className="text-primary underline">
               CC BY-SA 4.0
-            </a>.
-            Les photos restent la propriété de leur auteur ; en les téléversant, vous accordez à Navventura
-            une licence d'affichage non exclusive et gratuite.
+            </a>{" "}
+            et le restent.
+          </p>
+        </div>
+
+        <div id="propriete-intellectuelle">
+          <h2 className="text-xl font-semibold mb-3">5. Propriété intellectuelle</h2>
+          <p className="mb-2">
+            Le site Navventura, sa marque, son logo, ses textes, son code, sa présentation graphique ainsi que
+            la base de données qu'il constitue (sélection, organisation et enrichissement des informations)
+            sont protégés par le droit d'auteur et par le droit des producteurs de bases de données
+            (articles L111-1 et L341-1 et suivants du Code de la propriété intellectuelle). Tous droits réservés.
+          </p>
+          <p className="mb-2">Sauf autorisation écrite préalable de Navventura, il est interdit :</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>de reproduire ou de représenter tout ou partie du site, à des fins commerciales ou non ;</li>
+            <li>
+              d'extraire ou de réutiliser une partie substantielle de la base de données, ou des parties non
+              substantielles de manière répétée et systématique (articles L342-1 et L342-2 du même code) ;
+            </li>
+            <li>
+              de collecter le contenu du site par des moyens automatisés (aspiration, scraping, robots), y compris
+              pour entraîner des systèmes d'intelligence artificielle. Navventura s'oppose expressément à la fouille
+              de textes et de données au sens de l'article L122-5-3 du même code ; cette opposition est également
+              exprimée dans le fichier robots.txt et par l'en-tête <code>tdm-reservation</code>.
+            </li>
+          </ul>
+          <p className="mt-2">
+            Les données issues de sources tierces (openAIP, OpenStreetMap, IGN, Météo-France, Wikimedia Commons…)
+            restent soumises à leur propre licence, que les présentes conditions ne restreignent pas : elles sont
+            listées, avec leurs licences, sur la page{" "}
+            <Link href="/sources-des-donnees" className="text-primary underline">Sources des données</Link>.
+            Pour les réutiliser, adressez-vous de préférence directement à ces sources.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">5. Modération</h2>
+          <h2 className="text-xl font-semibold mb-3">6. Modération</h2>
           <p>
             Navventura se réserve le droit de supprimer tout contenu contraire aux présentes CGU
             et de suspendre ou supprimer tout compte en cas d'abus, sans préavis ni indemnité.
@@ -73,7 +107,7 @@ export default function CguPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">6. Disponibilité du service</h2>
+          <h2 className="text-xl font-semibold mb-3">7. Disponibilité du service</h2>
           <p>
             Navventura est un service fourni sans garantie de disponibilité permanente. Nous nous
             réservons le droit d'interrompre ou de modifier le service à tout moment.
@@ -81,7 +115,7 @@ export default function CguPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">7. Responsabilité</h2>
+          <h2 className="text-xl font-semibold mb-3">8. Responsabilité</h2>
           <p>
             Navventura ne pourra être tenu responsable de tout dommage direct ou indirect résultant
             de l'utilisation des informations publiées sur la plateforme, notamment dans le cadre
@@ -90,7 +124,7 @@ export default function CguPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">8. Données personnelles</h2>
+          <h2 className="text-xl font-semibold mb-3">9. Données personnelles</h2>
           <p>
             Le traitement de vos données personnelles est décrit dans notre{" "}
             <Link href="/politique-de-confidentialite" className="text-primary underline">
@@ -100,7 +134,7 @@ export default function CguPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">9. Droit applicable</h2>
+          <h2 className="text-xl font-semibold mb-3">10. Droit applicable</h2>
           <p>
             Les présentes CGU sont soumises au droit français. Tout litige sera porté devant les
             juridictions compétentes du ressort du siège de Navventura.
@@ -108,7 +142,7 @@ export default function CguPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold mb-3">10. Contact</h2>
+          <h2 className="text-xl font-semibold mb-3">11. Contact</h2>
           <p>
             Pour toute question :{" "}
             <a href="mailto:contact@navventura.fr" className="text-primary underline">
