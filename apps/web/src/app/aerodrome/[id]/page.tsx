@@ -793,11 +793,16 @@ export default function AerodromeDetailPage() {
     setCorrectionActionAlert(null);
 
     try {
-      await apiClient.post(`/aerodromes/${id}/corrections`, {
-        field,
-        proposedValue: correctionValue.trim(),
-        reason: correctionReason.trim() || undefined,
-      });
+      const altcha = await solveAltcha();
+      await apiClient.post(
+        `/aerodromes/${id}/corrections`,
+        {
+          field,
+          proposedValue: correctionValue.trim(),
+          reason: correctionReason.trim() || undefined,
+        },
+        altcha ? { "x-altcha": altcha } : undefined,
+      );
 
       setCorrectionValue("");
       setCorrectionReason("");
