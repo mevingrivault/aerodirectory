@@ -1751,7 +1751,7 @@ export default function AerodromeDetailPage() {
         {/* FOOTER NOTICE */}
         <div style={{ marginTop: 28, padding: "12px 18px", background: "oklch(0.97 0.04 85)", border: "1px solid oklch(0.90 0.05 85)", borderRadius: 8, fontSize: 12, color: "var(--ink-700)", display: "flex", alignItems: "center", gap: 10 }}>
           <Info className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--ink-500)" }} />
-          <span>Les informations affichées sont indicatives et ne sauraient se substituer à la VAC en vigueur. Consultez les NOTAMs avant chaque vol.{ad.source && ` · Source : ${ad.source}`}</span>
+          <span>Les informations affichées, dont les obstacles et les zones sensibles, sont indicatives et non exhaustives : elles ne remplacent ni la VAC, ni la carte OACI, ni les NOTAM et SUP AIP en vigueur.{ad.source && ` · Source : ${ad.source}`}</span>
         </div>
       </div>
 
@@ -1835,8 +1835,7 @@ function ObstacleList({ obstacles }: { obstacles: NearbyObstacle[] }) {
           </div>
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Source : openAIP (données OpenStreetMap), non exhaustive et sans valeur réglementaire. Consultez la VAC et la carte OACI.
-          Relèvement vrai depuis le point de référence de l&apos;aérodrome.
+          Source : openAIP (données OpenStreetMap). Relèvement vrai depuis le point de référence de l&apos;aérodrome.
         </p>
       </CardContent>
     </Card>
@@ -1870,8 +1869,7 @@ function ProtectedAreaList({ areas }: { areas: NearbyProtectedArea[] }) {
           ))}
         </ul>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Ces zones peuvent faire l&apos;objet d&apos;une hauteur minimale de survol ou d&apos;une interdiction : vérifiez la carte OACI,
-          la VAC et les SUP AIP avant le vol. Source : IGN BD TOPO (Licence Ouverte), contours simplifiés.
+          Hauteur minimale de survol ou interdiction possibles. Source : IGN BD TOPO (Licence Ouverte), contours simplifiés.
         </p>
       </CardContent>
     </Card>
