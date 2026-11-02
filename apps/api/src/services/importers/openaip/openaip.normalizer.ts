@@ -14,7 +14,15 @@ import type {
   OpenAipAirport,
   OpenAipRunway,
   OpenAipFrequency,
+  OpenAipOperatingHours,
 } from "../../openaip/openaip.client";
+
+/**
+ * Part of the change-detection hash. Bump it when the normalizer starts
+ * reading new fields: every aerodrome is then rewritten once on the next
+ * sync, instead of only those whose openAIP data changed.
+ */
+export const NORMALIZER_VERSION = 2;
 import type { AerodromeType, AerodromeStatus, SurfaceType, FrequencyType, FuelType } from "@aerodirectory/database";
 
 // ─── Output types matching our Prisma schema ──────────────
@@ -37,6 +45,10 @@ export interface NormalizedAerodrome {
   winchOnly: boolean;
   handlingFacilities: number[];
   passengerFacilities: number[];
+  phones: NormalizedPhone[];
+  contactInfo: string | null;
+  openingHours: NormalizedOpeningSlot[];
+  sourceRemarks: string | null;
   source: string;
   sourceId: string;
   sourceRawHash: string;
@@ -69,6 +81,22 @@ export interface NormalizedFrequency {
 export interface NormalizedFuel {
   type: FuelType;
   available: boolean;
+}
+
+export interface NormalizedPhone {
+  label: string | null;
+  number: string;
+  remarks: string | null;
+}
+
+/** `from`/`to` are "HH:MM", or "SR"/"SS" for sunrise/sunset. */
+export interface NormalizedOpeningSlot {
+  day: number; // 0=Monday … 6=Sunday
+  from: string | null;
+  to: string | null;
+  byNotam: boolean;
+  holidaysExcluded: boolean;
+  remarks: string | null;
 }
 
 // ─── Type mappings ────────────────────────────────────────
@@ -191,9 +219,13 @@ export function normalizeOpenAipAirport(
     winchOnly: raw.winchOnly ?? false,
     handlingFacilities: normalizeNumericCodes(raw.services?.handlingFacilities ?? []),
     passengerFacilities: normalizeNumericCodes(raw.services?.passengerFacilities ?? []),
+    phones: normalizePhones(raw.telephoneServices ?? []),
+    contactInfo: cleanText(raw.contact, 500),
+    openingHours: normalizeOpeningHours(raw.hoursOfOperation?.operatingHours ?? []),
+    sourceRemarks: cleanText(raw.remarks, 2000),
     source: "openaip",
     sourceId: raw._id,
-    sourceRawHash: simpleHash(JSON.stringify(raw)),
+    sourceRawHash: simpleHash(`v${NORMALIZER_VERSION}:${JSON.stringify(raw)}`),
     lastSyncedAt: new Date(),
     runways: (raw.runways ?? [])
       .map(normalizeRunway)
@@ -259,6 +291,62 @@ function normalizeFrequency(raw: OpenAipFrequency): NormalizedFrequency | null {
     callsign: raw.name?.trim() || null,
     notes: raw.primary ? "Primary" : null,
   };
+}
+
+/** Trimmed text with whitespace runs collapsed (line breaks kept), or null. */
+export function cleanText(value: string | null | undefined, maxLength: number): string | null {
+  const text = value
+    ?.replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!text) return null;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+// Digits with the usual separators, optionally a leading +; no letters.
+const PHONE_PATTERN = /^\+?[\d][\d\s().\-/]{4,30}$/;
+
+export function normalizePhones(
+  services: { name?: string; phoneNumber?: string; remarks?: string }[],
+): NormalizedPhone[] {
+  const seen = new Set<string>();
+  const phones: NormalizedPhone[] = [];
+  for (const service of services) {
+    const number = service.phoneNumber?.trim().replace(/\s+/g, " ");
+    if (!number || !PHONE_PATTERN.test(number)) continue;
+    const key = number.replace(/[^\d+]/g, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    phones.push({
+      label: cleanText(service.name, 80),
+      number,
+      remarks: cleanText(service.remarks, 200),
+    });
+  }
+  return phones;
+}
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/;
+const hhmm = (time: string | undefined) => {
+  const match = time?.match(TIME_PATTERN);
+  return match ? `${match[1]}:${match[2]}` : null;
+};
+
+export function normalizeOpeningHours(slots: OpenAipOperatingHours[]): NormalizedOpeningSlot[] {
+  return slots
+    .filter((slot) => Number.isInteger(slot.dayOfWeek) && slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6)
+    .map((slot) => ({
+      day: slot.dayOfWeek,
+      from: slot.sunrise ? "SR" : hhmm(slot.startTime),
+      to: slot.sunset ? "SS" : hhmm(slot.endTime),
+      byNotam: slot.byNotam ?? false,
+      holidaysExcluded: slot.publicHolidaysExcluded ?? false,
+      remarks: cleanText(slot.remarks, 200),
+    }))
+    .sort((a, b) => a.day - b.day || (a.from ?? "").localeCompare(b.from ?? ""));
 }
 
 function normalizeNumericCodes(values: number[]): number[] {

@@ -55,7 +55,7 @@ import {
   Sunrise,
   Sunset,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import type { CSSProperties } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
@@ -87,6 +87,16 @@ interface PhotoEntry {
   height: number | null;
   createdAt: string;
   user: { id: string; displayName: string | null };
+}
+
+/** `from`/`to` are "HH:MM" (UTC or local as published), or "SR"/"SS" for sunrise/sunset. */
+interface OpeningSlot {
+  day: number; // 0=Monday … 6=Sunday
+  from: string | null;
+  to: string | null;
+  byNotam: boolean;
+  holidaysExcluded: boolean;
+  remarks: string | null;
 }
 
 interface CommonsPhoto {
@@ -124,6 +134,10 @@ interface AerodromeDetail {
   vacLink: string | null;
   websiteUrl: string | null;
   wikipediaUrl: string | null;
+  phones: { label: string | null; number: string; remarks: string | null }[];
+  contactInfo: string | null;
+  openingHours: OpeningSlot[];
+  sourceRemarks: string | null;
   commonsPhoto: CommonsPhoto | null;
   handlingFacilities: number[];
   passengerFacilities: number[];
@@ -1220,6 +1234,8 @@ export default function AerodromeDetailPage() {
                   </section>
                 )}
 
+                <ContactSection ad={ad} asideH={asideH} />
+
                 {(ad.ppr || ad.privateUse || ad.skydiveActivity || ad.winchOnly) && (
                   <section style={{ marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
@@ -1787,6 +1803,75 @@ export default function AerodromeDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── ContactSection ────────────────────────────────────────────────────────
+
+const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+function slotLabel(slot: OpeningSlot): string {
+  if (slot.byNotam) return "Sur NOTAM";
+  const time = (t: string | null) => (t === "SR" ? "lever du soleil" : t === "SS" ? "coucher du soleil" : t ?? "?");
+  return `${time(slot.from)} – ${time(slot.to)}`;
+}
+
+/** Phone numbers, contact, opening hours and remarks published on openAIP. */
+function ContactSection({ ad, asideH }: { ad: AerodromeDetail; asideH: CSSProperties }) {
+  const phones = ad.phones ?? [];
+  const slots = ad.openingHours ?? [];
+  if (phones.length === 0 && !ad.contactInfo && slots.length === 0 && !ad.sourceRemarks) return null;
+
+  const byDay = DAY_LABELS.map((label, day) => ({ label, slots: slots.filter((s) => s.day === day) })).filter((d) => d.slots.length > 0);
+  const block: CSSProperties = { fontSize: 13, color: "var(--ink-800)", lineHeight: 1.6, margin: 0, whiteSpace: "pre-line" };
+
+  return (
+    <section style={{ marginBottom: 20 }}>
+      <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22 }}>
+        <div style={asideH}>Contact et horaires</div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {(phones.length > 0 || ad.contactInfo) && (
+            <div>
+              {phones.map((phone) => (
+                <div key={phone.number} style={{ marginBottom: 8 }}>
+                  <a href={`tel:${phone.number.replace(/[^\d+]/g, "")}`} style={{ fontSize: 14, fontWeight: 600, color: "var(--horizon-700)", textDecoration: "none" }}>{phone.number}</a>
+                  {(phone.label || phone.remarks) && (
+                    <div style={{ fontSize: 12, color: "var(--ink-500)" }}>{[phone.label, phone.remarks].filter(Boolean).join(" · ")}</div>
+                  )}
+                </div>
+              ))}
+              {ad.contactInfo && <p style={block}>{ad.contactInfo}</p>}
+            </div>
+          )}
+          {byDay.length > 0 && (
+            <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 16, rowGap: 4, fontSize: 13, margin: 0 }}>
+              {byDay.map(({ label, slots: daySlots }) => (
+                <Fragment key={label}>
+                  <dt style={{ color: "var(--ink-500)" }}>{label}</dt>
+                  <dd style={{ margin: 0, color: "var(--ink-950)" }}>
+                    {daySlots.map((slot, i) => (
+                      <div key={i}>
+                        {slotLabel(slot)}
+                        {(slot.holidaysExcluded || slot.remarks) && (
+                          <span style={{ color: "var(--ink-500)" }}> · {[slot.holidaysExcluded && "sauf jours fériés", slot.remarks].filter(Boolean).join(" · ")}</span>
+                        )}
+                      </div>
+                    ))}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+        </div>
+        {ad.sourceRemarks && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--ink-200)" }}>
+            <div style={{ fontSize: 11, color: "var(--ink-500)", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "var(--f-mono)", fontWeight: 600, marginBottom: 6 }}>Remarques</div>
+            <p style={block}>{ad.sourceRemarks}</p>
+          </div>
+        )}
+        <p style={{ fontSize: 11, color: "var(--ink-500)", margin: "14px 0 0" }}>Source : openAIP.</p>
+      </div>
+    </section>
   );
 }
 

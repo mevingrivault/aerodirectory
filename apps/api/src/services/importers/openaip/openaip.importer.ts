@@ -7,7 +7,7 @@
  * Child collections (runways, frequencies) are replaced per airport inside a transaction.
  */
 
-import type { PrismaClient } from "@aerodirectory/database";
+import type { Prisma, PrismaClient } from "@aerodirectory/database";
 import { OpenAipClient } from "../../openaip/openaip.client";
 import {
   normalizeOpenAipAirport,
@@ -108,7 +108,13 @@ async function upsertAirport(
   prisma: PrismaClient,
   airport: NormalizedAerodrome,
 ): Promise<{ action: "created" | "updated" | "unchanged"; aerodromeId: string | null }> {
-  const { runways, frequencies, fuels, ...aerodromeData } = airport;
+  const { runways, frequencies, fuels, phones, openingHours, ...scalars } = airport;
+  const aerodromeData = {
+    ...scalars,
+    // JSON columns: Prisma wants its own JSON type, not our interfaces.
+    phones: phones as unknown as Prisma.InputJsonValue,
+    openingHours: openingHours as unknown as Prisma.InputJsonValue,
+  };
 
   // Check if this airport already exists by source+sourceId
   const existing = await prisma.aerodrome.findUnique({

@@ -326,6 +326,12 @@ model Aerodrome {
   vacLink          String?
   websiteUrl       String?
   wikipediaUrl     String?
+  // From openAIP: [{ label, number, remarks }], free-text contact, opening
+  // slots [{ day, from, to, byNotam, holidaysExcluded, remarks }] and remarks.
+  phones           Json            @default("[]")
+  contactInfo      String?
+  openingHours     Json            @default("[]")
+  sourceRemarks    String?
   description      String?
   handlingFacilities  Int[]        @default([])
   passengerFacilities Int[]        @default([])

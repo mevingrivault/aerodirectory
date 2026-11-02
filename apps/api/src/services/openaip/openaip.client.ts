@@ -51,6 +51,22 @@ export interface OpenAipAirport {
   private?: boolean;
   skydiveActivity?: boolean;
   winchOnly?: boolean;
+  contact?: string;
+  remarks?: string;
+  telephoneServices?: { name: string; phoneNumber: string; remarks?: string }[];
+  hoursOfOperation?: { operatingHours?: OpenAipOperatingHours[] };
+}
+
+/** One opening slot; the start or end is sunrise/sunset when the flag is set. */
+export interface OpenAipOperatingHours {
+  dayOfWeek: number; // 0=Monday … 6=Sunday
+  startTime?: string;
+  endTime?: string;
+  sunrise?: boolean;
+  sunset?: boolean;
+  byNotam?: boolean;
+  publicHolidaysExcluded?: boolean;
+  remarks?: string;
 }
 
 export interface OpenAipRunway {
