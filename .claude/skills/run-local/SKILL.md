@@ -65,6 +65,13 @@ curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:3000/
   demo aerodromes (LFPB, LFPN, LFLY, LFCH, …) for the map, search and
   aerodrome pages. Without a browser, say what couldn't be checked
   instead of claiming it works.
+- **Imported data** (obstacles, protected areas, aerial lines, wind rose,
+  Commons photos…): the seed has none. Imports are sync sources and the
+  local API runs without the worker, so a run triggered from the admin
+  page stays queued. Set `SYNC_ENABLED=true` in `apps/api/.env`, restart,
+  then trigger the source from `/admin`. Mind the volumes: `OSM` downloads
+  ~4 GB, `WIND_CLIMATE` ~2.8 GB, `COMMONS` one file per photo; the IGN
+  sources take seconds.
 
 ## 5. Clean up
 

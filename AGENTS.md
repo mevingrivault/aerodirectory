@@ -16,11 +16,32 @@ pnpm monorepo (`pnpm-workspace.yaml`):
 - `packages/shared` — Zod schemas, types and constants used by both apps.
 - `packages/database` — Prisma 7 schema, migrations, seed. The generated
   client lives in `src/generated/` (git-ignored).
-- `scripts/` — data imports (openAIP, OpenAir, OSM) and region/flag syncs,
-  run with `tsx` from the root `package.json` scripts.
+- `scripts/` — the same imports run by hand with `tsx`, **local only**
+  (`run-imports.sh` included).
 
-Data flow: openAIP/OSM → import scripts → PostgreSQL/PostGIS → API → web.
-Neither app calls openAIP at runtime.
+## Data sources
+
+Imports live in `apps/api/src/services/importers/<source>/` and run as
+sources of the sync worker (`apps/api/src/sync/`: cron, retries, admin
+trigger at `POST /admin/sync/:source`). In production Postgres and S3 sit on
+the internal Docker network: an import that is not a sync source cannot run
+there.
+
+| Sync source | What | Licence |
+|---|---|---|
+| `OPENAIP` | aerodromes, runways, frequencies, fuel, phones, hours | CC BY-NC |
+| `AIRSPACES`, `OBSTACLES` | airspaces; wind turbines, towers… | CC BY-NC |
+| `OSM` | restaurants, transport, lodging around fields | ODbL |
+| `REGIONS` | city/region via Nominatim | ODbL |
+| `OURAIRPORTS` | `websiteUrl`, `wikipediaUrl` | public domain |
+| `COMMONS` | one photo per aerodrome (Wikidata P18), copied to S3 | per file, credited |
+| `PROTECTED_AREAS`, `AERIAL_LINES` | BD TOPO via Géoplateforme WFS (`ign/wfs.ts`) | Licence Ouverte |
+| `WIND_CLIMATE` | wind rose per Météo-France station, 2020-2024 | Licence Ouverte |
+
+Runtime calls to outside services: CheckWX (METAR/TAF, `metar/`) and HEAD
+requests to the SIA for the current AIRAC cycle's VAC/AD 2 (`sia/`), both
+cached and with timeouts. Nothing else is fetched at request time, and
+browsers load nothing from third parties except map tiles (CSP).
 
 ## Toolchain
 
@@ -73,6 +94,24 @@ to the code.
   editing them.
 - `apps/web/scripts/copy-altcha.mjs` copies the ALTCHA widget into
   `public/` before `dev` and `build`.
+- Migrations are applied in production by `apps/api/docker/migrate.mjs`
+  (each `migration.sql` in one go, no Prisma CLI), in the `migrate` service
+  before the API starts. Write them by hand from
+  `prisma migrate diff --from-schema <old> --to-schema prisma/schema.prisma --script`,
+  with `"public".` names and `IF NOT EXISTS` where possible. `ALTER TYPE …
+  ADD VALUE` is fine as long as the same file does not use the new value.
+- Text from openAIP, OSM, Nominatim or Wikimedia is user-editable upstream:
+  never put it in HTML strings (MapLibre `setHTML`, `innerHTML`); build DOM
+  nodes (`apps/web/src/lib/map-popup.ts`). The CSP allows inline scripts.
+- Bulk imports rebuild their table in one transaction and throw instead of
+  writing when the answer looks truncated (minimum count), so a bad run
+  keeps the previous data. A failed external call is never cached.
+- The openAIP change-detection hash includes `NORMALIZER_VERSION`
+  (`openaip.normalizer.ts`): bump it when the normalizer reads a new field,
+  or existing aerodromes never get it.
+- The checkout tends to grow macOS-style `name 2.ext` copies of recently
+  written files (folder sync). Stage explicit paths, and run
+  `find . -name "* 2.*" -not -path "*/node_modules/*"` before committing.
 - A push to `main` builds, scans (Trivy) and publishes the `:latest`
   images. Work on a branch and merge when CI-equivalent checks pass.
 
@@ -86,10 +125,10 @@ to the code.
 - Major dependency upgrades go on a `feat/<dep>-v<N>` branch, after
   reading the package's changelog or migration guide.
 
-## vexp - Context-Aware AI Coding <!-- vexp v3.3.7 -->
+## vexp - Context-Aware AI Coding <!-- vexp v3.3.8 -->
 
 ### Context strategy: call run_pipeline ONCE at task start
-If the task already names the files/symbols to touch, SKIP vexp. Otherwise one
+If the task already names the files/symbols to touch, skip run_pipeline. Otherwise one
 `run_pipeline({ "task": "..." })` returns ranked pivot files with line ranges and
 blast radius. Do NOT open files one by one to find your way around - every extra
 tool call costs a turn. Call it again ONLY when the task moves to a new area.
