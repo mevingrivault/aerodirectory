@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+// Self-hosted fonts (OFL): bundled by Next and served from our origin, so
+// visitors never contact Google Fonts.
+import "@fontsource-variable/fraunces/opsz.css";
+import "@fontsource-variable/inter/index.css";
+import "@fontsource-variable/jetbrains-mono/index.css";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Header } from "@/components/layout/header";

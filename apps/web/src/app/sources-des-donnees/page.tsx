@@ -119,14 +119,6 @@ const LIVE: Source[] = [
     licence: "Conditions d'utilisation d'Esri",
     credit: "Esri, Maxar, Earthstar Geographics",
   },
-  {
-    name: "Google Fonts",
-    url: "https://fonts.google.com",
-    what: "Polices de caractères du site (Fraunces, Inter, JetBrains Mono), chargées par votre navigateur.",
-    refresh: "En direct.",
-    licence: "SIL Open Font License",
-    licenceUrl: "https://openfontlicense.org",
-  },
 ];
 
 function SourceList({ sources }: { sources: Source[] }) {
@@ -210,6 +202,27 @@ export default function SourcesPage() {
               Les conditions de publication sont décrites dans les <Link href="/cgu" className="underline underline-offset-4">CGU</Link>.
             </p>
           </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-2">Polices de caractères</h2>
+          <p className="text-sm">
+            Fraunces, Inter et JetBrains Mono, sous{" "}
+            <a href="https://openfontlicense.org" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+              SIL Open Font License
+            </a>
+            , hébergées par Navventura : votre navigateur ne contacte aucun service de polices.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-2">Droits de Navventura</h2>
+          <p className="text-sm">
+            En dehors des données tierces ci-dessus, qui restent sous leur licence, le site et sa base de données
+            sont protégés et toute reproduction ou extraction sans autorisation est interdite. Voir la section{" "}
+            <Link href="/cgu#propriete-intellectuelle" className="underline underline-offset-4">Propriété intellectuelle</Link>{" "}
+            des CGU.
+          </p>
         </section>
 
         <section>

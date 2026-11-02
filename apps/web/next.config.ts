@@ -36,8 +36,8 @@ function contentSecurityPolicy(): string {
   const directives = [
     `default-src ${self}`,
     `script-src ${self} 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
-    `style-src ${self} 'unsafe-inline' https://fonts.googleapis.com`,
-    `font-src ${self} https://fonts.gstatic.com data:`,
+    `style-src ${self} 'unsafe-inline'`,
+    `font-src ${self} data:`,
     `img-src ${self} data: blob: ${tileHosts.join(" ")}`,
     `connect-src ${connect.join(" ")}`,
     `worker-src ${self} blob:`,
@@ -65,6 +65,9 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Text and data mining reserved (TDMRep), see robots.ts and the CGU.
+          { key: "tdm-reservation", value: "1" },
+          { key: "tdm-policy", value: "https://navventura.fr/cgu#propriete-intellectuelle" },
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(self)",
