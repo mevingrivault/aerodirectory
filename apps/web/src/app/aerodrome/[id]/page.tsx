@@ -618,6 +618,16 @@ export default function AerodromeDetailPage() {
     staleTime: 30 * 60 * 1000,
   });
 
+  // VAC and AD 2 of the AIRAC cycle in force (or the links set by hand on the sheet).
+  const { data: docsRes } = useQuery({
+    queryKey: ["documents", id],
+    queryFn: () => apiClient.get<{ vacUrl: string | null; aipUrl: string | null; airac: string | null }>(`/aerodromes/${id}/documents`),
+    enabled: !!ad,
+    staleTime: 60 * 60 * 1000,
+  });
+  const vacHref = docsRes?.data?.vacUrl ?? ad?.vacLink ?? null;
+  const aipHref = docsRes?.data?.aipUrl ?? ad?.aipLink ?? null;
+
   const { data: obstaclesRes } = useQuery({
     queryKey: ["obstacles", id],
     queryFn: () => apiClient.get<NearbyObstacle[]>(`/aerodromes/${id}/obstacles`, { radiusMeters: "10000" }),
@@ -1243,7 +1253,7 @@ export default function AerodromeDetailPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                       <div style={sectionMark}><Plane className="h-3.5 w-3.5" /></div>
                       <h2 style={sectionH2}>Pistes</h2>
-                      {ad.vacLink && <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={sectionAction}>Voir VAC <ExternalLink className="h-3 w-3" /></a>}
+                      {vacHref && <a href={vacHref} target="_blank" rel="noopener noreferrer" style={sectionAction}>Voir VAC <ExternalLink className="h-3 w-3" /></a>}
                     </div>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       {ad.runways.map((r) => (
@@ -1654,7 +1664,7 @@ export default function AerodromeDetailPage() {
                 <Link href={`/planner?to=${ad.id}`} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", background: "var(--ink-950)", color: "white", borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: "none" }}><Send className="h-4 w-4" /> Planifier un vol</Link>
                 {user && <button type="button" onClick={() => handleVisit("VISITED")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><CheckCircle2 className="h-4 w-4" /> {isVisited ? "Aérodex ✓" : "Ajouter à l'Aérodex"}</button>}
                 {user && <button type="button" onClick={() => handleVisit("FAVORITE")} disabled={isVisitUpdating} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: isVisitUpdating ? 0.6 : 1 }}><Star className="h-4 w-4" style={{ fill: isFavorite ? "var(--brass-500)" : "none", color: isFavorite ? "var(--brass-500)" : "var(--ink-950)" }} /> {isFavorite ? "Favori ✓" : "Ajouter aux favoris"}</button>}
-                {ad.vacLink && <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><FileText className="h-4 w-4" /> Voir la VAC officielle</a>}
+                {vacHref && <a href={vacHref} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 16px", border: "1px solid var(--ink-300)", borderRadius: 8, background: "white", color: "var(--ink-950)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}><FileText className="h-4 w-4" /> Voir la VAC officielle</a>}
 
                 {user && userLists.length > 0 && (
                   <div style={{ marginTop: 4 }}>
@@ -1710,35 +1720,35 @@ export default function AerodromeDetailPage() {
             )}
 
             {/* Liens */}
-            {(ad.websiteUrl || ad.wikipediaUrl || ad.aipLink || ad.vacLink) && (
+            {(ad.websiteUrl || ad.wikipediaUrl || aipHref || vacHref) && (
               <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 18 }}>
                 <div style={asideH}><ExternalLink className="h-3 w-3" /> Liens</div>
                 <div>
                   {ad.websiteUrl && (
-                    <a href={ad.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.wikipediaUrl || ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                    <a href={ad.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.wikipediaUrl || aipHref || vacHref) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
                       <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
                       <div><div style={contactLabel}>Site web</div><div style={contactValue}>{(() => { try { return new URL(ad.websiteUrl).hostname; } catch { return ad.websiteUrl; } })()}</div></div>
                       <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
                     </a>
                   )}
                   {ad.wikipediaUrl && (
-                    <a href={ad.wikipediaUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (ad.aipLink || ad.vacLink) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                    <a href={ad.wikipediaUrl} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: (aipHref || vacHref) ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
                       <FileText className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
                       <div><div style={contactLabel}>Wikipédia</div><div style={contactValue}>{(() => { try { return decodeURIComponent(new URL(ad.wikipediaUrl).pathname.split("/").pop() ?? "").replace(/_/g, " "); } catch { return "Article"; } })()}</div></div>
                       <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
                     </a>
                   )}
-                  {ad.aipLink && (
-                    <a href={ad.aipLink} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: ad.vacLink ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
+                  {aipHref && (
+                    <a href={aipHref} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: vacHref ? "1px dashed var(--ink-200)" : "none", textDecoration: "none" }}>
                       <FileText className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
-                      <div><div style={contactLabel}>AIP</div><div style={contactValue}>Documentation officielle SIA</div></div>
+                      <div><div style={contactLabel}>AIP</div><div style={contactValue}>Fiche AD 2 de l&apos;eAIP (SIA)</div></div>
                       <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
                     </a>
                   )}
-                  {ad.vacLink && (
-                    <a href={ad.vacLink} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", textDecoration: "none" }}>
+                  {vacHref && (
+                    <a href={vacHref} target="_blank" rel="noopener noreferrer" style={{ display: "grid", gridTemplateColumns: "28px 1fr auto", gap: 12, alignItems: "center", padding: "10px 0", textDecoration: "none" }}>
                       <Download className="h-3.5 w-3.5" style={{ color: "var(--ink-500)" }} />
-                      <div><div style={contactLabel}>VAC</div><div style={contactValue}>Vue en approche et circuits</div></div>
+                      <div><div style={contactLabel}>VAC</div><div style={contactValue}>{docsRes?.data?.airac ? `Cycle AIRAC du ${new Date(docsRes.data.airac).toLocaleDateString("fr-FR", { timeZone: "UTC" })}` : "Vue en approche et circuits"}</div></div>
                       <ExternalLink className="h-3 w-3" style={{ color: "var(--ink-400)" }} />
                     </a>
                   )}

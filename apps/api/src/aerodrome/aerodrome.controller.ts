@@ -18,6 +18,7 @@ import { AccommodationService } from "../accommodation/accommodation.service";
 import { z } from "zod";
 import { MetarService } from "../metar/metar.service";
 import { computeSunTimes } from "../metar/sun";
+import { SiaService } from "../sia/sia.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { ok, paginated } from "../common/api-response";
 import { Public, Roles, CurrentUser } from "../common/decorators";
@@ -57,6 +58,7 @@ export class AerodromeController {
     private readonly transport: TransportService,
     private readonly accommodation: AccommodationService,
     private readonly metar: MetarService,
+    private readonly sia: SiaService,
   ) {}
 
   @Public()
@@ -225,6 +227,20 @@ export class AerodromeController {
       aerodrome.longitude,
     );
     return ok(result);
+  }
+
+  /** VAC and AD 2 links of the AIRAC cycle in force; a link set by hand on the sheet wins. */
+  @Public()
+  @Get(":id/documents")
+  @Header("Cache-Control", "public, max-age=3600")
+  async getDocuments(@Param("id") id: string) {
+    const aerodrome = await this.aerodromes.findById(id);
+    const sia = await this.sia.getDocuments(aerodrome.icaoCode ?? null);
+    return ok({
+      vacUrl: aerodrome.vacLink ?? sia.vacUrl,
+      aipUrl: aerodrome.aipLink ?? sia.ad2Url,
+      airac: sia.airac,
+    });
   }
 
   @Public()
