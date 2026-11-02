@@ -244,6 +244,13 @@ export class AerodromeController {
   }
 
   @Public()
+  @Get(":id/wind-climate")
+  @Header("Cache-Control", "public, max-age=86400")
+  async getWindClimate(@Param("id") id: string) {
+    return ok(await this.aerodromes.findWindClimate(id));
+  }
+
+  @Public()
   @Get(":id/obstacles")
   @Header("Cache-Control", "public, max-age=3600")
   async getObstacles(

@@ -17,6 +17,7 @@ import { wikimediaApi } from "../services/importers/wikimedia/wikimedia.client";
 import { syncCommonsPhotos } from "../services/importers/wikimedia/wikimedia.importer";
 import { syncOpenAipObstacles } from "../services/importers/openaip/openaip-obstacles.importer";
 import { syncProtectedAreas } from "../services/importers/ign/protected-areas.importer";
+import { syncWindClimate } from "../services/importers/meteofrance/wind-climate.importer";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
 import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
@@ -42,6 +43,8 @@ const COMMONS_CRON = process.env["SYNC_COMMONS_CRON"] ?? "30 5 * * 0";
 const OBSTACLES_CRON = process.env["SYNC_OBSTACLES_CRON"] ?? "0 3 * * 1";
 // Monthly: the inventory changes a few times a year.
 const PROTECTED_AREAS_CRON = process.env["SYNC_PROTECTED_AREAS_CRON"] ?? "0 4 2 * *";
+// Yearly: a closed multi-year period; Météo-France republishes it around January.
+const WIND_CLIMATE_CRON = process.env["SYNC_WIND_CLIMATE_CRON"] ?? "0 4 15 2 *";
 const SYNC_TIMEZONE = process.env["SYNC_TIMEZONE"] ?? "Europe/Paris";
 const WORKER_HEARTBEAT_KEY = "navventura:sync:worker-heartbeat";
 const WORKER_HEARTBEAT_TTL_SECONDS = 120;
@@ -211,6 +214,15 @@ export class SyncService implements OnModuleInit {
   async scheduleProtectedAreas() {
     if (!this.workerEnabled) return;
     await this.enqueueRun("PROTECTED_AREAS", "SCHEDULED");
+  }
+
+  @Cron(WIND_CLIMATE_CRON, {
+    name: "sync-enqueue-wind-climate",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleWindClimate() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("WIND_CLIMATE", "SCHEDULED");
   }
 
   @Cron("0 * * * * *", {
@@ -502,6 +514,8 @@ export class SyncService implements OnModuleInit {
         return this.executeObstacles(run);
       case "PROTECTED_AREAS":
         return this.executeProtectedAreas(run);
+      case "WIND_CLIMATE":
+        return this.executeWindClimate(run);
       default:
         throw new Error(`Source non supportée: ${run.source}`);
     }
@@ -825,6 +839,27 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  private async executeWindClimate(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "wind_climate_import", 1);
+
+    try {
+      const result = await syncWindClimate(this.prisma as never, { log: (line) => this.logger.log(line) });
+      await this.completeStep(run.id, "wind_climate_import", {
+        metrics: { files: result.files, lines: result.lines, stations: result.stations, imported: result.imported },
+        logSummary: `Stations retenues: ${result.imported} sur ${result.stations}, ${result.lines} lignes lues`,
+      });
+
+      return {
+        source: "WIND_CLIMATE" as const,
+        status: "SUCCESS" as const,
+        summary: toInputJsonValue(result),
+      };
+    } catch (error) {
+      await this.failStep(run.id, "wind_climate_import", error);
+      throw error;
+    }
+  }
+
   private async startStep(runId: string, stepKey: string, stepOrder: number) {
     await this.prisma.syncRunStep.upsert({
       where: { runId_stepKey: { runId, stepKey } },
@@ -1046,6 +1081,8 @@ export class SyncService implements OnModuleInit {
         return OBSTACLES_CRON;
       case "PROTECTED_AREAS":
         return PROTECTED_AREAS_CRON;
+      case "WIND_CLIMATE":
+        return WIND_CLIMATE_CRON;
       default:
         return "";
     }

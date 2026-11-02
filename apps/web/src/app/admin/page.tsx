@@ -41,6 +41,7 @@ const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
   COMMONS: "Photos Commons",
   OBSTACLES: "Obstacles",
   PROTECTED_AREAS: "Zones protégées",
+  WIND_CLIMATE: "Climatologie du vent",
 };
 
 export default function AdminPage() {

@@ -59,6 +59,7 @@ import { useState, useEffect, Fragment } from "react";
 import type { CSSProperties } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
+import { WindRoseCard, type WindClimate } from "@/components/ui/wind-rose";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
 import { commonsPhotoUrl } from "@/lib/commons-photo";
@@ -641,6 +642,13 @@ export default function AerodromeDetailPage() {
   });
   const vacHref = docsRes?.data?.vacUrl ?? ad?.vacLink ?? null;
   const aipHref = docsRes?.data?.aipUrl ?? ad?.aipLink ?? null;
+
+  const { data: windClimateRes } = useQuery({
+    queryKey: ["wind-climate", id],
+    queryFn: () => apiClient.get<WindClimate | null>(`/aerodromes/${id}/wind-climate`),
+    enabled: !!ad,
+    staleTime: 24 * 60 * 60 * 1000,
+  });
 
   const { data: obstaclesRes } = useQuery({
     queryKey: ["obstacles", id],
@@ -1532,6 +1540,12 @@ export default function AerodromeDetailPage() {
                   </div>
                   <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
                   <SunCard sun={sunRes?.data ?? null} loading={sunLoading} />
+                  {windClimateRes?.data && (
+                    <WindRoseCard
+                      climate={windClimateRes.data}
+                      runwayHeadings={[...new Set(ad.runways.map((r) => r.trueHeading).filter((h): h is number => h != null).map((h) => h % 180))]}
+                    />
+                  )}
                 </section>
               </div>
             )}

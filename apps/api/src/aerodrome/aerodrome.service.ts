@@ -14,6 +14,26 @@ import {
 /** Sheets created through the API carry this source; imported ones carry the importer's name. */
 export const MANUAL_SOURCE = "manual";
 
+/**
+ * 36 bins of 10° × speed classes → 12 sectors of 30°, each centred on its
+ * heading (the 000° sector takes 350°, 000° and 010°), in percent of hours.
+ */
+export function windRose(counts: number[][], calm: number, observations: number) {
+  const pct = (n: number) => (observations > 0 ? Math.round((1000 * n) / observations) / 10 : 0);
+  const sectors = Array.from({ length: 12 }, (_, s) => {
+    const classes = [0, 0, 0];
+    for (const offset of [-1, 0, 1]) {
+      const bin = (s * 3 + offset + 36) % 36;
+      (counts[bin] ?? []).forEach((n, c) => {
+        classes[c] = (classes[c] ?? 0) + n;
+      });
+    }
+    return { heading: s * 30, classes: classes.map(pct), total: pct(classes.reduce((a, b) => a + b, 0)) };
+  });
+  const prevailing = sectors.reduce((best, s) => (s.total > best.total ? s : best), sectors[0]!);
+  return { sectors, calm: pct(calm), prevailingHeading: prevailing.heading, observations };
+}
+
 /** Initial great-circle bearing from A to B, in whole degrees true (0–359). */
 export function initialBearing(latA: number, lonA: number, latB: number, lonB: number): number {
   const rad = Math.PI / 180;
@@ -86,6 +106,46 @@ export class AerodromeService {
   }
 
   private static readonly MAX_OBSTACLES = 500;
+  private static readonly WIND_STATION_MAX_KM = 30;
+
+  /**
+   * Prevailing-wind rose from the nearest Météo-France station within 30 km,
+   * as percentages of the hours: 12 sectors of 30° (where the wind blows
+   * from) × 3 speed classes, plus calm.
+   */
+  async findWindClimate(id: string) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id },
+      select: { latitude: true, longitude: true },
+    });
+    if (!aerodrome) {
+      throw new NotFoundException("Aerodrome not found");
+    }
+
+    const { latitude: lat, longitude: lon } = aerodrome;
+    const km = AerodromeService.WIND_STATION_MAX_KM;
+    const dLat = km / 111.32;
+    const dLon = km / (111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+    const stations = await this.prisma.windClimate.findMany({
+      where: {
+        latitude: { gte: lat - dLat, lte: lat + dLat },
+        longitude: { gte: lon - dLon, lte: lon + dLon },
+      },
+    });
+
+    const nearest = stations
+      .map((s) => ({ station: s, distanceKm: haversineKm(lat, lon, s.latitude, s.longitude) }))
+      .filter((s) => s.distanceKm <= km)
+      .sort((a, b) => a.distanceKm - b.distanceKm)[0];
+    if (!nearest) return null;
+
+    const { station, distanceKm } = nearest;
+    return {
+      station: { name: station.name, altitudeM: station.altitudeM, distanceKm: Math.round(distanceKm * 10) / 10 },
+      period: { from: station.periodStart, to: station.periodEnd },
+      ...windRose(station.counts as number[][], station.calm, station.observations),
+    };
+  }
 
   /**
    * Protected areas within `radiusMeters` of the aerodrome reference point

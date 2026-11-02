@@ -129,6 +129,7 @@ enum SyncSource {
   COMMONS
   OBSTACLES
   PROTECTED_AREAS
+  WIND_CLIMATE
 
   @@schema("public")
 }
@@ -807,6 +808,29 @@ model ProtectedArea {
   @@unique([source, sourceId])
   @@index([minLat, maxLat, minLon, maxLon])
   @@map("protected_areas")
+  @@schema("public")
+}
+
+// Wind climatology of a Météo-France station (hourly data, Licence
+// Ouverte), for the prevailing-wind rose of nearby aerodromes. `counts` is
+// 36 directions (0°, 10°, … 350°, where the wind blows from) × 3 speed
+// classes (1–10 kt, 11–20 kt, > 20 kt) of hourly observations.
+model WindClimate {
+  id           String   @id @default(cuid())
+  stationId    String   @unique // NUM_POSTE
+  name         String
+  latitude     Float
+  longitude    Float
+  altitudeM    Int?
+  periodStart  Int      // first year
+  periodEnd    Int      // last year
+  observations Int      // hours with a valid wind
+  calm         Int      // hours below 1 kt
+  counts       Json
+  updatedAt    DateTime @updatedAt
+
+  @@index([latitude, longitude])
+  @@map("wind_climate")
   @@schema("public")
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { NotFoundException } from "@nestjs/common";
-import { AerodromeService, initialBearing } from "./aerodrome.service";
+import { AerodromeService, initialBearing, windRose } from "./aerodrome.service";
 
 /**
  * Obstacles shown around an aerodrome: only those inside the radius,
@@ -79,6 +79,54 @@ describe("AerodromeService.findProtectedAreasNear", () => {
     const where = prisma.protectedArea.findMany.mock.calls[0]![0].where;
     expect(where.minLat.lte).toBeGreaterThan(48.7519);
     expect(where.maxLat.gte).toBeLessThan(48.7519);
+  });
+});
+
+describe("windRose", () => {
+  it("folds 10° bins into 30° sectors centred on their heading, in percent", () => {
+    const counts = Array.from({ length: 36 }, () => [0, 0, 0]);
+    counts[35] = [10, 0, 0]; // 350° → north sector
+    counts[0] = [10, 5, 0];
+    counts[1] = [5, 0, 0]; // 010° → north sector
+    counts[2] = [0, 0, 20]; // 020° → 030° sector
+    counts[27] = [30, 10, 0]; // 270°
+
+    const rose = windRose(counts, 10, 100);
+
+    expect(rose.sectors).toHaveLength(12);
+    expect(rose.sectors[0]).toEqual({ heading: 0, classes: [25, 5, 0], total: 30 });
+    expect(rose.sectors[1]).toEqual({ heading: 30, classes: [0, 0, 20], total: 20 });
+    expect(rose.sectors[9]!.total).toBe(40);
+    expect(rose).toMatchObject({ calm: 10, prevailingHeading: 270, observations: 100 });
+  });
+});
+
+describe("AerodromeService.findWindClimate", () => {
+  const station = (stationId: string, latitude: number, longitude: number) => ({
+    stationId, name: stationId, latitude, longitude, altitudeM: 150, periodStart: 2020, periodEnd: 2024,
+    observations: 100, calm: 0, counts: Array.from({ length: 36 }, (_, i) => (i === 27 ? [100, 0, 0] : [0, 0, 0])),
+  });
+
+  it("uses the nearest station within 30 km", async () => {
+    const prisma = {
+      aerodrome: { findUnique: vi.fn().mockResolvedValue(TOUSSUS) },
+      windClimate: { findMany: vi.fn().mockResolvedValue([station("FAR", 48.95, 2.1061), station("NEAR", 48.78, 2.1061)]) },
+    };
+    const service = new AerodromeService(prisma as never, {} as never, {} as never, {} as never);
+
+    const result = await service.findWindClimate("a1");
+
+    expect(result?.station).toMatchObject({ name: "NEAR", distanceKm: 3.1 });
+    expect(result).toMatchObject({ prevailingHeading: 270, period: { from: 2020, to: 2024 } });
+  });
+
+  it("returns null without a station close enough", async () => {
+    const prisma = {
+      aerodrome: { findUnique: vi.fn().mockResolvedValue(TOUSSUS) },
+      windClimate: { findMany: vi.fn().mockResolvedValue([station("EDGE", 48.7519 + 0.27, 2.1061 + 0.1)]) },
+    };
+    const service = new AerodromeService(prisma as never, {} as never, {} as never, {} as never);
+    expect(await service.findWindClimate("a1")).toBeNull();
   });
 });
 

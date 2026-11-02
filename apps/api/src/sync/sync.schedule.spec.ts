@@ -11,7 +11,7 @@ import { SyncController } from "./sync.controller";
 
 describe("sync sources", () => {
   it("includes the OurAirports and Commons imports", () => {
-    expect(SYNC_SOURCES).toEqual(expect.arrayContaining(["OURAIRPORTS", "COMMONS", "OBSTACLES", "PROTECTED_AREAS"]));
+    expect(SYNC_SOURCES).toEqual(expect.arrayContaining(["OURAIRPORTS", "COMMONS", "OBSTACLES", "PROTECTED_AREAS", "WIND_CLIMATE"]));
   });
 
   it.each(SYNC_SOURCES)("describes the schedule of %s", (source) => {
