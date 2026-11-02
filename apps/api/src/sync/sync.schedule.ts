@@ -1,7 +1,7 @@
 import type { SyncSource } from "@aerodirectory/database";
 
 /** Every source the worker runs, in the order the admin page lists them. */
-export const SYNC_SOURCES: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD", "OURAIRPORTS", "COMMONS", "OBSTACLES", "PROTECTED_AREAS", "WIND_CLIMATE"];
+export const SYNC_SOURCES: SyncSource[] = ["OPENAIP", "AIRSPACES", "OSM", "REGIONS", "RGPD", "OURAIRPORTS", "COMMONS", "OBSTACLES", "PROTECTED_AREAS", "WIND_CLIMATE", "AERIAL_LINES"];
 
 function matchesCronField(value: number, token: string) {
   if (token === "*") return true;
@@ -63,6 +63,8 @@ export function getSourceScheduleDescription(source: SyncSource) {
       return "Zones protégées IGN, le 2 de chaque mois à 04:00";
     case "WIND_CLIMATE":
       return "Climatologie du vent Météo-France, le 15 février à 04:00";
+    case "AERIAL_LINES":
+      return "Lignes électriques et câbles IGN, le 3 de chaque mois à 04:00";
     default:
       return "Planification inconnue";
   }

@@ -82,6 +82,31 @@ describe("AerodromeService.findProtectedAreasNear", () => {
   });
 });
 
+describe("AerodromeService.findAerialLinesNear", () => {
+  it("keeps lines within the radius by their closest point, with its bearing", async () => {
+    const line = (id: string, coordinates: [number, number][]) => ({
+      id, kind: "POWER_LINE", detail: "63 kV", name: null, geometry: { type: "LineString", coordinates },
+    });
+    const prisma = {
+      aerodrome: { findUnique: vi.fn().mockResolvedValue(TOUSSUS) },
+      aerialLine: {
+        findMany: vi.fn().mockResolvedValue([
+          // Crosses the search box but passes ~6 km away.
+          line("far", [[2.1061 - 0.2, 48.7519 + 0.054], [2.1061 + 0.2, 48.7519 + 0.054]]),
+          // East-west line 1 km south of the aerodrome.
+          line("south", [[2.09, 48.7519 - 0.009], [2.12, 48.7519 - 0.009]]),
+        ]),
+      },
+    };
+    const service = new AerodromeService(prisma as never, {} as never, {} as never, {} as never);
+
+    const result = await service.findAerialLinesNear("a1", 5000);
+
+    expect(result.map((l) => l.id)).toEqual(["south"]);
+    expect(result[0]).toMatchObject({ distanceM: 1002, bearingDeg: 180 });
+  });
+});
+
 describe("windRose", () => {
   it("folds 10° bins into 30° sectors centred on their heading, in percent", () => {
     const counts = Array.from({ length: 36 }, () => [0, 0, 0]);

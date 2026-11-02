@@ -118,3 +118,24 @@ export function distanceToArea(lat: number, lon: number, geometry: AreaGeometry)
   }
   return Math.round(best * METRES_PER_DEGREE);
 }
+
+/**
+ * Nearest point of a polyline to (lat, lon), with its distance in metres.
+ * Used for power lines and ropeways around an aerodrome.
+ */
+export function nearestPointOnLine(lat: number, lon: number, line: Position[]): { distanceM: number; point: Position } {
+  const kx = Math.cos((lat * Math.PI) / 180);
+  let best = { d: Infinity, point: line[0]! };
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const ax = a[0] * kx, ay = a[1];
+    const dx = b[0] * kx - ax, dy = b[1] - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((lon * kx - ax) * dx + (lat - ay) * dy) / len2));
+    const px = ax + t * dx, py = ay + t * dy;
+    const d = Math.hypot(lon * kx - px, lat - py);
+    if (d < best.d) best = { d, point: [px / kx, py] };
+  }
+  return { distanceM: Math.round(best.d * METRES_PER_DEGREE), point: best.point };
+}

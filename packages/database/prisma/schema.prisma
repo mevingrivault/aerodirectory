@@ -130,6 +130,7 @@ enum SyncSource {
   OBSTACLES
   PROTECTED_AREAS
   WIND_CLIMATE
+  AERIAL_LINES
 
   @@schema("public")
 }
@@ -808,6 +809,36 @@ model ProtectedArea {
   @@unique([source, sourceId])
   @@index([minLat, maxLat, minLon, maxLon])
   @@map("protected_areas")
+  @@schema("public")
+}
+
+enum AerialLineKind {
+  POWER_LINE // high-voltage line
+  CABLE      // chairlift, cable car, material ropeway, zip line
+
+  @@schema("public")
+}
+
+// Overhead wires near aerodromes, from IGN BD TOPO (Licence Ouverte):
+// power lines of 63 kV and more, and aerial ropeways. Replaced as a whole by
+// each sync; the bounding box finds those around an aerodrome.
+model AerialLine {
+  id        String         @id @default(cuid())
+  source    String         // "ign-bdtopo"
+  sourceId  String         // BD TOPO cleabs
+  kind      AerialLineKind
+  detail    String?        // voltage ("225 kV") or ropeway type
+  name      String?
+  geometry  Json           // GeoJSON LineString, WGS 84, no altitude
+  minLat    Float
+  maxLat    Float
+  minLon    Float
+  maxLon    Float
+  createdAt DateTime       @default(now())
+
+  @@unique([source, sourceId])
+  @@index([minLat, maxLat, minLon, maxLon])
+  @@map("aerial_lines")
   @@schema("public")
 }
 

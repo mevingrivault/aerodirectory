@@ -60,6 +60,7 @@ import type { CSSProperties } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { WindRoseCard, type WindClimate } from "@/components/ui/wind-rose";
+import { AERIAL_LINE_COLORS, aerialLineTitle, type NearbyAerialLine } from "@/lib/aerial-lines";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
 import { commonsPhotoUrl } from "@/lib/commons-photo";
@@ -653,6 +654,13 @@ export default function AerodromeDetailPage() {
   const { data: obstaclesRes } = useQuery({
     queryKey: ["obstacles", id],
     queryFn: () => apiClient.get<NearbyObstacle[]>(`/aerodromes/${id}/obstacles`, { radiusMeters: "10000" }),
+    enabled: !!ad,
+    staleTime: 60 * 60 * 1000,
+  });
+
+  const { data: linesRes } = useQuery({
+    queryKey: ["aerial-lines", id],
+    queryFn: () => apiClient.get<NearbyAerialLine[]>(`/aerodromes/${id}/aerial-lines`, { radiusMeters: "10000" }),
     enabled: !!ad,
     staleTime: 60 * 60 * 1000,
   });
@@ -1262,8 +1270,9 @@ export default function AerodromeDetailPage() {
                 )}
 
                 <section style={{ marginBottom: 20 }}>
-                  <AerodromeLocationMap aerodromeId={ad.id} name={ad.name} icaoCode={ad.icaoCode} latitude={ad.latitude} longitude={ad.longitude} elevation={ad.elevation} obstacles={obstaclesRes?.data} protectedAreas={areasRes?.data} />
+                  <AerodromeLocationMap aerodromeId={ad.id} name={ad.name} icaoCode={ad.icaoCode} latitude={ad.latitude} longitude={ad.longitude} elevation={ad.elevation} obstacles={obstaclesRes?.data} protectedAreas={areasRes?.data} aerialLines={linesRes?.data} />
                   {obstaclesRes?.data && <ObstacleList obstacles={obstaclesRes.data} />}
+                  {linesRes?.data && <AerialLineList lines={linesRes.data} />}
                   {areasRes?.data && areasRes.data.length > 0 && <ProtectedAreaList areas={areasRes.data} />}
                 </section>
               </div>
@@ -1791,7 +1800,7 @@ export default function AerodromeDetailPage() {
         {/* FOOTER NOTICE */}
         <div style={{ marginTop: 28, padding: "12px 18px", background: "oklch(0.97 0.04 85)", border: "1px solid oklch(0.90 0.05 85)", borderRadius: 8, fontSize: 12, color: "var(--ink-700)", display: "flex", alignItems: "center", gap: 10 }}>
           <Info className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--ink-500)" }} />
-          <span>Les informations affichées, dont les obstacles et les zones sensibles, sont indicatives et non exhaustives : elles ne remplacent ni la VAC, ni la carte OACI, ni les NOTAM et SUP AIP en vigueur.{ad.source && ` · Source : ${ad.source}`}</span>
+          <span>Les informations affichées, dont les obstacles, lignes, zones sensibles et le vent dominant, sont indicatives et non exhaustives : elles ne remplacent ni la VAC, ni la carte OACI, ni les NOTAM et SUP AIP en vigueur.{ad.source && ` · Source : ${ad.source}`}</span>
         </div>
       </div>
 
@@ -1945,6 +1954,45 @@ function ObstacleList({ obstacles }: { obstacles: NearbyObstacle[] }) {
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
           Source : openAIP (données OpenStreetMap). Relèvement vrai depuis le point de référence de l&apos;aérodrome.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── AerialLineList ────────────────────────────────────────────────────────
+
+const AERIAL_LIST_RADIUS_M = 5000;
+const AERIAL_LIST_MAX = 8;
+
+/** Wires within 5 km, nearest first; the map shows everything up to 10 km. */
+function AerialLineList({ lines }: { lines: NearbyAerialLine[] }) {
+  const near = lines.filter((l) => l.distanceM <= AERIAL_LIST_RADIUS_M);
+  if (near.length === 0) return null;
+  const shown = near.slice(0, AERIAL_LIST_MAX);
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg"><TriangleAlert className="h-5 w-5" /> Lignes et câbles à moins de 5 km</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="divide-y text-sm">
+          {shown.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <span className="inline-block h-0 w-4 shrink-0 border-t-2" style={{ borderColor: AERIAL_LINE_COLORS[l.kind], borderTopStyle: l.kind === "CABLE" ? "dashed" : "solid" }} />
+                <span className="font-medium">{aerialLineTitle(l)}</span>
+              </span>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {formatObstacleDistance(l.distanceM)} · <span className="font-mono">{String(l.bearingDeg).padStart(3, "0")}°</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {near.length > shown.length && <p className="mt-2 text-[11px] text-muted-foreground">Et {near.length - shown.length} autres, visibles sur la carte.</p>}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Lignes de 63 kV et plus, remontées mécaniques aériennes. Distance et relèvement vrai du point le plus proche. Source : IGN BD TOPO (Licence Ouverte).
         </p>
       </CardContent>
     </Card>

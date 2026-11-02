@@ -9,17 +9,16 @@
 import { z } from "zod";
 import type { PrismaClient, ProtectedAreaKind } from "@aerodirectory/database";
 import { boundingBox, pointCount, simplifyGeometry, type AreaGeometry } from "./protected-areas.geometry";
+import { wfsPageFetcher, type FetchPage } from "./wfs";
 
 export const PROTECTED_AREA_SOURCE = "ign-bdtopo";
 
-const WFS_URL = "https://data.geopf.fr/wfs/ows";
 const LAYER = "BDTOPO_V3:parc_ou_reserve";
 // Server-side pre-filter; kindOf() makes the final choice.
 const CQL_FILTER =
   "nature IN ('Parc national','Réserve naturelle','Arrêté de protection','Zone de silence') " +
   "OR nature_detaillee='Site inscrit au titre de la Directive Oiseaux'";
 const PAGE_SIZE = 200;
-const REQUEST_TIMEOUT_MS = 120_000;
 // ~30 m: invisible at the zoom levels of an aerodrome map, divides the points by ~10.
 const SIMPLIFY_TOLERANCE_DEG = 0.0003;
 const INSERT_BATCH = 100;
@@ -124,26 +123,12 @@ export function normalizeFeature(raw: unknown): (NormalizedProtectedArea & { pro
   return { ...area, provenance: provenanceOf(area, p.sources, p.identifiants_sources) };
 }
 
-export type FetchPage = (startIndex: number) => Promise<unknown>;
-
-export const fetchWfsPage: FetchPage = async (startIndex) => {
-  const params = new URLSearchParams({
-    SERVICE: "WFS",
-    VERSION: "2.0.0",
-    REQUEST: "GetFeature",
-    TYPENAMES: LAYER,
-    OUTPUTFORMAT: "application/json",
-    SRSNAME: "EPSG:4326",
-    PROPERTYNAME: "cleabs,nature,nature_detaillee,toponyme,sources,identifiants_sources,geometrie",
-    SORTBY: "cleabs",
-    COUNT: String(PAGE_SIZE),
-    STARTINDEX: String(startIndex),
-    CQL_FILTER,
-  });
-  const res = await fetch(`${WFS_URL}?${params}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Géoplateforme WFS: HTTP ${res.status}`);
-  return res.json();
-};
+export const fetchWfsPage: FetchPage = wfsPageFetcher({
+  layer: LAYER,
+  properties: ["cleabs", "nature", "nature_detaillee", "toponyme", "sources", "identifiants_sources"],
+  pageSize: PAGE_SIZE,
+  cqlFilter: CQL_FILTER,
+});
 
 export interface ProtectedAreasImportResult {
   fetched: number;

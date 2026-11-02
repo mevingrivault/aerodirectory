@@ -20,6 +20,7 @@ import {
   type NearbyProtectedArea,
 } from "@/lib/protected-areas";
 import { POPUP_DETAIL, POPUP_TITLE, popupContent } from "@/lib/map-popup";
+import { AERIAL_LINE_COLORS, AERIAL_LINE_LABELS, aerialLineTitle, type NearbyAerialLine } from "@/lib/aerial-lines";
 
 type MapStyleKey = "default" | "satellite" | "hybrid";
 
@@ -32,10 +33,30 @@ interface AerodromeLocationMapProps {
   elevation: number | null;
   obstacles?: NearbyObstacle[];
   protectedAreas?: NearbyProtectedArea[];
+  aerialLines?: NearbyAerialLine[];
 }
 
 const OBSTACLES_SOURCE = "obstacles";
 const AREAS_SOURCE = "protected-areas";
+const LINES_SOURCE = "aerial-lines";
+
+function linesGeoJson(lines: NearbyAerialLine[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: lines.map((l) => ({
+      type: "Feature" as const,
+      geometry: l.geometry,
+      properties: { id: l.id, kind: l.kind, color: AERIAL_LINE_COLORS[l.kind] },
+    })),
+  };
+}
+
+function linePopupContent(l: NearbyAerialLine): HTMLElement {
+  return popupContent([
+    { text: aerialLineTitle(l), style: POPUP_TITLE },
+    { text: `${formatObstacleDistance(l.distanceM)} au ${String(l.bearingDeg).padStart(3, "0")}°`, style: { ...POPUP_DETAIL, color: "#64748b" } },
+  ]);
+}
 
 function areasGeoJson(areas: NearbyProtectedArea[]) {
   return {
@@ -148,6 +169,7 @@ export function AerodromeLocationMap({
   elevation,
   obstacles,
   protectedAreas,
+  aerialLines,
 }: AerodromeLocationMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -156,6 +178,8 @@ export function AerodromeLocationMap({
   obstaclesRef.current = obstacles ?? [];
   const areasRef = useRef<NearbyProtectedArea[]>(protectedAreas ?? []);
   areasRef.current = protectedAreas ?? [];
+  const linesRef = useRef<NearbyAerialLine[]>(aerialLines ?? []);
+  linesRef.current = aerialLines ?? [];
   const markerRef = useRef<any>(null);
   const popupRef = useRef<any>(null);
   const [mapStyle, setMapStyle] = useState<MapStyleKey>("default");
@@ -226,7 +250,7 @@ export function AerodromeLocationMap({
         });
         map.on("click", "protected-areas-fill", (event: any) => {
           // An obstacle click inside an area takes precedence.
-          if (map.queryRenderedFeatures(event.point, { layers: ["obstacles"] }).length > 0) return;
+          if (map.queryRenderedFeatures(event.point, { layers: ["obstacles", "aerial-lines", "aerial-cables"] }).length > 0) return;
           const id = event.features?.[0]?.properties?.id;
           const area = areasRef.current.find((a) => a.id === id);
           if (!area) return;
@@ -235,6 +259,33 @@ export function AerodromeLocationMap({
             .setDOMContent(areaPopupContent(area))
             .addTo(map);
         });
+
+        map.addSource(LINES_SOURCE, { type: "geojson", data: linesGeoJson(linesRef.current) });
+        map.addLayer({
+          id: "aerial-lines",
+          type: "line",
+          source: LINES_SOURCE,
+          filter: ["==", ["get", "kind"], "POWER_LINE"],
+          paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.5, 14, 3] },
+        });
+        map.addLayer({
+          id: "aerial-cables",
+          type: "line",
+          source: LINES_SOURCE,
+          filter: ["==", ["get", "kind"], "CABLE"],
+          paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.5, 14, 3], "line-dasharray": [2, 1] },
+        });
+        for (const layer of ["aerial-lines", "aerial-cables"]) {
+          map.on("click", layer, (event: any) => {
+            if (map.queryRenderedFeatures(event.point, { layers: ["obstacles"] }).length > 0) return;
+            const id = event.features?.[0]?.properties?.id;
+            const line = linesRef.current.find((l) => l.id === id);
+            if (!line) return;
+            new maplibregl.Popup({ offset: 8 }).setLngLat(event.lngLat).setDOMContent(linePopupContent(line)).addTo(map);
+          });
+          map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
+        }
 
         map.addSource(OBSTACLES_SOURCE, { type: "geojson", data: obstaclesGeoJson(obstaclesRef.current) });
         map.addLayer({
@@ -282,6 +333,16 @@ export function AerodromeLocationMap({
     const source = mapRef.current?.getSource?.(OBSTACLES_SOURCE);
     source?.setData?.(obstaclesGeoJson(obstacles ?? []));
   }, [obstacles]);
+
+  useEffect(() => {
+    const source = mapRef.current?.getSource?.(LINES_SOURCE);
+    source?.setData?.(linesGeoJson(aerialLines ?? []));
+  }, [aerialLines]);
+
+  const presentLineKinds = useMemo(
+    () => (Object.keys(AERIAL_LINE_LABELS) as NearbyAerialLine["kind"][]).filter((k) => aerialLines?.some((l) => l.kind === k)),
+    [aerialLines],
+  );
 
   useEffect(() => {
     const source = mapRef.current?.getSource?.(AREAS_SOURCE);
@@ -382,6 +443,20 @@ export function AerodromeLocationMap({
           className="h-[360px] overflow-hidden rounded-xl border bg-muted/20"
           data-aerodrome-id={aerodromeId}
         />
+        {presentLineKinds.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span>Lignes :</span>
+            {presentLineKinds.map((kind) => (
+              <span key={kind} className="inline-flex items-center gap-1">
+                <span
+                  className="inline-block h-0 w-4 border-t-2"
+                  style={{ borderColor: AERIAL_LINE_COLORS[kind], borderTopStyle: kind === "CABLE" ? "dashed" : "solid" }}
+                />
+                {AERIAL_LINE_LABELS[kind]}
+              </span>
+            ))}
+          </div>
+        )}
         {presentKinds.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             <span>Zones :</span>

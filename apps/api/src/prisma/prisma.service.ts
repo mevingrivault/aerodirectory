@@ -41,6 +41,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get obstacle() { return this.client.obstacle; }
   get protectedArea() { return this.client.protectedArea; }
   get windClimate() { return this.client.windClimate; }
+  get aerialLine() { return this.client.aerialLine; }
   get aerodromeEvent() { return this.client.aerodromeEvent; }
 
   get $queryRaw() { return this.client.$queryRaw.bind(this.client); }

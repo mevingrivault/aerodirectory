@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CacheService } from "../common/cache.service";
 import { Prisma } from "@aerodirectory/database";
-import { distanceToArea, type AreaGeometry } from "../services/importers/ign/protected-areas.geometry";
+import { distanceToArea, nearestPointOnLine, type AreaGeometry } from "../services/importers/ign/protected-areas.geometry";
 import {
   haversineKm,
   type AerodromeCreateInput,
@@ -107,6 +107,48 @@ export class AerodromeService {
 
   private static readonly MAX_OBSTACLES = 500;
   private static readonly WIND_STATION_MAX_KM = 30;
+  private static readonly MAX_AERIAL_LINES = 300;
+
+  /**
+   * Power lines and aerial ropeways within `radiusMeters`, nearest first,
+   * with the distance and true bearing of their closest point.
+   */
+  async findAerialLinesNear(id: string, radiusMeters: number) {
+    const aerodrome = await this.prisma.aerodrome.findUnique({
+      where: { id },
+      select: { latitude: true, longitude: true },
+    });
+    if (!aerodrome) {
+      throw new NotFoundException("Aerodrome not found");
+    }
+
+    const { latitude: lat, longitude: lon } = aerodrome;
+    const dLat = radiusMeters / 111_320;
+    const dLon = radiusMeters / (111_320 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+    const candidates = await this.prisma.aerialLine.findMany({
+      where: {
+        minLat: { lte: lat + dLat },
+        maxLat: { gte: lat - dLat },
+        minLon: { lte: lon + dLon },
+        maxLon: { gte: lon - dLon },
+      },
+      select: { id: true, kind: true, detail: true, name: true, geometry: true },
+    });
+
+    return candidates
+      .map((line) => {
+        const coordinates = (line.geometry as unknown as { coordinates: [number, number][] }).coordinates;
+        const nearest = nearestPointOnLine(lat, lon, coordinates);
+        return {
+          ...line,
+          distanceM: nearest.distanceM,
+          bearingDeg: initialBearing(lat, lon, nearest.point[1], nearest.point[0]),
+        };
+      })
+      .filter((line) => line.distanceM <= radiusMeters)
+      .sort((a, b) => a.distanceM - b.distanceM)
+      .slice(0, AerodromeService.MAX_AERIAL_LINES);
+  }
 
   /**
    * Prevailing-wind rose from the nearest Météo-France station within 30 km,
