@@ -43,7 +43,7 @@ export const AdminMailEventsQuerySchema = PaginationSchema.extend({
 });
 
 export const AdminContentAuditQuerySchema = PaginationSchema.extend({
-  targetType: z.enum(["comment", "correction", "photo", "event", "aerodrome", "user", "all"]).optional(),
+  targetType: z.enum(["comment", "correction", "community_info", "photo", "event", "aerodrome", "user", "all"]).optional(),
   actionType: z
     .enum([
       "COMMENT_DELETE",
@@ -54,6 +54,8 @@ export const AdminContentAuditQuerySchema = PaginationSchema.extend({
       "EVENT_REJECT",
       "CORRECTION_APPROVE",
       "CORRECTION_REJECT",
+      "COMMUNITY_INFO_APPROVE",
+      "COMMUNITY_INFO_REJECT",
       "PHOTO_APPROVE",
       "PHOTO_REJECT",
       "REPORT_APPROVE",

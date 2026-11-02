@@ -20,6 +20,8 @@ const ACTION_LABELS: Record<AdminContentAuditItem["actionType"], string> = {
   EVENT_REJECT: "Rejet d'événement",
   CORRECTION_APPROVE: "Validation de contribution",
   CORRECTION_REJECT: "Rejet de contribution",
+  COMMUNITY_INFO_APPROVE: "Publication d'info pratique",
+  COMMUNITY_INFO_REJECT: "Rejet d'info pratique",
   PHOTO_APPROVE: "Validation de photo",
   PHOTO_REJECT: "Rejet de photo",
   REPORT_APPROVE: "Validation de signalement",
@@ -32,6 +34,7 @@ const ACTION_LABELS: Record<AdminContentAuditItem["actionType"], string> = {
 const TARGET_LABELS: Record<AdminContentAuditItem["targetType"], string> = {
   comment: "Commentaire",
   correction: "Contribution",
+  community_info: "Info pratique",
   photo: "Photo",
   event: "Événement",
   aerodrome: "Fiche aérodrome",
@@ -42,7 +45,7 @@ export default function AdminAuditPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [targetType, setTargetType] = useState<
-    "comment" | "correction" | "photo" | "user" | "all"
+    "comment" | "correction" | "community_info" | "photo" | "user" | "all"
   >("all");
   const [actionType, setActionType] = useState<
     | AdminContentAuditItem["actionType"]
@@ -94,7 +97,7 @@ export default function AdminAuditPage() {
           value={targetType}
           onChange={(event) =>
             setTargetType(
-              event.target.value as "comment" | "correction" | "photo" | "user" | "all",
+              event.target.value as "comment" | "correction" | "community_info" | "photo" | "user" | "all",
             )
           }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -102,6 +105,7 @@ export default function AdminAuditPage() {
           <option value="all">Toutes les cibles</option>
           <option value="comment">Commentaires</option>
           <option value="correction">Contributions</option>
+          <option value="community_info">Infos pratiques</option>
           <option value="photo">Photos</option>
           <option value="user">Membres</option>
         </select>
@@ -119,6 +123,8 @@ export default function AdminAuditPage() {
           <option value="COMMENT_RESTORE">Restauration de commentaire</option>
           <option value="CORRECTION_APPROVE">Validation de contribution</option>
           <option value="CORRECTION_REJECT">Rejet de contribution</option>
+          <option value="COMMUNITY_INFO_APPROVE">Publication d'info pratique</option>
+          <option value="COMMUNITY_INFO_REJECT">Rejet d'info pratique</option>
           <option value="PHOTO_APPROVE">Validation de photo</option>
           <option value="PHOTO_REJECT">Rejet de photo</option>
           <option value="REPORT_APPROVE">Validation de signalement</option>

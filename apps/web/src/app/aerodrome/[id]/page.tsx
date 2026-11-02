@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { FUEL_LABELS } from "@aerodirectory/shared";
+import { FUEL_LABELS, type AerodromeCommunityInfo } from "@aerodirectory/shared";
 import {
   Plane,
   MapPin,
@@ -60,6 +60,7 @@ import type { CSSProperties } from "react";
 import { PhotoUpload } from "@/components/ui/photo-upload";
 import { AerodromeLocationMap } from "@/components/ui/aerodrome-location-map";
 import { WindRoseCard, type WindClimate } from "@/components/ui/wind-rose";
+import { CommunityInfoSection, WebcamLinks } from "@/components/ui/community-info-card";
 import { AERIAL_LINE_COLORS, aerialLineTitle, type NearbyAerialLine } from "@/lib/aerial-lines";
 import { Input } from "@/components/ui/input";
 import { useAltchaAuto } from "@/lib/use-altcha-auto";
@@ -643,6 +644,13 @@ export default function AerodromeDetailPage() {
   });
   const vacHref = docsRes?.data?.vacUrl ?? ad?.vacLink ?? null;
   const aipHref = docsRes?.data?.aipUrl ?? ad?.aipLink ?? null;
+
+  const { data: communityInfoRes } = useQuery({
+    queryKey: ["aerodrome-community-info", id],
+    queryFn: () => apiClient.get<AerodromeCommunityInfo>(`/aerodromes/${id}/community-info`),
+    enabled: !!ad,
+  });
+  const communityInfo = communityInfoRes?.data ?? null;
 
   const { data: windClimateRes } = useQuery({
     queryKey: ["wind-climate", id],
@@ -1418,6 +1426,14 @@ export default function AerodromeDetailPage() {
                     )}
                   </div>
                 </section>
+
+                <section style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <div style={{ ...sectionMark, background: "var(--brass-100)", color: "var(--brass-700)" }}><Info className="h-3.5 w-3.5" /></div>
+                    <h2 style={sectionH2}>Infos pratiques</h2>
+                  </div>
+                  <CommunityInfoSection aerodromeId={id} info={communityInfo} loggedIn={!!user} />
+                </section>
               </div>
             )}
 
@@ -1549,6 +1565,11 @@ export default function AerodromeDetailPage() {
                   </div>
                   <WeatherCard weather={weatherRes?.data ?? null} loading={weatherLoading} authenticated={!!user} />
                   <SunCard sun={sunRes?.data ?? null} loading={sunLoading} />
+                  {communityInfo && (communityInfo.webcams.length > 0 || communityInfo.items.some((item) => item.kind === "WEBCAM")) && (
+                    <div style={{ background: "white", border: "1px solid var(--ink-200)", borderRadius: 12, padding: 22, marginTop: 14 }}>
+                      <WebcamLinks info={communityInfo} />
+                    </div>
+                  )}
                   {windClimateRes?.data && (
                     <WindRoseCard
                       climate={windClimateRes.data}

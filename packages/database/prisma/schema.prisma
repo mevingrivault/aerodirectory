@@ -131,6 +131,7 @@ enum SyncSource {
   PROTECTED_AREAS
   WIND_CLIMATE
   AERIAL_LINES
+  CAM_AERO
 
   @@schema("public")
 }
@@ -198,6 +199,7 @@ enum AuditAction {
   COMMENT_REJECT
   EVENT_APPROVE
   EVENT_REJECT
+  COMMUNITY_INFO_PROPOSE
 
   @@schema("public")
 }
@@ -214,55 +216,56 @@ enum EventType {
 // ─── User ────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime?
-  passwordHash  String
-  totpSecret    String?
-  totpEnabled   Boolean   @default(false)
-  status        UserStatus @default(ACTIVE)
-  bannedAt      DateTime?
-  bannedReason  String?
-  bannedById    String?
-  role                Role      @default(MEMBER)
-  displayName         String?   @unique
-  bio                 String?
-  avatarKey           String?
-  avatarMimeType      String?
-  communityConsentAt  DateTime?
-  showCommunityProfile       Boolean   @default(false)
-  showCommunityContributions Boolean   @default(true)
-  showCommunityPhotos        Boolean   @default(true)
-  showPublicSearches         Boolean   @default(false)
-  homeAerodromeId     String?
-  failedLoginAttempts Int       @default(0)
-  lockedUntil         DateTime?
+  id                         String     @id @default(cuid())
+  email                      String     @unique
+  emailVerified              DateTime?
+  passwordHash               String
+  totpSecret                 String?
+  totpEnabled                Boolean    @default(false)
+  status                     UserStatus @default(ACTIVE)
+  bannedAt                   DateTime?
+  bannedReason               String?
+  bannedById                 String?
+  role                       Role       @default(MEMBER)
+  displayName                String?    @unique
+  bio                        String?
+  avatarKey                  String?
+  avatarMimeType             String?
+  communityConsentAt         DateTime?
+  showCommunityProfile       Boolean    @default(false)
+  showCommunityContributions Boolean    @default(true)
+  showCommunityPhotos        Boolean    @default(true)
+  showPublicSearches         Boolean    @default(false)
+  homeAerodromeId            String?
+  failedLoginAttempts        Int        @default(0)
+  lockedUntil                DateTime?
   // Bumped on password change/reset, TOTP disable and ban: every access and
   // refresh token carries the version it was issued with and dies on mismatch.
-  tokenVersion        Int       @default(0)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  tokenVersion               Int        @default(0)
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
 
-  homeAerodrome    Aerodrome?        @relation("UserHomeAerodrome", fields: [homeAerodromeId], references: [id])
-  visits           Visit[]
-  comments         Comment[]          @relation("CommentAuthor")
-  deletedComments  Comment[]          @relation("CommentDeletedBy")
-  corrections      Correction[]
-  reports          Report[]
-  aircraftProfiles AircraftProfile[]
-  savedSearches    SavedSearch[]
-  followers        Follow[]           @relation("UserFollowers")
-  following        Follow[]           @relation("UserFollowing")
-  aerodromeLists   AerodromeList[]
-  notifications    Notification[]
-  auditLogs        AuditLog[]
-  emailTokens      EmailToken[]
-  bannedBy         User?             @relation("UserBans", fields: [bannedById], references: [id], onDelete: SetNull)
-  bannedUsers      User[]            @relation("UserBans")
-  photos           Photo[]
-  reviewedPhotos   Photo[]           @relation("PhotoReviewedBy")
-  triggeredSyncRuns SyncRun[]        @relation("SyncRunTriggeredBy")
-  events           AerodromeEvent[]
+  homeAerodrome     Aerodrome?        @relation("UserHomeAerodrome", fields: [homeAerodromeId], references: [id])
+  visits            Visit[]
+  comments          Comment[]         @relation("CommentAuthor")
+  deletedComments   Comment[]         @relation("CommentDeletedBy")
+  corrections       Correction[]
+  reports           Report[]
+  aircraftProfiles  AircraftProfile[]
+  savedSearches     SavedSearch[]
+  followers         Follow[]          @relation("UserFollowers")
+  following         Follow[]          @relation("UserFollowing")
+  aerodromeLists    AerodromeList[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  emailTokens       EmailToken[]
+  bannedBy          User?             @relation("UserBans", fields: [bannedById], references: [id], onDelete: SetNull)
+  bannedUsers       User[]            @relation("UserBans")
+  photos            Photo[]
+  reviewedPhotos    Photo[]           @relation("PhotoReviewedBy")
+  triggeredSyncRuns SyncRun[]         @relation("SyncRunTriggeredBy")
+  events            AerodromeEvent[]
+  communityInfos    CommunityInfo[]
 
   @@index([email])
   @@index([status])
@@ -287,13 +290,13 @@ model Follow {
 }
 
 model EmailToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
+  id        String    @id @default(cuid())
+  token     String    @unique
   userId    String
   type      String // "verify" | "reset"
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -305,67 +308,69 @@ model EmailToken {
 // ─── Aerodrome ───────────────────────────────────────────
 
 model Aerodrome {
-  id               String          @id @default(cuid())
-  name             String
-  icaoCode         String?         @unique
-  iataCode         String?
-  altIdentifier    String?
-  latitude         Float
-  longitude        Float
-  elevation        Int? // feet
+  id                  String          @id @default(cuid())
+  name                String
+  icaoCode            String?         @unique
+  iataCode            String?
+  altIdentifier       String?
+  latitude            Float
+  longitude           Float
+  elevation           Int? // feet
   magneticDeclination Float?
-  city             String?
-  region           String?
-  department       String?
-  countryCode      String          @default("FR")
-  aerodromeType    AerodromeType   @default(SMALL_AIRPORT)
-  status           AerodromeStatus @default(OPEN)
-  ppr              Boolean         @default(false)
-  privateUse       Boolean         @default(false)
-  skydiveActivity  Boolean         @default(false)
-  winchOnly        Boolean         @default(false)
-  aipLink          String?
-  vacLink          String?
-  websiteUrl       String?
-  wikipediaUrl     String?
+  city                String?
+  region              String?
+  department          String?
+  countryCode         String          @default("FR")
+  aerodromeType       AerodromeType   @default(SMALL_AIRPORT)
+  status              AerodromeStatus @default(OPEN)
+  ppr                 Boolean         @default(false)
+  privateUse          Boolean         @default(false)
+  skydiveActivity     Boolean         @default(false)
+  winchOnly           Boolean         @default(false)
+  aipLink             String?
+  vacLink             String?
+  websiteUrl          String?
+  wikipediaUrl        String?
   // From openAIP: [{ label, number, remarks }], free-text contact, opening
   // slots [{ day, from, to, byNotam, holidaysExcluded, remarks }] and remarks.
-  phones           Json            @default("[]")
-  contactInfo      String?
-  openingHours     Json            @default("[]")
-  sourceRemarks    String?
-  description      String?
-  handlingFacilities  Int[]        @default([])
-  passengerFacilities Int[]        @default([])
-  hasRestaurant    Boolean         @default(false)
-  hasBikes         Boolean         @default(false)
-  hasTransport     Boolean         @default(false)
-  hasAccommodation Boolean         @default(false)
-  hasMaintenance   Boolean         @default(false)
-  hasHangars       Boolean         @default(false)
-  nightOperations  Boolean         @default(false)
+  phones              Json            @default("[]")
+  contactInfo         String?
+  openingHours        Json            @default("[]")
+  sourceRemarks       String?
+  description         String?
+  handlingFacilities  Int[]           @default([])
+  passengerFacilities Int[]           @default([])
+  hasRestaurant       Boolean         @default(false)
+  hasBikes            Boolean         @default(false)
+  hasTransport        Boolean         @default(false)
+  hasAccommodation    Boolean         @default(false)
+  hasMaintenance      Boolean         @default(false)
+  hasHangars          Boolean         @default(false)
+  nightOperations     Boolean         @default(false)
 
   // ─── Source tracking ──────────────────────────
-  source         String? // e.g. "openaip", "sia", "manual"
-  sourceId       String? // external unique ID from data source
-  sourceRawHash  String? // hash of raw payload for change detection
-  lastSyncedAt   DateTime?
+  source        String? // e.g. "openaip", "sia", "manual"
+  sourceId      String? // external unique ID from data source
+  sourceRawHash String? // hash of raw payload for change detection
+  lastSyncedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  runways     Runway[]
-  frequencies Frequency[]
-  fuels       Fuel[]
-  visits      Visit[]
-  comments    Comment[]
-  corrections Correction[]
-  reports     Report[]
-  listItems   AerodromeListItem[]
-  homeUsers   User[]       @relation("UserHomeAerodrome")
-  photos      Photo[]
-  commonsPhoto CommonsPhoto?
-  events      AerodromeEvent[]
+  runways        Runway[]
+  frequencies    Frequency[]
+  fuels          Fuel[]
+  visits         Visit[]
+  comments       Comment[]
+  corrections    Correction[]
+  reports        Report[]
+  listItems      AerodromeListItem[]
+  homeUsers      User[]              @relation("UserHomeAerodrome")
+  photos         Photo[]
+  commonsPhoto   CommonsPhoto?
+  events         AerodromeEvent[]
+  communityInfos CommunityInfo[]
+  webcams        Webcam[]
 
   @@unique([source, sourceId])
   @@index([latitude, longitude])
@@ -380,20 +385,20 @@ model Aerodrome {
 }
 
 model Runway {
-  id          String      @id @default(cuid())
-  aerodromeId String
-  identifier  String // e.g. "09/27"
-  length      Int // meters
-  width       Int? // meters
-  trueHeading Int?
-  mainRunway  Boolean     @default(false)
-  operations  Int?
-  surface     SurfaceType
-  surfaceComposition Int[] @default([])
-  lighting    Boolean     @default(false)
-  remarks     String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  aerodromeId        String
+  identifier         String // e.g. "09/27"
+  length             Int // meters
+  width              Int? // meters
+  trueHeading        Int?
+  mainRunway         Boolean     @default(false)
+  operations         Int?
+  surface            SurfaceType
+  surfaceComposition Int[]       @default([])
+  lighting           Boolean     @default(false)
+  remarks            String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
 
@@ -548,20 +553,57 @@ model AerodromeEvent {
   @@schema("public")
 }
 
+enum CommunityInfoKind {
+  FUEL_PRICE
+  LANDING_FEE
+  HANGAR
+  WEBCAM
+
+  @@schema("public")
+}
+
+// Practical information only members know (fuel prices, fees, hangar, webcam
+// links), dated and moderated like corrections. `data` holds the fields of
+// its kind, validated by CommunityInfoCreateSchema in packages/shared. The
+// sheet shows the newest approved entry per kind and key (fuel type, aircraft
+// category, webcam URL); older ones stay as history.
+model CommunityInfo {
+  id            String            @id @default(cuid())
+  userId        String
+  aerodromeId   String
+  kind          CommunityInfoKind
+  key           String // e.g. "AVGAS_100LL", "ULM", "-" for a hangar
+  data          Json
+  observedAt    DateTime // date the member saw the price or fee
+  contentStatus ContentStatus     @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@index([aerodromeId, contentStatus, kind, key, observedAt])
+  @@index([contentStatus, createdAt])
+  @@map("community_infos")
+  @@schema("public")
+}
+
 // ─── Flight Planner ──────────────────────────────────────
 
 model AircraftProfile {
-  id               String       @id @default(cuid())
-  userId           String
-  name             String // e.g. "My C172"
-  tas              Float // knots
-  fuelConsumption  Float // liters per hour
-  hourlyCost       Float // euros per hour
-  fuelRange        Float // nautical miles
-  minRunwayLength  Int // meters
-  allowedSurfaces  SurfaceType[]
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id              String        @id @default(cuid())
+  userId          String
+  name            String // e.g. "My C172"
+  tas             Float // knots
+  fuelConsumption Float // liters per hour
+  hourlyCost      Float // euros per hour
+  fuelRange       Float // nautical miles
+  minRunwayLength Int // meters
+  allowedSurfaces SurfaceType[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -595,7 +637,7 @@ model AerodromeList {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   items AerodromeListItem[]
 
   @@unique([userId, name])
@@ -621,7 +663,7 @@ model AerodromeListItem {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   type      String
   title     String
@@ -629,7 +671,7 @@ model Notification {
   linkUrl   String?
   metadata  Json?
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -714,7 +756,6 @@ model SyncRunStep {
   @@schema("public")
 }
 
-
 // ─── Photo ───────────────────────────────────────────────
 
 model Photo {
@@ -722,10 +763,10 @@ model Photo {
   userId           String
   aerodromeId      String
   originalFilename String?
-  storedFilename   String      // UUID-based, never the original name
-  storedKey        String      // S3 object key
-  mimeType         String      // final MIME type after conversion
-  size             Int         // bytes after processing
+  storedFilename   String // UUID-based, never the original name
+  storedKey        String // S3 object key
+  mimeType         String // final MIME type after conversion
+  size             Int // bytes after processing
   width            Int?
   height           Int?
   status           PhotoStatus @default(PENDING)
@@ -763,14 +804,14 @@ enum ObstacleType {
 // around each aerodrome. Replaced as a whole by each sync.
 model Obstacle {
   id         String       @id @default(cuid())
-  source     String       // "openaip"
+  source     String // "openaip"
   sourceId   String
   name       String?
   type       ObstacleType
   latitude   Float
   longitude  Float
-  heightM    Int?         // above ground
-  elevationM Int?         // above mean sea level, as openAIP gives it
+  heightM    Int? // above ground
+  elevationM Int? // above mean sea level, as openAIP gives it
   createdAt  DateTime     @default(now())
 
   @@unique([source, sourceId])
@@ -780,10 +821,10 @@ model Obstacle {
 }
 
 enum ProtectedAreaKind {
-  NATIONAL_PARK      // core area only
+  NATIONAL_PARK // core area only
   NATURE_RESERVE
   BIOTOPE_PROTECTION // arrêté de protection de biotope
-  BIRD_SPA           // Natura 2000, Birds Directive
+  BIRD_SPA // Natura 2000, Birds Directive
   SILENCE_ZONE
 
   @@schema("public")
@@ -794,12 +835,12 @@ enum ProtectedAreaKind {
 // the areas around an aerodrome. Replaced as a whole by each sync.
 model ProtectedArea {
   id        String            @id @default(cuid())
-  source    String            // "ign-bdtopo"
-  sourceId  String            // BD TOPO cleabs
+  source    String // "ign-bdtopo"
+  sourceId  String // BD TOPO cleabs
   name      String?
   kind      ProtectedAreaKind
-  detail    String?           // nature_detaillee, e.g. "Réserve naturelle nationale"
-  geometry  Json              // GeoJSON Polygon or MultiPolygon, WGS 84
+  detail    String? // nature_detaillee, e.g. "Réserve naturelle nationale"
+  geometry  Json // GeoJSON Polygon or MultiPolygon, WGS 84
   minLat    Float
   maxLat    Float
   minLon    Float
@@ -814,7 +855,7 @@ model ProtectedArea {
 
 enum AerialLineKind {
   POWER_LINE // high-voltage line
-  CABLE      // chairlift, cable car, material ropeway, zip line
+  CABLE // chairlift, cable car, material ropeway, zip line
 
   @@schema("public")
 }
@@ -824,12 +865,12 @@ enum AerialLineKind {
 // each sync; the bounding box finds those around an aerodrome.
 model AerialLine {
   id        String         @id @default(cuid())
-  source    String         // "ign-bdtopo"
-  sourceId  String         // BD TOPO cleabs
+  source    String // "ign-bdtopo"
+  sourceId  String // BD TOPO cleabs
   kind      AerialLineKind
-  detail    String?        // voltage ("225 kV") or ropeway type
+  detail    String? // voltage ("225 kV") or ropeway type
   name      String?
-  geometry  Json           // GeoJSON LineString, WGS 84, no altitude
+  geometry  Json // GeoJSON LineString, WGS 84, no altitude
   minLat    Float
   maxLat    Float
   minLon    Float
@@ -853,15 +894,33 @@ model WindClimate {
   latitude     Float
   longitude    Float
   altitudeM    Int?
-  periodStart  Int      // first year
-  periodEnd    Int      // last year
-  observations Int      // hours with a valid wind
-  calm         Int      // hours below 1 kt
+  periodStart  Int // first year
+  periodEnd    Int // last year
+  observations Int // hours with a valid wind
+  calm         Int // hours below 1 kt
   counts       Json
   updatedAt    DateTime @updatedAt
 
   @@index([latitude, longitude])
   @@map("wind_climate")
+  @@schema("public")
+}
+
+// Weather webcam listed by Cam-Aéro (cam-aero.eu). Only the link to its
+// viewer page is kept: images are never loaded or copied.
+model Webcam {
+  id          String    @id @default(cuid())
+  aerodromeId String
+  sourceId    String    @unique // Cam-Aéro camera name, e.g. "LFBP_AeroclubDuBearn"
+  label       String
+  pageUrl     String
+  lastImageAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  aerodrome Aerodrome @relation(fields: [aerodromeId], references: [id], onDelete: Cascade)
+
+  @@index([aerodromeId])
+  @@map("webcams")
   @@schema("public")
 }
 
@@ -871,15 +930,15 @@ model WindClimate {
 model CommonsPhoto {
   id          String   @id @default(cuid())
   aerodromeId String   @unique
-  wikidataId  String   // e.g. "Q2886463"
-  fileTitle   String   // "File:…" on Commons
-  pageUrl     String   // Commons description page, linked in the credit
-  sourceSha1  String   // unchanged on Commons → no new download
-  author      String?  // plain text, HTML stripped
-  license     String   // short name as on Commons, e.g. "CC BY-SA 4.0"
+  wikidataId  String // e.g. "Q2886463"
+  fileTitle   String // "File:…" on Commons
+  pageUrl     String // Commons description page, linked in the credit
+  sourceSha1  String // unchanged on Commons → no new download
+  author      String? // plain text, HTML stripped
+  license     String // short name as on Commons, e.g. "CC BY-SA 4.0"
   licenseUrl  String?
-  storedKey   String   // S3 object key of our copy
-  thumbKey    String?  // small copy for result lists; null until the next import
+  storedKey   String // S3 object key of our copy
+  thumbKey    String? // small copy for result lists; null until the next import
   mimeType    String
   width       Int
   height      Int
@@ -893,31 +952,31 @@ model CommonsPhoto {
 }
 
 model Airspace {
-  id          String  @id @default(cuid())
-  name        String
+  id           String  @id @default(cuid())
+  name         String
   // openAIP type code (0=Other, 1=Restricted, 2=Danger, 3=Prohibited, 4=CTR, 5=TMA,
   //   6=RMZ, 7=TMZ, 8=FIR, 9=UIR, 10=ADIZ, 11=ATZ, 12=MATZ, 13=Airway,
   //   14=MTR, 15=Alert, 16=Warning, 17=Protected, 18=HTZ, 19=Glider, 20=TRP,
   //   21=TIZ, 22=TIA, 23=MBZ, 24=GP, 25=WTSZ, 26=NOTAM)
-  type        Int
+  type         Int
   // ICAO class: A B C D E F G or special codes
-  icaoClass   String
+  icaoClass    String
   // Altitude limits — stored as human-readable strings (e.g. "SFC", "FL065", "3500ft MSL")
-  lowerLimit  String
-  upperLimit  String
+  lowerLimit   String
+  upperLimit   String
   // Raw limit values for filtering
-  lowerLimitFt  Int?   // feet MSL, null = SFC (0) or unknown
-  upperLimitFt  Int?   // feet MSL, null = unlimited or unknown
+  lowerLimitFt Int? // feet MSL, null = SFC (0) or unknown
+  upperLimitFt Int? // feet MSL, null = unlimited or unknown
   // GeoJSON polygon geometry (type: "Polygon" | "MultiPolygon", coordinates: ...)
-  geometry    Json
-  countryCode String  @default("FR")
+  geometry     Json
+  countryCode  String  @default("FR")
   // openAIP specific
-  activity    Int?    // 0=All, 1=Parachute, 2=Aerobatic, 3=Airshow, 4=Glider...
-  onDemand    Boolean @default(false)
-  onRequest   Boolean @default(false)
-  remarks     String?
+  activity     Int? // 0=All, 1=Parachute, 2=Aerobatic, 3=Airshow, 4=Glider...
+  onDemand     Boolean @default(false)
+  onRequest    Boolean @default(false)
+  remarks      String?
 
-  sourceId    String?
+  sourceId      String?
   sourceRawHash String?
   lastSyncedAt  DateTime?
 
@@ -937,11 +996,11 @@ model Airspace {
 // Isolated in the `osm` PostgreSQL schema to keep app migrations clean.
 
 model OsmPoi {
-  osmId    String @id          // "node/123456" | "way/789"
+  osmId    String @id // "node/123456" | "way/789"
   lat      Float
   lon      Float
-  category String               // "RESTAURANT" | "TRANSPORT" | "BIKE"
-  tags     Json                 // raw OSM tags — mirrors OverpassElement.tags
+  category String // "RESTAURANT" | "TRANSPORT" | "BIKE"
+  tags     Json // raw OSM tags — mirrors OverpassElement.tags
 
   importedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt

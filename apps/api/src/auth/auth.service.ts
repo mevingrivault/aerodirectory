@@ -1442,6 +1442,10 @@ export class AuthService {
           select: { id: true, aerodromeId: true, field: true, currentValue: true, proposedValue: true, reason: true, createdAt: true },
           orderBy: { createdAt: "desc" },
         },
+        communityInfos: {
+          select: { id: true, aerodromeId: true, kind: true, data: true, observedAt: true, contentStatus: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        },
         photos: {
           where: { status: "READY" },
           select: { id: true, aerodromeId: true, mimeType: true, width: true, height: true, createdAt: true },
@@ -1497,6 +1501,11 @@ export class AuthService {
       })),
       corrections: user.corrections.map((c: { id: string; aerodromeId: string; field: string; currentValue: string | null; proposedValue: string; reason: string | null; createdAt: Date }) => ({
         ...c,
+        createdAt: c.createdAt.toISOString(),
+      })),
+      communityInfos: user.communityInfos.map((c: { id: string; aerodromeId: string; kind: string; data: unknown; observedAt: Date; contentStatus: string; createdAt: Date }) => ({
+        ...c,
+        observedAt: c.observedAt.toISOString(),
         createdAt: c.createdAt.toISOString(),
       })),
       photos: user.photos.map((p: { id: string; aerodromeId: string; mimeType: string; width: number | null; height: number | null; createdAt: Date }) => ({

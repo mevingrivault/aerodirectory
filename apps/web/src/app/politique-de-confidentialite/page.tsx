@@ -31,7 +31,7 @@ export default function PolitiqueConfidentialitePage() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Compte</strong> : adresse e-mail, nom d'affichage, mot de passe (haché avec Argon2id), date de création du compte.</li>
             <li><strong>Authentification à deux facteurs</strong> : secret TOTP chiffré (optionnel).</li>
-            <li><strong>Contenu utilisateur</strong> : commentaires, visites d'aérodromes, profils d'avion, corrections proposées.</li>
+            <li><strong>Contenu utilisateur</strong> : commentaires, visites d'aérodromes, profils d'avion, corrections proposées, informations pratiques proposées (prix carburant, taxes, hangar, liens de webcam).</li>
             <li><strong>Photos</strong> : images téléversées, dimensions, type MIME. Les métadonnées EXIF sont supprimées lors du traitement.</li>
             <li><strong>Journaux d'activité</strong> : actions effectuées (connexion, publication de commentaire, etc.), adresse IP anonymisée, user-agent du navigateur.</li>
           </ul>

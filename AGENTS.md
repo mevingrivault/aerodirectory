@@ -37,6 +37,11 @@ there.
 | `COMMONS` | one photo per aerodrome (Wikidata P18), copied to S3 | per file, credited |
 | `PROTECTED_AREAS`, `AERIAL_LINES` | BD TOPO via Géoplateforme WFS (`ign/wfs.ts`) | Licence Ouverte |
 | `WIND_CLIMATE` | wind rose per Météo-France station, 2020-2024 | Licence Ouverte |
+| `CAM_AERO` | webcam links per field from cam-aero.eu (links only, no images) | no licence stated: links only |
+
+Fuel prices, fees, hangars and member webcam links are not imported: members
+propose them (`community-info/`, moderated, dated) and the sheet shows the
+newest approved entry per kind and key.
 
 Runtime calls to outside services: CheckWX (METAR/TAF, `metar/`) and HEAD
 requests to the SIA for the current AIRAC cycle's VAC/AD 2 (`sia/`), both

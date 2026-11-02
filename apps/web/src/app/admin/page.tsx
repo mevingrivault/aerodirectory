@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Ban,
+  Coins,
   Clock3,
   FileText,
   ImagePlus,
@@ -43,6 +44,7 @@ const SOURCE_LABELS: Record<AdminSyncRunItem["source"], string> = {
   PROTECTED_AREAS: "Zones protégées",
   WIND_CLIMATE: "Climatologie du vent",
   AERIAL_LINES: "Lignes et câbles",
+  CAM_AERO: "Webcams Cam-Aéro",
 };
 
 export default function AdminPage() {
@@ -131,6 +133,21 @@ export default function AdminPage() {
           accent: stats.pendingPhotos > 0 ? "text-primary" : "text-muted-foreground",
           summary: "Valider ou rejeter avant publication publique.",
           cta: "Traiter les photos",
+        },
+        {
+          href: "/admin/infos-pratiques",
+          icon: Coins,
+          title: "Infos pratiques",
+          value: stats.pendingCommunityInfos,
+          valueLabel:
+            stats.pendingCommunityInfos > 1 ? "infos à valider" : "info à valider",
+          tone:
+            stats.pendingCommunityInfos > 0
+              ? "border-primary/30 bg-primary/5"
+              : "border-border bg-background",
+          accent: stats.pendingCommunityInfos > 0 ? "text-primary" : "text-muted-foreground",
+          summary: "Prix carburant, taxes, hangars et webcams proposés par les membres.",
+          cta: "Traiter les infos",
         },
         {
           href: "/admin/comments",

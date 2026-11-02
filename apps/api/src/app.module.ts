@@ -13,6 +13,7 @@ import { AerodromeModule } from "./aerodrome/aerodrome.module";
 import { SearchModule } from "./search/search.module";
 import { VisitModule } from "./visit/visit.module";
 import { CommentModule } from "./comment/comment.module";
+import { CommunityInfoModule } from "./community-info/community-info.module";
 import { PlannerModule } from "./planner/planner.module";
 import { AuditModule } from "./audit/audit.module";
 import { HealthModule } from "./health/health.module";
@@ -57,6 +58,7 @@ import { ThrottlerGuard } from "@nestjs/throttler";
     SearchModule,
     VisitModule,
     CommentModule,
+    CommunityInfoModule,
     PlannerModule,
     AuditModule,
     HealthModule,

@@ -159,6 +159,7 @@ export interface AdminDashboardStats {
   activeComments: number;
   deletedComments: number;
   pendingPhotos: number;
+  pendingCommunityInfos: number;
   pendingReports: number;
   failedLogins24h: number;
   altchaFailures24h: number;
@@ -168,7 +169,7 @@ export interface AdminDashboardStats {
 
 export interface AdminSyncRunItem {
   id: string;
-  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS" | "OBSTACLES" | "PROTECTED_AREAS" | "WIND_CLIMATE" | "AERIAL_LINES";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS" | "OBSTACLES" | "PROTECTED_AREAS" | "WIND_CLIMATE" | "AERIAL_LINES" | "CAM_AERO";
   runType: "SCHEDULED" | "MANUAL" | "RETRY" | "RECOVERY";
   scope: string | null;
   status: "QUEUED" | "RETRY_SCHEDULED" | "IN_PROGRESS" | "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
@@ -184,7 +185,7 @@ export interface AdminSyncRunItem {
 }
 
 export interface AdminSyncSourceStatus {
-  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS" | "OBSTACLES" | "PROTECTED_AREAS" | "WIND_CLIMATE" | "AERIAL_LINES";
+  source: "OPENAIP" | "AIRSPACES" | "OSM" | "REGIONS" | "RGPD" | "OURAIRPORTS" | "COMMONS" | "OBSTACLES" | "PROTECTED_AREAS" | "WIND_CLIMATE" | "AERIAL_LINES" | "CAM_AERO";
   schedule: string;
   description: string;
   nextPlannedAt: string | null;
@@ -406,6 +407,8 @@ export interface AdminContentAuditItem {
     | "EVENT_REJECT"
     | "CORRECTION_APPROVE"
     | "CORRECTION_REJECT"
+    | "COMMUNITY_INFO_APPROVE"
+    | "COMMUNITY_INFO_REJECT"
     | "PHOTO_APPROVE"
     | "PHOTO_REJECT"
     | "REPORT_APPROVE"
@@ -413,7 +416,7 @@ export interface AdminContentAuditItem {
     | "USER_BAN"
     | "USER_UNBAN"
     | "USER_DELETE";
-  targetType: "comment" | "correction" | "photo" | "event" | "aerodrome" | "user";
+  targetType: "comment" | "correction" | "community_info" | "photo" | "event" | "aerodrome" | "user";
   targetId: string;
   targetSummary: string | null;
   reason: string | null;
@@ -533,4 +536,42 @@ export interface NotificationItem {
   metadata: Record<string, unknown> | null;
   readAt: string | null;
   createdAt: string;
+}
+
+/** Approved practical information on a sheet: the newest entry per kind and key. */
+export interface CommunityInfoItem {
+  id: string;
+  kind: import("../schemas/community-info.schema").CommunityInfoKind;
+  key: string;
+  data: Record<string, unknown>;
+  observedAt: string;
+  createdAt: string;
+  user: { id: string; displayName: string | null };
+}
+
+/** Webcam imported from Cam-Aéro: a link to its viewer page. */
+export interface ImportedWebcamItem {
+  id: string;
+  label: string;
+  pageUrl: string;
+  lastImageAt: string | null;
+}
+
+export interface AerodromeCommunityInfo {
+  items: CommunityInfoItem[];
+  webcams: ImportedWebcamItem[];
+}
+
+export interface AdminCommunityInfoListItem {
+  id: string;
+  kind: import("../schemas/community-info.schema").CommunityInfoKind;
+  key: string;
+  data: Record<string, unknown>;
+  observedAt: string;
+  contentStatus: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: { id: string; displayName: string | null; email: string } | null;
+  aerodrome: { id: string; name: string; icaoCode: string | null };
+  user: { id: string; displayName: string | null; email: string };
 }

@@ -8,6 +8,7 @@ export * from "./schemas/admin.schema";
 export * from "./schemas/list.schema";
 export * from "./schemas/notification.schema";
 export * from "./schemas/event.schema";
+export * from "./schemas/community-info.schema";
 export * from "./types/api";
 export * from "./constants";
 export * from "./geo";

@@ -54,7 +54,7 @@ export class AdminService {
 
   async getDashboardStats(): Promise<AdminDashboardStats> {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [totalUsers, bannedUsers, activeComments, pendingPhotos, pendingReports, failedLogins24h, altchaFailures24h, mailSent24h, mailFailed24h] =
+    const [totalUsers, bannedUsers, activeComments, pendingPhotos, pendingReports, pendingCommunityInfos, failedLogins24h, altchaFailures24h, mailSent24h, mailFailed24h] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: "BANNED" } }),
@@ -66,6 +66,7 @@ export class AdminService {
         }),
         this.prisma.photo.count({ where: { status: "PENDING" } }),
         this.prisma.report.count({ where: { contentStatus: "PENDING" } }),
+        this.prisma.communityInfo.count({ where: { contentStatus: "PENDING" } }),
         this.prisma.auditLog.count({
           where: {
             action: "LOGIN_FAILED",
@@ -104,6 +105,7 @@ export class AdminService {
       deletedComments: 0,
       pendingPhotos,
       pendingReports,
+      pendingCommunityInfos,
       failedLogins24h,
       altchaFailures24h,
       mailSent24h,
@@ -2341,6 +2343,8 @@ export class AdminService {
       value === "EVENT_REJECT" ||
       value === "CORRECTION_APPROVE" ||
       value === "CORRECTION_REJECT" ||
+      value === "COMMUNITY_INFO_APPROVE" ||
+      value === "COMMUNITY_INFO_REJECT" ||
       value === "PHOTO_APPROVE" ||
       value === "PHOTO_REJECT" ||
       value === "REPORT_APPROVE" ||
@@ -2357,6 +2361,7 @@ export class AdminService {
     return (
       value === "comment" ||
       value === "correction" ||
+      value === "community_info" ||
       value === "photo" ||
       value === "event" ||
       value === "aerodrome" ||

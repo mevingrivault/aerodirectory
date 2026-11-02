@@ -19,6 +19,7 @@ import { syncOpenAipObstacles } from "../services/importers/openaip/openaip-obst
 import { syncProtectedAreas } from "../services/importers/ign/protected-areas.importer";
 import { syncWindClimate } from "../services/importers/meteofrance/wind-climate.importer";
 import { syncAerialLines } from "../services/importers/ign/aerial-lines.importer";
+import { syncCamAeroWebcams } from "../services/importers/camaero/cam-aero.importer";
 import { runOpenAipSyncTask } from "./tasks/openaip-sync.task";
 import { runOpenAipAirspacesSyncTask } from "./tasks/openaip-airspaces-sync.task";
 import { runRegionsSyncTask } from "./tasks/regions-sync.task";
@@ -47,6 +48,8 @@ const PROTECTED_AREAS_CRON = process.env["SYNC_PROTECTED_AREAS_CRON"] ?? "0 4 2 
 // Yearly: a closed multi-year period; Météo-France republishes it around January.
 const WIND_CLIMATE_CRON = process.env["SYNC_WIND_CLIMATE_CRON"] ?? "0 4 15 2 *";
 const AERIAL_LINES_CRON = process.env["SYNC_AERIAL_LINES_CRON"] ?? "0 4 3 * *";
+// Weekly: cameras come and go with the aeroclubs that host them.
+const CAM_AERO_CRON = process.env["SYNC_CAM_AERO_CRON"] ?? "0 5 * * 1";
 const SYNC_TIMEZONE = process.env["SYNC_TIMEZONE"] ?? "Europe/Paris";
 const WORKER_HEARTBEAT_KEY = "navventura:sync:worker-heartbeat";
 const WORKER_HEARTBEAT_TTL_SECONDS = 120;
@@ -234,6 +237,15 @@ export class SyncService implements OnModuleInit {
   async scheduleAerialLines() {
     if (!this.workerEnabled) return;
     await this.enqueueRun("AERIAL_LINES", "SCHEDULED");
+  }
+
+  @Cron(CAM_AERO_CRON, {
+    name: "sync-enqueue-cam-aero",
+    timeZone: SYNC_TIMEZONE,
+  })
+  async scheduleCamAero() {
+    if (!this.workerEnabled) return;
+    await this.enqueueRun("CAM_AERO", "SCHEDULED");
   }
 
   @Cron("0 * * * * *", {
@@ -529,6 +541,8 @@ export class SyncService implements OnModuleInit {
         return this.executeWindClimate(run);
       case "AERIAL_LINES":
         return this.executeAerialLines(run);
+      case "CAM_AERO":
+        return this.executeCamAero(run);
       default:
         throw new Error(`Source non supportée: ${run.source}`);
     }
@@ -894,6 +908,29 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  private async executeCamAero(run: SyncRun): Promise<RunExecutionResult> {
+    await this.startStep(run.id, "cam_aero_import", 1);
+
+    try {
+      const result = await syncCamAeroWebcams(this.prisma as never);
+      await this.completeStep(run.id, "cam_aero_import", {
+        metrics: { listed: result.listed, active: result.active, imported: result.imported },
+        logSummary:
+          `Webcams liées: ${result.imported} sur ${result.active} actives` +
+          (result.unknownIcao.length ? ` (terrains inconnus: ${result.unknownIcao.join(", ")})` : ""),
+      });
+
+      return {
+        source: "CAM_AERO" as const,
+        status: "SUCCESS" as const,
+        summary: toInputJsonValue(result),
+      };
+    } catch (error) {
+      await this.failStep(run.id, "cam_aero_import", error);
+      throw error;
+    }
+  }
+
   private async startStep(runId: string, stepKey: string, stepOrder: number) {
     await this.prisma.syncRunStep.upsert({
       where: { runId_stepKey: { runId, stepKey } },
@@ -1119,6 +1156,8 @@ export class SyncService implements OnModuleInit {
         return WIND_CLIMATE_CRON;
       case "AERIAL_LINES":
         return AERIAL_LINES_CRON;
+      case "CAM_AERO":
+        return CAM_AERO_CRON;
       default:
         return "";
     }

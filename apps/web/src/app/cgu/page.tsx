@@ -47,7 +47,7 @@ export default function CguPage() {
         <div>
           <h2 className="text-xl font-semibold mb-3">4. Contenu utilisateur</h2>
           <p className="mb-2">
-            En publiant du contenu (commentaires, photos, corrections), vous déclarez :
+            En publiant du contenu (commentaires, photos, corrections, prix et informations pratiques), vous déclarez :
           </p>
           <ul className="list-disc pl-5 space-y-1">
             <li>en être l'auteur ou disposer des droits nécessaires ;</li>
