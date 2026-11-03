@@ -4,10 +4,12 @@ import { Fragment, Suspense, useEffect, useState, type CSSProperties, type FormE
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Download, Plus, Printer, X } from "lucide-react";
 import {
   FUEL_LABELS,
+  windComponents,
   type AerodromeCommunityInfo,
+  type BriefingField,
   type BriefingTrip,
 } from "@aerodirectory/shared";
 import { apiClient } from "@/lib/api-client";
@@ -72,7 +74,12 @@ interface WeatherResult {
   stationName: string | null;
   isNearest: boolean;
   distanceNm?: number;
-  metar: { raw: string; observedAt: string; flight_category: string | null } | null;
+  metar: {
+    raw: string;
+    observedAt: string;
+    flight_category: string | null;
+    wind: { degrees: number | null; speed_kts: number; gust_kts: number | null } | null;
+  } | null;
   taf: { raw: string; issuedAt: string } | null;
 }
 
@@ -93,6 +100,51 @@ const course = (deg: number | null) => (deg == null ? "—" : `${String(deg).pad
 const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { timeZone: "UTC" });
 const fieldName = (f: { name: string; icaoCode: string | null }) => (f.icaoCode ? `${f.icaoCode} — ${f.name}` : f.name);
+const shortName = (f: { name: string; icaoCode: string | null }) => f.icaoCode ?? f.name;
+const MAX_STOPS = 4;
+
+/** openAIP codes kept on a route (see the API's ROUTE_AIRSPACE_TYPES). */
+const AIRSPACE_TYPES: Record<number, string> = {
+  1: "Zone R", 2: "Zone D", 3: "Zone P", 4: "CTR", 5: "TMA", 6: "RMZ", 7: "TMZ",
+  11: "ATZ", 18: "HTZ", 19: "Secteur vol à voile", 21: "TIZ", 22: "TIA",
+};
+
+type Wind = NonNullable<NonNullable<WeatherResult["metar"]>["wind"]>;
+
+/** Wind on the better end of a runway, gusts counted; null for a variable wind or an unknown heading. */
+function runwayWind(wind: Wind, runway: { identifier: string; trueHeading: number | null }) {
+  if (wind.degrees == null || runway.trueHeading == null) return null;
+  const speed = Math.max(wind.speed_kts, wind.gust_kts ?? 0);
+  const ends = runway.identifier.split("/").map((e) => e.trim());
+  const options = [0, 180].map((offset, i) => ({
+    end: ends[i] ?? (i === 0 ? runway.identifier : ""),
+    ...windComponents(wind.degrees!, speed, (runway.trueHeading! + offset) % 360),
+  }));
+  return options[0]!.headwind >= options[1]!.headwind ? options[0]! : options[1]!;
+}
+
+const xml = (value: string) => value.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** GPX 1.1 route through the fields, for an EFB or a GPS. */
+function downloadGpx(trip: BriefingTrip) {
+  const points = [trip.departure, ...trip.stops, trip.destination, ...(trip.tripScope === "round_trip" ? [trip.departure] : [])];
+  const name = points.map(shortName).join(" - ");
+  const gpx = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<gpx version="1.1" creator="Navventura" xmlns="http://www.topografix.com/GPX/1/1">`,
+    `  <rte>`,
+    `    <name>${xml(name)}</name>`,
+    ...points.map((p) => `    <rtept lat="${p.latitude.toFixed(6)}" lon="${p.longitude.toFixed(6)}"><name>${xml(shortName(p))}</name><desc>${xml(p.name)}</desc></rtept>`),
+    `  </rte>`,
+    `</gpx>`,
+  ].join("\n");
+  const url = URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${points.map(shortName).join("-").replace(/[^A-Za-z0-9-]+/g, "_")}.gpx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function slotLabel(slot: OpeningSlot) {
   if (slot.byNotam) return "sur NOTAM";
@@ -170,7 +222,12 @@ function BriefingContent() {
       {from && to && profile ? (
         <Briefing params={params} />
       ) : (
-        <BriefingForm initialFrom={from ?? user.homeAerodrome?.id ?? null} initialTo={to} initialProfile={profile} />
+        <BriefingForm
+          initialFrom={from ?? user.homeAerodrome?.id ?? null}
+          initialTo={to}
+          initialVia={(params.get("via") ?? "").split(",").filter(Boolean)}
+          initialProfile={profile}
+        />
       )}
     </div>
   );
@@ -215,10 +272,11 @@ function AerodromePicker({ label, value, onChange }: { label: string; value: Aer
   );
 }
 
-function BriefingForm({ initialFrom, initialTo, initialProfile }: { initialFrom: string | null; initialTo: string | null; initialProfile: string | null }) {
+function BriefingForm({ initialFrom, initialTo, initialVia, initialProfile }: { initialFrom: string | null; initialTo: string | null; initialVia: string[]; initialProfile: string | null }) {
   const router = useRouter();
   const [from, setFrom] = useState<AerodromeOption | null>(null);
   const [to, setTo] = useState<AerodromeOption | null>(null);
+  const [stops, setStops] = useState<(AerodromeOption | null)[]>([]);
   const [profileId, setProfileId] = useState(initialProfile ?? "");
   const [scope, setScope] = useState<"round_trip" | "outbound">("round_trip");
   const [departure, setDeparture] = useState("");
@@ -234,12 +292,18 @@ function BriefingForm({ initialFrom, initialTo, initialProfile }: { initialFrom:
   useEffect(() => {
     if (initialFrom) apiClient.get<AerodromeOption>(`/aerodromes/${initialFrom}`).then((r) => setFrom(r.data)).catch(() => undefined);
     if (initialTo) apiClient.get<AerodromeOption>(`/aerodromes/${initialTo}`).then((r) => setTo(r.data)).catch(() => undefined);
+    Promise.all(initialVia.slice(0, MAX_STOPS).map((id) => apiClient.get<AerodromeOption>(`/aerodromes/${id}`).then((r) => r.data).catch(() => null)))
+      .then(setStops);
+  // initialVia is a fresh array each render; the ids come from the URL once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFrom, initialTo]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!from || !to || !profileId) return;
     const qs = new URLSearchParams({ from: from.id, to: to.id, profile: profileId, scope });
+    const via = stops.filter((s): s is AerodromeOption => !!s).map((s) => s.id);
+    if (via.length > 0) qs.set("via", via.join(","));
     if (departure) {
       const at = new Date(departure);
       if (!Number.isNaN(at.getTime())) qs.set("dep", at.toISOString());
@@ -262,6 +326,24 @@ function BriefingForm({ initialFrom, initialTo, initialProfile }: { initialFrom:
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2" style={card}>
         <AerodromePicker label="Départ" value={from} onChange={setFrom} />
         <AerodromePicker label="Destination" value={to} onChange={setTo} />
+        {stops.map((stop, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <AerodromePicker label={`Escale ${i + 1}`} value={stop} onChange={(v) => setStops((all) => all.map((s, j) => (j === i ? v : s)))} />
+            </div>
+            <button type="button" aria-label={`Retirer l'escale ${i + 1}`} onClick={() => setStops((all) => all.filter((_, j) => j !== i))} className="h-10 rounded-md border px-2">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {stops.length < MAX_STOPS && (
+          <div className="sm:col-span-2">
+            <button type="button" onClick={() => setStops((all) => [...all, null])} className="inline-flex items-center gap-2 text-sm underline">
+              <Plus className="h-4 w-4" /> Ajouter une escale
+            </button>
+            <span className="text-xs text-muted-foreground"> · dans l&apos;ordre de vol, avant la destination</span>
+          </div>
+        )}
         <div>
           <label className="text-sm font-medium" style={{ display: "block", marginBottom: 4 }}>Avion</label>
           <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
@@ -310,6 +392,7 @@ function Briefing({ params }: { params: URLSearchParams }) {
     profileId: params.get("profile"),
     departureId: params.get("from"),
     destinationId: params.get("to"),
+    viaIds: (params.get("via") ?? "").split(",").filter(Boolean).slice(0, MAX_STOPS),
     tripScope: params.get("scope") === "outbound" ? "outbound" : "round_trip",
     ...(params.get("dep") ? { departureTime: params.get("dep") } : {}),
     ...(readNumber(params, "stay") != null ? { stayMinutes: readNumber(params, "stay") } : {}),
@@ -346,7 +429,10 @@ function Briefing({ params }: { params: URLSearchParams }) {
           <ArrowLeft className="h-4 w-4" /> Retour
         </button>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={() => router.replace("/briefing")} className="h-9 rounded-md border px-3 text-sm">Autre trajet</button>
+          <button type="button" onClick={() => router.replace(`/briefing?${editParams(params)}`)} className="h-9 rounded-md border px-3 text-sm">Modifier le trajet</button>
+          <button type="button" onClick={() => downloadGpx(trip)} className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm">
+            <Download className="h-4 w-4" /> GPX
+          </button>
           <button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
             <Printer className="h-4 w-4" /> Imprimer / PDF
           </button>
@@ -356,8 +442,10 @@ function Briefing({ params }: { params: URLSearchParams }) {
       <header className="brief-card" style={{ ...card, background: "var(--paper-50)" }}>
         <p style={{ ...small, margin: 0 }}>Briefing Navventura · généré le {generatedAt}</p>
         <h1 style={{ fontFamily: "var(--f-serif)", fontWeight: 500, fontSize: 28, margin: "6px 0 4px" }}>
-          {fieldName(trip.departure)} → {fieldName(trip.destination)}
+          {[trip.departure, ...trip.stops, trip.destination].map(shortName).join(" → ")}
+          {roundTrip ? ` → ${shortName(trip.departure)}` : ""}
         </h1>
+        <p style={{ margin: "0 0 4px", fontSize: 14 }}>{fieldName(trip.departure)} → {fieldName(trip.destination)}</p>
         <p style={{ margin: 0, fontSize: 14 }}>
           {roundTrip ? "Aller-retour" : "Aller simple"} · {trip.aircraft.name}
           {trip.aircraft.fuelType ? ` · ${FUEL_LABELS[trip.aircraft.fuelType] ?? trip.aircraft.fuelType}` : ""}
@@ -368,26 +456,38 @@ function Briefing({ params }: { params: URLSearchParams }) {
       <Section title="Trajet">
         <div style={{ marginBottom: 10 }}>
           {!trip.withinRange && <span style={warn}>Hors autonomie</span>}
-          {trip.refuelRequired && trip.withinRange && <span style={warn}>Plein sur place obligatoire pour le retour</span>}
+          {trip.legs.some((l) => l.refuelBefore) && <span style={warn}>Plein en route obligatoire</span>}
           {trip.nightOperation && <span style={{ ...warn, background: "oklch(0.93 0.04 270)", color: "oklch(0.38 0.12 270)" }}>Nuit aéronautique</span>}
         </div>
         <Facts
           rows={[
             ["Distance", <span key="d" style={mono}>{formatNm(trip.distanceNm)}</span>],
-            ["Route vraie", <span key="c" style={mono}>{course(trip.trueCourse)}{roundTrip ? ` · retour ${course(trip.returnTrueCourse)}` : ""}</span>],
-            ["Route magnétique", <span key="m" style={mono}>{course(trip.magneticCourse)}{roundTrip ? ` · retour ${course(trip.returnMagneticCourse)}` : ""}</span>],
-            ["Temps de vol", <span key="t" style={mono}>{formatFlightTime(trip.timeHours)} par trajet{roundTrip ? ` · ${formatFlightTime(trip.tripTimeHours)} au total, roulage compris` : ""}</span>],
-            ["Carburant", <span key="f" style={mono}>{trip.fuelUsedLiters} L par trajet{roundTrip ? ` · ${trip.tripFuelLiters} L au total` : ""}</span>],
+            ["Temps de vol", <span key="t" style={mono}>{formatFlightTime(trip.flightTimeHours)} · {formatFlightTime(trip.tripTimeHours)} roulage compris</span>],
+            ["Carburant", <span key="f" style={mono}>{trip.tripFuelLiters} L</span>],
             ["Autonomie utile", <span key="r" style={mono}>{formatNm(trip.usableRangeNm)} (réserve {trip.reserveMinutes} min déduite)</span>],
-            ["Coût estimé", <span key="e" style={mono}>{formatEuros(trip.estimatedCost)}{trip.landingFee ? ", taxe incluse" : ""}</span>],
-            ...(trip.arrivalAt ? ([["Horaires", <span key="h" style={mono}>arrivée {clock(trip.arrivalAt)}{trip.returnAt ? ` · retour ${clock(trip.returnAt)}` : ""}</span>]] as [string, ReactNode][]) : []),
+            ["Coût estimé", (
+              <span key="e" style={mono}>
+                {formatEuros(trip.estimatedCost)}
+                {trip.landingFees > 0 ? `, dont ${formatEuros(trip.landingFees)} de taxes` : ""}
+                {trip.parkingFees > 0 ? ` et ${formatEuros(trip.parkingFees)} de parking` : ""}
+              </span>
+            )],
           ]}
         />
-        <p style={{ ...small, marginTop: 10, marginBottom: 0 }}>Ligne droite, sans vent, à {trip.aircraft.tas} kt et {trip.aircraft.fuelConsumption} L/h.</p>
+        <LegsTable trip={trip} />
+        <p style={{ ...small, marginTop: 10, marginBottom: 0 }}>
+          Ligne droite, sans vent, à {trip.aircraft.tas} kt et {trip.aircraft.fuelConsumption} L/h. Réservoir plein au départ ; plein refait en escale
+          quand ce qui reste ne suffit pas jusqu&apos;au prochain terrain qui vend votre carburant.
+          {trip.stops.length > 0 || roundTrip ? ` ${trip.stayMinutes} min au sol à chaque escale.` : ""}
+        </p>
       </Section>
 
-      <FieldSection role="Arrivée" id={trip.destination.id} sunDate={sunDate} />
-      <FieldSection role="Départ" id={trip.departure.id} sunDate={sunDate} compact />
+      <RouteSection trip={trip} />
+      <FieldSection role="Arrivée" id={trip.destination.id} sunDate={sunDate} maxCrosswindKt={trip.aircraft.maxCrosswindKt} />
+      {trip.stops.map((stop, i) => (
+        <FieldSection key={`${stop.id}-${i}`} role={`Escale ${i + 1}`} id={stop.id} sunDate={sunDate} maxCrosswindKt={trip.aircraft.maxCrosswindKt} />
+      ))}
+      <FieldSection role="Départ" id={trip.departure.id} sunDate={sunDate} maxCrosswindKt={trip.aircraft.maxCrosswindKt} compact />
       <SurroundingsSection id={trip.destination.id} />
       <WindSection id={trip.destination.id} />
       <PracticalSection id={trip.destination.id} trip={trip} />
@@ -402,7 +502,90 @@ function Briefing({ params }: { params: URLSearchParams }) {
   );
 }
 
-function FieldSection({ role, id, sunDate, compact = false }: { role: string; id: string; sunDate: string; compact?: boolean }) {
+/** The briefing's query string, turned back into the form's. */
+function editParams(params: URLSearchParams) {
+  const qs = new URLSearchParams();
+  for (const key of ["from", "to", "via", "profile"]) {
+    const value = params.get(key);
+    if (value) qs.set(key, value);
+  }
+  return qs.toString();
+}
+
+function LegsTable({ trip }: { trip: BriefingTrip }) {
+  const fields = new Map<string, BriefingField>([trip.departure, trip.destination, ...trip.stops].map((f) => [f.id, f]));
+  const name = (id: string) => (fields.get(id) ? shortName(fields.get(id)!) : "?");
+  const timed = trip.legs.some((l) => l.takeOffAt);
+  const cell: CSSProperties = { padding: "6px 8px 6px 0", whiteSpace: "nowrap" };
+
+  return (
+    <div style={{ overflowX: "auto", marginTop: 14 }}>
+      <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: "var(--ink-500)", fontSize: 12 }}>
+            <th style={cell}>Étape</th><th style={cell}>Distance</th><th style={cell}>Route vraie / mag.</th>
+            <th style={cell}>Temps</th><th style={cell}>Carburant</th>{timed && <th style={cell}>Décollage → atterrissage</th>}<th style={cell} />
+          </tr>
+        </thead>
+        <tbody>
+          {trip.legs.map((leg, i) => (
+            <tr key={i} style={{ borderTop: "1px solid var(--ink-200)" }}>
+              <td style={{ ...cell, ...mono, fontWeight: 600 }}>{name(leg.fromId)} → {name(leg.toId)}</td>
+              <td style={{ ...cell, ...mono }}>{formatNm(leg.distanceNm)}</td>
+              <td style={{ ...cell, ...mono }}>{course(leg.trueCourse)} / {course(leg.magneticCourse)}</td>
+              <td style={{ ...cell, ...mono }}>{formatFlightTime(leg.timeHours)}</td>
+              <td style={{ ...cell, ...mono }}>{leg.fuelLiters} L</td>
+              {timed && <td style={{ ...cell, ...mono }}>{clock(leg.takeOffAt)} → {clock(leg.landingAt)}</td>}
+              <td style={{ ...cell, fontSize: 12 }}>
+                {leg.refuelBefore && <span style={warn}>Plein avant</span>}
+                {!leg.withinRange && <span style={warn}>Hors autonomie</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ ...small, margin: "6px 0 0" }}>Route magnétique : déclinaison du terrain de départ de l&apos;étape, « — » si inconnue.</p>
+    </div>
+  );
+}
+
+function RouteSection({ trip }: { trip: BriefingTrip }) {
+  return (
+    <Section title="Sur la route">
+      <h3 style={{ ...h3, marginTop: 0 }}>Espaces traversés (plancher ≤ 6 500 ft)</h3>
+      {trip.airspaces.length === 0 ? <p style={small}>Aucun espace réglementé, dangereux, interdit ni contrôlé connu sur la ligne droite.</p> : (
+        trip.airspaces.map((a) => (
+          <p key={a.id} style={{ fontSize: 13, margin: "0 0 3px" }}>
+            <span style={{ ...mono, fontWeight: 600 }}>{AIRSPACE_TYPES[a.type] ?? "Espace"}</span> {a.name}
+            {/^[A-G]$/.test(a.icaoClass) && a.type > 3 ? ` · classe ${a.icaoClass}` : ""}
+            {" · "}<span style={mono}>{a.lowerLimit} – {a.upperLimit}</span>
+            {a.onDemand ? " · activable" : ""}{a.onRequest ? " · sur demande" : ""}
+            <span style={small}> · à {formatNm(a.alongNm)} du départ</span>
+          </p>
+        ))
+      )}
+      <h3 style={h3}>Obstacles les plus hauts à moins de {trip.obstacleCorridorNm} NM</h3>
+      {trip.obstacles.length === 0 ? <p style={small}>Aucun obstacle connu dans ce couloir.</p> : (
+        <>
+          {trip.obstacles.map((o) => (
+            <p key={o.id} style={{ fontSize: 13, margin: "0 0 3px" }}>
+              {OBSTACLE_LABELS[o.type as NearbyObstacle["type"]] ?? "Obstacle"}{o.name ? ` « ${o.name} »` : ""} · sommet {formatObstacleElevation(o.elevationM)} · {formatObstacleHeight(o.heightM)}
+              <span style={small}> · à {formatNm(o.alongNm)} du départ, {o.offsetNm} NM de la route</span>
+            </p>
+          ))}
+          {trip.obstacleCount > trip.obstacles.length && (
+            <p style={{ ...small, margin: "4px 0 0" }}>{trip.obstacleCount} obstacles connus dans le couloir, les {trip.obstacles.length} plus hauts affichés.</p>
+          )}
+        </>
+      )}
+      <p style={{ ...small, marginTop: 10, marginBottom: 0 }}>
+        Ligne droite entre les terrains, données openAIP indicatives : préparez la navigation sur la carte OACI et vérifiez les activations (NOTAM, SUP AIP).
+      </p>
+    </Section>
+  );
+}
+
+function FieldSection({ role, id, sunDate, maxCrosswindKt, compact = false }: { role: string; id: string; sunDate: string; maxCrosswindKt: number | null; compact?: boolean }) {
   const { data: adRes } = useQuery({ queryKey: ["aerodrome", id], queryFn: () => apiClient.get<FieldDetail>(`/aerodromes/${id}`) });
   const { data: docsRes } = useQuery({ queryKey: ["aerodrome-documents", id], queryFn: () => apiClient.get<FieldDocuments>(`/aerodromes/${id}/documents`) });
   const { data: weatherRes } = useQuery({ queryKey: ["weather", id], queryFn: () => apiClient.get<WeatherResult | null>(`/aerodromes/${id}/weather`) });
@@ -416,6 +599,7 @@ function FieldSection({ role, id, sunDate, compact = false }: { role: string; id
   const vac = safeHttpUrl(docs?.vacUrl);
   const aip = safeHttpUrl(docs?.aipUrl);
   const fuels = ad.fuels.filter((f) => f.available);
+  const wind = weather?.metar?.wind ?? null;
 
   return (
     <Section title={`${role} · ${fieldName(ad)}`}>
@@ -451,6 +635,7 @@ function FieldSection({ role, id, sunDate, compact = false }: { role: string; id
                 <td style={{ padding: "6px 8px" }}>{r.length} m{r.width ? ` × ${r.width} m` : ""}</td>
                 <td style={{ padding: "6px 8px" }}>{SURFACES[r.surface] ?? r.surface}{r.lighting ? " · balisée" : ""}</td>
                 <td style={{ padding: "6px 0", color: "var(--ink-500)" }}>{r.trueHeading != null ? `${course(r.trueHeading)} vrai` : ""}{r.remarks ? ` · ${r.remarks}` : ""}</td>
+                <td style={{ padding: "6px 0 6px 8px", whiteSpace: "nowrap" }}><RunwayWind wind={wind} runway={r} maxCrosswindKt={maxCrosswindKt} /></td>
               </tr>
             ))}
           </tbody>
@@ -504,9 +689,28 @@ function FieldSection({ role, id, sunDate, compact = false }: { role: string; id
             </p>
           )}
           {weather.taf && <p style={{ ...mono, margin: 0, whiteSpace: "pre-wrap" }}>{weather.taf.raw}</p>}
+          {wind && ad.runways.length > 0 && (
+            <p style={{ ...small, margin: "4px 0 0" }}>
+              Composantes par piste calculées sur le METAR, rafales comprises{maxCrosswindKt == null ? " · indiquez votre limite de vent de travers dans le profil avion pour être averti" : ""}.
+            </p>
+          )}
         </div>
       )}
     </Section>
+  );
+}
+
+/** METAR wind on the runway end that faces it best. */
+function RunwayWind({ wind, runway, maxCrosswindKt }: { wind: Wind | null; runway: { identifier: string; trueHeading: number | null }; maxCrosswindKt: number | null }) {
+  if (!wind) return null;
+  const best = runwayWind(wind, runway);
+  if (!best) return wind.degrees == null && wind.speed_kts > 0 ? <span style={small}>vent variable</span> : null;
+  const over = maxCrosswindKt != null && best.crosswind > maxCrosswindKt;
+  return (
+    <span style={{ fontSize: 12 }}>
+      <span style={mono}>{best.end}</span> : {best.headwind >= 0 ? `face ${best.headwind}` : `arrière ${-best.headwind}`} kt, travers {best.crosswind} kt
+      {over && <span style={{ ...warn, marginLeft: 6, marginRight: 0 }}>au-delà de {maxCrosswindKt} kt</span>}
+    </span>
   );
 }
 

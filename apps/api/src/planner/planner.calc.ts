@@ -42,10 +42,14 @@ export const FUEL_FILTERS = {
   fuelJetA1: "JET_A1",
 } as const;
 
+const PAVED_SURFACES = ["ASPHALT", "CONCRETE"];
+
 /**
  * Destinations the aircraft can use. Winch-only fields (gliders) and
  * heliports never are; private fields only on request, since landing there
  * needs the owner's permission. PPR fields stay in and are flagged.
+ * A hangar or webcam counts whether it comes from the import or from an
+ * approved member report.
  */
 export function buildDestinationWhere(
   aircraft: Pick<PlannerAircraft, "minRunwayLength" | "allowedSurfaces">,
@@ -56,6 +60,34 @@ export function buildDestinationWhere(
   const fuelTypes = Object.entries(FUEL_FILTERS)
     .filter(([key]) => filters[key as keyof typeof FUEL_FILTERS])
     .map(([, type]) => type);
+  const surfaces = filters.pavedRunway
+    ? aircraft.allowedSurfaces.filter((s) => PAVED_SURFACES.includes(s))
+    : aircraft.allowedSurfaces;
+  const either: Prisma.AerodromeWhereInput[] = [];
+  if (filters.hasHangar) {
+    either.push({
+      OR: [
+        { hasHangars: true },
+        {
+          communityInfos: {
+            some: {
+              kind: "HANGAR",
+              contentStatus: "APPROVED",
+              OR: [
+                { data: { path: ["availability"], equals: "YES" } },
+                { data: { path: ["availability"], equals: "ON_REQUEST" } },
+              ],
+            },
+          },
+        },
+      ],
+    });
+  }
+  if (filters.hasWebcam) {
+    either.push({
+      OR: [{ webcams: { some: {} } }, { communityInfos: { some: { kind: "WEBCAM", contentStatus: "APPROVED" } } }],
+    });
+  }
 
   return {
     status: "OPEN",
@@ -65,7 +97,7 @@ export function buildDestinationWhere(
     runways: {
       some: {
         length: { gte: aircraft.minRunwayLength },
-        surface: { in: aircraft.allowedSurfaces as Prisma.EnumSurfaceTypeFilter["in"] },
+        surface: { in: surfaces as Prisma.EnumSurfaceTypeFilter["in"] },
       },
     },
     ...(filters.hasRestaurant ? { hasRestaurant: true } : {}),
@@ -78,6 +110,7 @@ export function buildDestinationWhere(
     ...(input.excludeVisited
       ? { visits: { none: { userId, status: { in: ["VISITED", "FAVORITE"] } } } }
       : {}),
+    ...(either.length > 0 ? { AND: either } : {}),
   };
 }
 
@@ -218,5 +251,160 @@ export function checkNight(
   };
 }
 
+const parisDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" });
+
+/** Midnights (French time) between landing and the next take-off: the nights a parking fee is due. */
+export function nightsParked(landing: number, takeOff: number): number {
+  if (takeOff <= landing) return 0;
+  const days = (Date.parse(parisDay.format(takeOff)) - Date.parse(parisDay.format(landing))) / 86_400_000;
+  return Math.max(0, Math.round(days));
+}
+
+/** Nights parked at the destination of a round trip; 0 without a departure time. */
+export function stayNights(input: TripInput, leg: Pick<LegEstimate, "timeHours">): number {
+  if (!input.departureTime || (input.tripScope ?? "round_trip") !== "round_trip") return 0;
+  const minute = 60_000;
+  const landing = Date.parse(input.departureTime) + (input.departureGroundMinutes ?? 0) * minute + leg.timeHours * 3_600_000;
+  const returnTakeOff =
+    landing + ((input.arrivalGroundMinutes ?? 0) + (input.stayMinutes ?? 60) + (input.departureGroundMinutes ?? 0)) * minute;
+  return nightsParked(landing, returnTakeOff);
+}
+
+// ─── Routes with stops (briefing) ─────────────────────────────────────────
+
+export interface RoutePoint extends Place {
+  id: string;
+  fuels: { type: string }[];
+  landingFee?: number | null;
+  parkingPerNight?: number | null;
+}
+
+export type RouteInput = Pick<
+  TripInput,
+  "reserveMinutes" | "departureGroundMinutes" | "arrivalGroundMinutes" | "fuelPricePerLiter" | "departureTime" | "stayMinutes"
+>;
+
+export interface RouteLeg {
+  fromId: string;
+  toId: string;
+  distanceNm: number;
+  timeHours: number;
+  fuelLiters: number;
+  refuelBefore: boolean;
+  withinRange: boolean;
+  takeOffAt: string | null;
+  landingAt: string | null;
+}
+
+export interface RouteEstimate {
+  legs: RouteLeg[];
+  distanceNm: number;
+  flightTimeHours: number;
+  tripTimeHours: number;
+  tripFuelLiters: number;
+  usableRangeNm: number;
+  withinRange: boolean;
+  fuelCost: number;
+  landingFees: number;
+  parkingFees: number;
+  estimatedCost: number;
+  nightOperation: boolean | null;
+}
+
+/**
+ * Flies the points in order, straight lines, no wind. The tank is full at
+ * the start. At each stop that sells the aircraft's fuel, it is filled when
+ * what is left would not reach the next field selling it (or the end). Every
+ * landing pays its fee except one back at the start; each stop lasts
+ * `stayMinutes`. A two-point return [A, B, A] gives the same answer as
+ * computeTrip, plus parking.
+ */
+export function computeRoute(aircraft: PlannerAircraft, input: RouteInput, points: RoutePoint[]): RouteEstimate {
+  const minute = 60_000;
+  const taxiOut = input.departureGroundMinutes ?? 0;
+  const taxiIn = input.arrivalGroundMinutes ?? 0;
+  const usableRangeNm = Math.max(0, aircraft.fuelRange - ((input.reserveMinutes ?? 30) / 60) * aircraft.tas);
+  const sells = (p: RoutePoint) => aircraft.fuelType != null && p.fuels.some((f) => f.type === aircraft.fuelType);
+  const distances = points.slice(1).map((p, i) => haversineNm(points[i]!.latitude, points[i]!.longitude, p.latitude, p.longitude));
+  const last = points.length - 1;
+  const backHome = points.length > 1 && points[last]!.id === points[0]!.id;
+
+  let onBoardNm = usableRangeNm;
+  let clock = input.departureTime ? Date.parse(input.departureTime) : null;
+  const events: [number, Place][] = [];
+  let landingFees = 0;
+  let parkingFees = 0;
+  const legs: RouteLeg[] = [];
+
+  distances.forEach((distanceNm, i) => {
+    const from = points[i]!;
+    const to = points[i + 1]!;
+    let refuelBefore = false;
+    if (i > 0 && sells(from)) {
+      // Distance to cover before the next chance to refuel.
+      let needed = 0;
+      for (let j = i; j < distances.length; j++) {
+        needed += distances[j]!;
+        if (sells(points[j + 1]!)) break;
+      }
+      if (onBoardNm < needed) {
+        onBoardNm = usableRangeNm;
+        refuelBefore = true;
+      }
+    }
+    const withinRange = distanceNm <= onBoardNm;
+    onBoardNm -= distanceNm;
+
+    const timeHours = distanceNm / aircraft.tas;
+    let takeOffAt: string | null = null;
+    let landingAt: string | null = null;
+    if (clock != null) {
+      const takeOff = clock + taxiOut * minute;
+      const landing = takeOff + timeHours * 3_600_000;
+      events.push([takeOff, from], [landing, to]);
+      takeOffAt = toMinute(takeOff);
+      landingAt = toMinute(landing);
+      clock = landing + (taxiIn + (i + 1 < distances.length ? input.stayMinutes ?? 60 : 0)) * minute;
+      if (i + 1 < distances.length && to.parkingPerNight) {
+        parkingFees += nightsParked(landing, clock + taxiOut * minute) * to.parkingPerNight;
+      }
+    }
+    if (!(backHome && i + 1 === last)) landingFees += to.landingFee ?? 0;
+
+    legs.push({
+      fromId: from.id,
+      toId: to.id,
+      distanceNm: round1(distanceNm),
+      timeHours: round2(timeHours),
+      fuelLiters: round1(timeHours * aircraft.fuelConsumption),
+      refuelBefore,
+      withinRange,
+      takeOffAt,
+      landingAt,
+    });
+  });
+
+  const flightTimeHours = distances.reduce((sum, d) => sum + d / aircraft.tas, 0);
+  const tripTimeHours = round2(flightTimeHours + (distances.length * (taxiOut + taxiIn)) / 60);
+  const tripFuelLiters = flightTimeHours * aircraft.fuelConsumption;
+  const fuelCost = round2(tripFuelLiters * (input.fuelPricePerLiter ?? 0));
+
+  return {
+    legs,
+    distanceNm: round1(distances.reduce((a, b) => a + b, 0)),
+    flightTimeHours: round2(flightTimeHours),
+    tripTimeHours,
+    tripFuelLiters: round1(tripFuelLiters),
+    usableRangeNm: round1(usableRangeNm),
+    withinRange: legs.every((l) => l.withinRange),
+    fuelCost,
+    landingFees: round2(landingFees),
+    parkingFees: round2(parkingFees),
+    estimatedCost: round2(fuelCost + round2(tripTimeHours * aircraft.hourlyCost) + landingFees + parkingFees),
+    nightOperation: clock == null ? null : events.some(([at, place]) => isAeronauticalNight(new Date(at), place)),
+  };
+}
+
+const toMinute = (ms: number) => new Date(Math.round(ms / 60_000) * 60_000).toISOString();
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;

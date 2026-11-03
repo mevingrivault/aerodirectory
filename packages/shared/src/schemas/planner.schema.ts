@@ -12,6 +12,7 @@ export const AircraftProfileSchema = z.object({
   allowedSurfaces: z.array(z.enum(SURFACE_TYPES)).min(1),
   fuelType: z.enum(FUEL_TYPES).nullable().optional(), // what the aircraft burns, to refuel on the way
   category: z.enum(FEE_CATEGORIES).nullable().optional(), // ULM / up to 1.5 t / over: picks the landing fee
+  maxCrosswindKt: z.number().int().min(0).max(60).nullable().optional(), // demonstrated or personal limit
 });
 
 export const PlannerQuerySchema = z.object({
@@ -62,6 +63,9 @@ export const PlannerQuerySchema = z.object({
       fuelUL91: z.boolean().optional(),
       fuelSP98: z.boolean().optional(),
       fuelJetA1: z.boolean().optional(),
+      hasHangar: z.boolean().optional(), // openAIP hangars, or a member saying there is room
+      hasWebcam: z.boolean().optional(), // Cam-Aéro or a member's link
+      pavedRunway: z.boolean().optional(), // asphalt or concrete, long enough for the aircraft
     })
     .optional(),
 });
@@ -71,6 +75,8 @@ export const BriefingQuerySchema = z.object({
   profileId: z.string().cuid(),
   departureId: z.string().min(1).max(50),
   destinationId: z.string().min(1).max(50),
+  // Stops on the way, in order. A round trip flies back direct from the destination.
+  viaIds: z.array(z.string().min(1).max(50)).max(4).default([]),
   tripScope: z.enum(["outbound", "round_trip"]).default("round_trip"),
   reserveMinutes: z.number().int().min(0).max(120).default(30),
   departureGroundMinutes: z.number().int().min(0).max(60).default(0),

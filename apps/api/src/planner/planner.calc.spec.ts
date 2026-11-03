@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { PlannerQuerySchema, type PlannerQueryInput } from "@aerodirectory/shared";
-import { buildDestinationWhere, checkNight, estimateLeg, isAeronauticalNight, type PlannerAircraft } from "./planner.calc";
+import {
+  buildDestinationWhere,
+  checkNight,
+  computeRoute,
+  computeTrip,
+  estimateLeg,
+  isAeronauticalNight,
+  nightsParked,
+  stayNights,
+  type PlannerAircraft,
+} from "./planner.calc";
 
 /** A DR400-ish: 100 kt, 30 L/h, 150 €/h, 400 NM with full tanks. */
 const aircraft: PlannerAircraft = {
@@ -105,6 +115,77 @@ describe("buildDestinationWhere", () => {
   it("turns every fuel filter, UL91 and Jet A1 included, into one OR clause", () => {
     const where = buildDestinationWhere(aircraft, query({ filters: { fuelUL91: true, fuelJetA1: true } }), "u1");
     expect(where.fuels).toEqual({ some: { type: { in: ["UL91", "JET_A1"] }, available: true } });
+  });
+});
+
+describe("buildDestinationWhere, hangar, webcam and paved filters", () => {
+  it("keeps only paved surfaces the aircraft accepts", () => {
+    const where = buildDestinationWhere(aircraft, query({ filters: { pavedRunway: true } }), "u1");
+    expect(where.runways).toEqual({ some: { length: { gte: 600 }, surface: { in: ["ASPHALT"] } } });
+  });
+
+  it("accepts an imported hangar or a member report, and either webcam source", () => {
+    const where = buildDestinationWhere(aircraft, query({ filters: { hasHangar: true, hasWebcam: true } }), "u1");
+    expect(where.AND).toHaveLength(2);
+    expect(JSON.stringify(where.AND)).toContain('"hasHangars":true');
+    expect(JSON.stringify(where.AND)).toContain('"equals":"ON_REQUEST"');
+    expect(JSON.stringify(where.AND)).toContain('"webcams":{"some":{}}');
+    expect(buildDestinationWhere(aircraft, query(), "u1")).not.toHaveProperty("AND");
+  });
+});
+
+describe("parking", () => {
+  it("counts the midnights, French time, between landing and take-off", () => {
+    // 22:30 UTC on 21 June is already 00:30 on the 22nd in Paris.
+    expect(nightsParked(Date.parse("2026-06-21T15:00:00Z"), Date.parse("2026-06-21T21:00:00Z"))).toBe(0);
+    expect(nightsParked(Date.parse("2026-06-21T15:00:00Z"), Date.parse("2026-06-21T22:30:00Z"))).toBe(1);
+    expect(nightsParked(Date.parse("2026-06-21T15:00:00Z"), Date.parse("2026-06-23T08:00:00Z"))).toBe(2);
+  });
+
+  it("only counts a round trip with a departure time", () => {
+    const leg = { timeHours: 1 };
+    expect(stayNights(query({ departureTime: "2026-06-21T08:00:00Z", stayMinutes: 1440 }), leg)).toBe(1);
+    expect(stayNights(query({ stayMinutes: 1440 }), leg)).toBe(0);
+    expect(stayNights(query({ tripScope: "outbound", departureTime: "2026-06-21T08:00:00Z", stayMinutes: 1440 }), leg)).toBe(0);
+  });
+});
+
+describe("computeRoute", () => {
+  const point = (id: string, nm: number, fuels: string[] = [], extra: object = {}) => ({ id, ...at(nm, fuels), ...extra });
+  const input = { reserveMinutes: 0, departureGroundMinutes: 0, arrivalGroundMinutes: 0, stayMinutes: 60 };
+
+  it("matches computeTrip for a plain round trip", () => {
+    for (const [nm, fuels] of [[100, []], [250, ["AVGAS_100LL"]], [250, []]] as const) {
+      const trip = computeTrip(aircraft, query(), { ...at(nm, [...fuels]), landingFee: 12 });
+      const route = computeRoute(aircraft, input, [point("A", 0), point("B", nm, [...fuels], { landingFee: 12 }), point("A", 0)]);
+      expect(route.distanceNm).toBeCloseTo(trip.distanceNm * 2, 0);
+      expect(route.tripTimeHours).toBeCloseTo(trip.tripTimeHours, 1);
+      expect(route.estimatedCost).toBeCloseTo(trip.estimatedCost, 0);
+      expect(route.withinRange).toBe(trip.withinRange);
+    }
+  });
+
+  it("refuels at a stop early enough when the next one sells nothing", () => {
+    // 150 + 150 + 150 NM, 400 NM in the tank: fill up at B, since C has no fuel.
+    const route = computeRoute(aircraft, input, [point("A", 0), point("B", 150, ["AVGAS_100LL"]), point("C", 300), point("D", 450)]);
+    expect(route.legs.map((l) => l.refuelBefore)).toEqual([false, true, false]);
+    expect(route.withinRange).toBe(true);
+    // Without fuel at B the last leg runs dry.
+    const dry = computeRoute(aircraft, input, [point("A", 0), point("B", 150), point("C", 300), point("D", 450)]);
+    expect(dry.legs.map((l) => l.withinRange)).toEqual([true, true, false]);
+  });
+
+  it("times every leg, pays every landing but the one back home, and the nights parked", () => {
+    const route = computeRoute(
+      aircraft,
+      { ...input, departureTime: "2026-06-21T08:00:00Z", stayMinutes: 1440 },
+      [point("A", 0), point("B", 100, [], { landingFee: 10, parkingPerNight: 5 }), point("A", 0, [], { landingFee: 99 })],
+    );
+    expect(route.legs[0]!.landingAt).toBe("2026-06-21T09:00:00.000Z");
+    expect(route.legs[1]!.takeOffAt).toBe("2026-06-22T09:00:00.000Z");
+    expect(route.landingFees).toBe(10);
+    expect(route.parkingFees).toBe(5);
+    expect(route.nightOperation).toBe(false);
   });
 });
 

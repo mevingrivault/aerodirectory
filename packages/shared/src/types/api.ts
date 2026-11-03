@@ -53,6 +53,8 @@ export interface PlannerResult {
   canRefuel: boolean;      // the destination sells the aircraft's fuel
   /** Newest approved member report for the profile's category; included in estimatedCost. */
   landingFee: { amount: number; parkingPerNight: number | null; observedAt: string } | null;
+  /** Nights parked at the destination (round trip with a departure time); their fee is in estimatedCost. */
+  parkingNights: number;
   /** Newest approved member price at the destination for the aircraft's fuel. */
   fuelPrice: { pricePerLiter: number; observedAt: string } | null;
   /** Only with a departure time: landing at the destination, and back home for a round trip. */
@@ -601,32 +603,78 @@ export interface BriefingField {
 }
 
 /** POST /planner/briefing: the trip between two given fields, reachable or not. */
+/** One flight of a briefing route, from one field to the next. */
+export interface BriefingLeg {
+  fromId: string;
+  toId: string;
+  distanceNm: number;
+  trueCourse: number;
+  /** True course minus the declination at the leg's start (east positive); null when unknown. */
+  magneticCourse: number | null;
+  timeHours: number;
+  fuelLiters: number;
+  /** The tank is filled at the leg's start field (never at the departure, assumed full). */
+  refuelBefore: boolean;
+  /** The fuel on board covers the leg with the reserve left. */
+  withinRange: boolean;
+  /** Only with a departure time. */
+  takeOffAt: string | null;
+  landingAt: string | null;
+}
+
+/** An airspace the straight route crosses at low level. */
+export interface RouteAirspace {
+  id: string;
+  name: string;
+  type: number; // openAIP code
+  icaoClass: string;
+  lowerLimit: string;
+  upperLimit: string;
+  onRequest: boolean;
+  onDemand: boolean;
+  /** Distance along the route where it is first entered. */
+  alongNm: number;
+}
+
+/** An obstacle close to the straight route. */
+export interface RouteObstacle {
+  id: string;
+  name: string | null;
+  type: string;
+  heightM: number | null;
+  elevationM: number | null;
+  alongNm: number;
+  offsetNm: number;
+}
+
 export interface BriefingTrip {
   departure: BriefingField;
   destination: BriefingField;
-  aircraft: { name: string; tas: number; fuelConsumption: number; fuelRange: number; fuelType: string | null; category: string | null };
+  /** Stops between the departure and the destination, in order. */
+  stops: BriefingField[];
+  aircraft: { name: string; tas: number; fuelConsumption: number; fuelRange: number; fuelType: string | null; category: string | null; maxCrosswindKt: number | null };
   tripScope: "outbound" | "round_trip";
   reserveMinutes: number;
-  distanceNm: number;
-  trueCourse: number;
-  returnTrueCourse: number;
-  /** True course minus the departure's declination (east positive); null when unknown. */
-  magneticCourse: number | null;
-  returnMagneticCourse: number | null;
-  timeHours: number;
-  fuelUsedLiters: number;
-  tripTimeHours: number;
+  stayMinutes: number;
+  legs: BriefingLeg[];
+  distanceNm: number; // all legs
+  flightTimeHours: number; // all legs, in the air
+  tripTimeHours: number; // all legs, taxi included
   tripFuelLiters: number;
   usableRangeNm: number;
+  /** Every leg fits in the fuel on board, refuelling where the field sells the aircraft's fuel. */
   withinRange: boolean;
-  refuelRequired: boolean;
-  canRefuel: boolean;
   fuelCost: number;
+  landingFees: number; // every stop and the destination, from member reports
+  parkingFees: number;
   estimatedCost: number;
-  landingFee: PlannerResult["landingFee"];
-  fuelPrice: PlannerResult["fuelPrice"];
+  landingFee: PlannerResult["landingFee"]; // at the destination
+  fuelPrice: PlannerResult["fuelPrice"]; // at the destination
   departureTime: string | null;
-  arrivalAt: string | null;
-  returnAt: string | null;
   nightOperation: boolean | null;
+  airspaces: RouteAirspace[];
+  obstacles: RouteObstacle[];
+  /** Obstacles found in the corridor, before keeping the highest. */
+  obstacleCount: number;
+  obstacleCorridorNm: number;
 }

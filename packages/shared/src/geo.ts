@@ -36,3 +36,16 @@ export function initialBearing(latA: number, lonA: number, latB: number, lonB: n
   const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   return Math.round(((Math.atan2(y, x) / rad) + 360) % 360) % 360;
 }
+
+/**
+ * Headwind (negative = tailwind) and crosswind (always ≥ 0) on a runway, in
+ * the wind's unit. Wind direction is where it blows from, true, like the
+ * runway heading.
+ */
+export function windComponents(windFromDeg: number, speed: number, runwayHeadingDeg: number): { headwind: number; crosswind: number } {
+  const angle = ((windFromDeg - runwayHeadingDeg) * Math.PI) / 180;
+  return {
+    headwind: Math.round(speed * Math.cos(angle)),
+    crosswind: Math.round(Math.abs(speed * Math.sin(angle))),
+  };
+}

@@ -4,88 +4,49 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { cn, formatNm, formatFlightTime, formatEuros } from "@/lib/utils";
+import { cn, formatFlightTime } from "@/lib/utils";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { PlannerResult, SavedSearchItem } from "@aerodirectory/shared";
-import { popupContent } from "@/lib/map-popup";
-import { formatPricePerLiter, isStale } from "@/lib/community-info";
+import {
+  AIRCRAFT_CATEGORIES,
+  AIRCRAFT_FUELS,
+  FUEL_SHORT_LABELS,
+  NO_FILTERS,
+  type AerodromeOption,
+  type AircraftProfile,
+  type PlannerFilters,
+  type SearchMode,
+  type SortBy,
+  type TripScope,
+} from "@/components/planner/types";
+import {
+  BikeIcon,
+  BusIcon,
+  HomeIcon,
+  IcoBookmark,
+  IcoCheck,
+  IcoClock,
+  IcoDownload,
+  IcoFilter,
+  IcoGlobe,
+  IcoInfo,
+  IcoMapPin,
+  IcoNav,
+  IcoNavIco,
+  IcoPlane,
+  IcoPlus,
+  IcoSave,
+  IcoSearch,
+  IcoSettings,
+  IcoSort,
+  IcoTrash,
+  IcoX,
+  RestaurantIcon,
+} from "@/components/planner/icons";
+import { PlannerMap } from "@/components/planner/planner-map";
+import { ResultRow } from "@/components/planner/result-row";
+import { PLANNER_CSS } from "@/components/planner/styles";
 
-/** "14:35", in the visitor's time zone. */
-const formatClock = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-const formatDay = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { timeZone: "UTC" });
-
-// ─── Types ─────────────────────────────────────────────────────────────────
-
-interface AircraftProfile {
-  id: string;
-  name: string;
-  tas: number;
-  fuelConsumption: number;
-  hourlyCost: number;
-  fuelRange: number;
-  minRunwayLength: number;
-  allowedSurfaces: string[];
-  fuelType: string | null;
-  category: string | null;
-}
-
-interface AerodromeOption {
-  id: string;
-  name: string;
-  icaoCode: string | null;
-  latitude: number;
-  longitude: number;
-  city: string | null;
-  elevation: number | null;
-}
-
-interface PlannerFilters {
-  hasRestaurant: boolean;
-  hasTransport: boolean;
-  hasBikes: boolean;
-  hasAccommodation: boolean;
-  fuel100LL: boolean;
-  fuelUL91: boolean;
-  fuelSP98: boolean;
-  fuelJetA1: boolean;
-  excludeVisited: boolean;
-  includePrivate: boolean;
-}
-
-const NO_FILTERS: PlannerFilters = {
-  hasRestaurant: false,
-  hasTransport: false,
-  hasBikes: false,
-  hasAccommodation: false,
-  fuel100LL: false,
-  fuelUL91: false,
-  fuelSP98: false,
-  fuelJetA1: false,
-  excludeVisited: false,
-  includePrivate: false,
-};
-
-/** Fuel an aircraft burns; "" = not given, the planner never counts on refuelling. */
-const AIRCRAFT_FUELS = [
-  { value: "", label: "Non renseigné" },
-  { value: "AVGAS_100LL", label: "100LL" },
-  { value: "UL91", label: "UL91" },
-  { value: "SP98", label: "SP98" },
-  { value: "JET_A1", label: "Jet A1" },
-];
-/** Picks the landing fee members reported; same keys as FEE_CATEGORIES. */
-const AIRCRAFT_CATEGORIES = [
-  { value: "", label: "Non renseignée" },
-  { value: "ULM", label: "ULM" },
-  { value: "LIGHT", label: "Avion ≤ 1,5 t" },
-  { value: "HEAVY", label: "Avion > 1,5 t" },
-];
-const FUEL_SHORT_LABELS: Record<string, string> = { AVGAS_100LL: "100LL", UL91: "UL91", SP98: "SP98", JET_A1: "Jet A1" };
-
-type SearchMode = "time" | "cost" | "unlimited";
-type TripScope = "outbound" | "round_trip";
-type SortBy = "time" | "cost" | "distance" | "region";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -114,505 +75,18 @@ function safeCsv(value: string): string {
   return `"${value.replaceAll("\"", "\"\"")}"`;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#39;");
-}
+/** "HH:MM" of a datetime-local value, kept by saved searches instead of a date that would go stale. */
+const clockOf = (local: string) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local) ? local.slice(11, 16) : "");
 
-// ─── SVG Icons ──────────────────────────────────────────────────────────────
-
-const icoStyle = {width:16,height:16,flexShrink:0} as const;
-
-const IcoSearch = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-  </svg>
-);
-const IcoPlane = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.8 19.2 16 11l3.5-3.5c.6-.6.8-1.4.6-2.1-.3-.8-1-1.3-1.8-1.5-.8-.1-1.6.1-2.1.6L12.7 8 4 6.4 2.4 8 9 12l-3 3H2l2 3 3 2 3-4v-4l4 6.6 1.8-1.4Z"/>
-  </svg>
-);
-const IcoClock = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
-  </svg>
-);
-const IcoSettings = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
-);
-const IcoFilter = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3Z"/>
-  </svg>
-);
-const IcoSort = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>
-  </svg>
-);
-const IcoNav = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" style={{width:22,height:22,strokeWidth:"1.5"}}>
-    <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-  </svg>
-);
-const IcoNavIco = () => (
-  <svg style={{width:18,height:18,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-  </svg>
-);
-const IcoMapPin = () => (
-  <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 10c0 7-8 12-8 12s-8-5-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-  </svg>
-);
-const IcoChevronDown = () => (
-  <svg style={{width:16,height:16,color:"var(--ink-500)",transition:"transform .2s"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m6 9 6 6 6-6"/>
-  </svg>
-);
-const IcoX = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-  </svg>
-);
-const IcoPlus = () => (
-  <svg style={{width:12,height:12,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12h14"/><path d="M12 5v14"/>
-  </svg>
-);
-const IcoTrash = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-  </svg>
-);
-const IcoCheck = () => (
-  <svg style={{width:14,height:14,flexShrink:0,color:"var(--horizon-700)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m5 13 4 4L19 7"/>
-  </svg>
-);
-const IcoDownload = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
-  </svg>
-);
-const IcoSave = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-  </svg>
-);
-const IcoGlobe = () => (
-  <svg style={icoStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-  </svg>
-);
-const IcoBookmark = () => (
-  <svg style={{width:14,height:14,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
-  </svg>
-);
-const IcoInfo = () => (
-  <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-  </svg>
-);
-
-// ─── PlannerMap ─────────────────────────────────────────────────────────────
-
-type PlannerMapStyle = "osm" | "satellite" | "hybrid";
-
-const PLANNER_MAP_STYLES: Record<PlannerMapStyle, object> = {
-  osm: {
-    version: 8,
-    sources: {
-      base: {
-        type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        attribution: "&copy; OpenStreetMap contributors",
-      },
-    },
-    layers: [{ id: "base", type: "raster", source: "base" }],
-  },
-  satellite: {
-    version: 8,
-    sources: {
-      base: {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Tiles &copy; Esri",
-      },
-    },
-    layers: [{ id: "base", type: "raster", source: "base" }],
-  },
-  hybrid: {
-    version: 8,
-    sources: {
-      base: {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Tiles &copy; Esri",
-      },
-      labels: {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-      },
-    },
-    layers: [
-      { id: "base", type: "raster", source: "base" },
-      { id: "labels", type: "raster", source: "labels" },
-    ],
-  },
-};
-
-function PlannerMap({ departure, results }: { departure: AerodromeOption | null; results: PlannerResult[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markersRef = useRef<any[]>([]);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapStyle, setMapStyle] = useState<PlannerMapStyle>("osm");
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    let cancelled = false;
-
-    import("maplibre-gl").then((ml) => {
-      if (cancelled || !containerRef.current) return;
-      // @ts-ignore
-      import("maplibre-gl/dist/maplibre-gl.css");
-
-      const map = new ml.Map({
-        container: containerRef.current,
-        style: PLANNER_MAP_STYLES.osm as any,
-        center: [2.3, 46.6],
-        zoom: 6,
-      });
-
-      map.addControl(new ml.NavigationControl(), "top-right");
-      map.on("load", () => setMapLoaded(true));
-      mapRef.current = map;
-    });
-
-    return () => {
-      cancelled = true;
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!mapRef.current || !mapLoaded) return;
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-
-    import("maplibre-gl").then((ml) => {
-      if (!mapRef.current) return;
-
-      if (departure) {
-        const el = document.createElement("div");
-        el.style.cssText =
-          "width:16px;height:16px;border-radius:50%;background:var(--horizon-700);border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4)";
-        const popup = new ml.Popup({ offset: 10, closeButton: false }).setDOMContent(
-          popupContent([
-            { text: departure.name, style: { fontSize: "12px", fontWeight: "600" } },
-            { text: "Départ", style: { fontSize: "11px", color: "var(--ink-500)" } },
-          ]),
-        );
-        const marker = new ml.Marker({ element: el })
-          .setLngLat([departure.longitude, departure.latitude])
-          .setPopup(popup)
-          .addTo(mapRef.current!);
-        el.addEventListener("click", () => marker.togglePopup());
-        markersRef.current.push(marker);
-      }
-
-      for (const r of results) {
-        const el = document.createElement("div");
-        el.style.cssText =
-          "width:10px;height:10px;border-radius:50%;background:var(--terrain-500);border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:pointer";
-
-        const content = popupContent([
-          { text: r.aerodrome.name, style: { fontSize: "12px", fontWeight: "600" } },
-          {
-            text: `${r.aerodrome.icaoCode ?? ""}${r.aerodrome.city ? ` · ${r.aerodrome.city}` : ""}`,
-            style: { fontSize: "11px", color: "var(--ink-500)" },
-          },
-          {
-            text: `${formatFlightTime(r.timeHours)} · ${formatNm(r.distanceNm)}${r.estimatedCost > 0 ? ` · ${formatEuros(r.estimatedCost)}` : ""}`,
-            style: { fontSize: "11px", marginTop: "4px" },
-          },
-        ]);
-        const link = document.createElement("a");
-        link.href = `/aerodrome/${encodeURIComponent(r.aerodrome.id)}`;
-        link.textContent = "Voir la fiche →";
-        Object.assign(link.style, { color: "var(--horizon-700)", fontSize: "11px" });
-        content.append(link);
-        const popup = new ml.Popup({ offset: 8, closeButton: false }).setDOMContent(content);
-
-        const marker = new ml.Marker({ element: el })
-          .setLngLat([r.aerodrome.longitude, r.aerodrome.latitude])
-          .setPopup(popup)
-          .addTo(mapRef.current!);
-        el.addEventListener("click", () => marker.togglePopup());
-        markersRef.current.push(marker);
-      }
-
-      if (departure && results.length > 0) {
-        const lats = [departure.latitude, ...results.map((r) => r.aerodrome.latitude)];
-        const lngs = [departure.longitude, ...results.map((r) => r.aerodrome.longitude)];
-        mapRef.current?.fitBounds(
-          [
-            [Math.min(...lngs) - 0.3, Math.min(...lats) - 0.3],
-            [Math.max(...lngs) + 0.3, Math.max(...lats) + 0.3],
-          ],
-          { padding: 40, maxZoom: 10, duration: 600 },
-        );
-      }
-    });
-  }, [mapLoaded, departure, results]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded) return;
-    map.setStyle(PLANNER_MAP_STYLES[mapStyle]);
-  }, [mapStyle, mapLoaded]);
-
-  return (
-    <div style={{ position: "relative", width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--ink-200)", height: 580 }}>
-      <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
-      <div style={{
-        position: "absolute", left: 12, bottom: 32, zIndex: 10,
-        display: "flex", borderRadius: 6, overflow: "hidden",
-        border: "1px solid var(--ink-300)", background: "white",
-        boxShadow: "var(--shadow-pop)",
-      }}>
-        {(["osm", "satellite", "hybrid"] as const).map((s, i) => (
-          <button
-            key={s}
-            onClick={() => setMapStyle(s)}
-            style={{
-              padding: "6px 12px", fontSize: 12, fontWeight: 500,
-              fontFamily: "var(--f-sans)", cursor: "pointer",
-              borderLeft: i > 0 ? "1px solid var(--ink-200)" : "none",
-              background: mapStyle === s ? "var(--ink-950)" : "transparent",
-              color: mapStyle === s ? "white" : "var(--ink-700)",
-              border: "none",
-            }}
-          >
-            {s === "osm" ? "Plan" : s === "satellite" ? "Satellite" : "Hybride"}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── ResultRow ───────────────────────────────────────────────────────────────
-
-function ResultRow({ result: r, tripScope, briefingHref }: { result: PlannerResult; tripScope: TripScope; briefingHref: string | null }) {
-  const router = useRouter();
-  const displayTime = tripScope === "round_trip" ? r.tripTimeHours : r.timeHours;
-  const displayFuel = tripScope === "round_trip" ? r.tripFuelLiters : r.fuelUsedLiters;
-  const isUlm = false;
-  const isHydro = false;
-
-  return (
-    <Link href={`/aerodrome/${r.aerodrome.id}`} style={{ textDecoration: "none" }}>
-      <div className="result-row">
-        <div className={cn("result-ico", isUlm && "ulm", isHydro && "hydro")}>
-          <IcePlane />
-        </div>
-        <div className="result-main">
-          <div className="result-head">
-            <span className="result-name">{r.aerodrome.name}</span>
-            {r.aerodrome.icaoCode && (
-              <span className="badge badge-oaci">{r.aerodrome.icaoCode}</span>
-            )}
-            <span className="badge badge-vfr">Ouvert</span>
-            {r.aerodrome.ppr && <span className="badge badge-warn" title="Prior Permission Required : prévenir le terrain avant de venir">PPR</span>}
-            {r.aerodrome.privateUse && <span className="badge badge-warn">Privé</span>}
-            {r.aerodrome.skydiveActivity && <span className="badge badge-warn">Parachutisme</span>}
-            {r.nightOperation && <span className="badge badge-night" title="Un décollage ou un atterrissage tombe pendant la nuit aéronautique (coucher du soleil + 30 min)">Nuit aéro</span>}
-            {r.aerodrome.city && <span className="result-city">{r.aerodrome.city}</span>}
-          </div>
-          <div className="result-line">
-            <span><span className="mono">{formatNm(r.distanceNm)}</span></span>
-            <span className="sep" />
-            <span>◷ <span className="mono">{formatFlightTime(displayTime)}{tripScope === "round_trip" ? " A/R" : ""}</span></span>
-            <span className="sep" />
-            <span>⛽ <span className="mono">{displayFuel.toFixed(1)} L</span></span>
-            {r.aerodrome.maxRunwayLength && (
-              <>
-                <span className="sep" />
-                <span><span className="mono">{r.aerodrome.maxRunwayLength} m piste</span></span>
-              </>
-            )}
-            {r.aerodrome.elevation != null && (
-              <>
-                <span className="sep" />
-                <span><span className="mono">{r.aerodrome.elevation} ft</span></span>
-              </>
-            )}
-          </div>
-          {(r.arrivalAt || r.landingFee || r.fuelPrice) && (
-            <div className="result-line">
-              {r.arrivalAt && (
-                <span>
-                  Arrivée <span className="mono">{formatClock(r.arrivalAt)}</span>
-                  {r.returnAt && <> · retour <span className="mono">{formatClock(r.returnAt)}</span></>}
-                </span>
-              )}
-              {r.landingFee && (
-                <>
-                  {r.arrivalAt && <span className="sep" />}
-                  <span title={`D'après un membre, constaté le ${formatDay(r.landingFee.observedAt)}`}>
-                    Taxe <span className="mono">{r.landingFee.amount === 0 ? "gratuite" : formatEuros(r.landingFee.amount)}</span>
-                    {isStale({ kind: "LANDING_FEE", observedAt: r.landingFee.observedAt }) && " (à vérifier)"}
-                  </span>
-                </>
-              )}
-              {r.fuelPrice && (
-                <>
-                  {(r.arrivalAt || r.landingFee) && <span className="sep" />}
-                  <span title={`D'après un membre, constaté le ${formatDay(r.fuelPrice.observedAt)}`}>
-                    ⛽ <span className="mono">{formatPricePerLiter(r.fuelPrice.pricePerLiter)}</span>
-                    {isStale({ kind: "FUEL_PRICE", observedAt: r.fuelPrice.observedAt }) && " (à vérifier)"}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-          {r.refuelRequired && (
-            <div className="result-line" style={{ color: "oklch(0.45 0.12 60)" }}>
-              ⛽ Retour possible seulement en refaisant le plein sur place
-            </div>
-          )}
-          {(r.aerodrome.hasRestaurant || r.aerodrome.hasAccommodation || r.aerodrome.hasTransport || r.aerodrome.hasBikes || r.aerodrome.fuels.length > 0) && (
-            <div className="result-amen">
-              {r.aerodrome.hasRestaurant && (
-                <span className="amen">
-                  <RestaurantIcon />
-                  Restaurant
-                </span>
-              )}
-              {r.aerodrome.hasAccommodation && (
-                <span className="amen">
-                  <HomeIcon />
-                  Hébergement
-                </span>
-              )}
-              {r.aerodrome.hasTransport && (
-                <span className="amen">
-                  <BusIcon />
-                  Transport
-                </span>
-              )}
-              {r.aerodrome.hasBikes && (
-                <span className="amen">
-                  <BikeIcon />
-                  Vélo
-                </span>
-              )}
-              {r.aerodrome.fuels.map((fuel: string) => {
-                const label = FUEL_SHORT_LABELS[fuel] ?? null;
-                return label ? (
-                  <span key={fuel} className="amen fuel">
-                    <FuelIcon />
-                    {label}
-                  </span>
-                ) : null;
-              })}
-            </div>
-          )}
-        </div>
-        <div className="result-right">
-          {r.estimatedCost > 0 && (
-            <div className="result-price">
-              <div className="result-price-val">
-                {r.estimatedCost.toFixed(2).replace(".", ",")} <span className="unit">€</span>
-              </div>
-              <div className="result-price-sub">{r.landingFee ? "estimé, taxe incluse" : "estimé"}</div>
-            </div>
-          )}
-          {briefingHref && (
-            <button
-              type="button"
-              className="planner-btn-secondary"
-              style={{ height: 30, fontSize: 12 }}
-              // The row is a link to the sheet: open the briefing instead.
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`${briefingHref}&to=${r.aerodrome.id}`); }}
-            >
-              Briefing
-            </button>
-          )}
-          <svg style={{width:16,height:16,flexShrink:0,color:"var(--ink-400)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m9 18 6-6-6-6"/>
-          </svg>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function IcePlane() {
-  return <IcoPlane />;
-}
-
-function RestaurantIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 11V4a1 1 0 0 1 2 0v7"/><path d="M7 11V4a1 1 0 0 1 2 0v7"/>
-      <path d="M11 4v11c0 1 1 2 2 2h1v6"/><path d="M16 14c0-6 3-10 5-10v17"/>
-    </svg>
-  );
-}
-function HomeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 20h16"/><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/>
-    </svg>
-  );
-}
-function BusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12h4l2-3h6l2 3h4"/><rect x="3" y="12" width="18" height="7" rx="1"/>
-    </svg>
-  );
-}
-function BikeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
-      <path d="M6 18 9 9h6l3 9"/><path d="m9 9 3-5h3"/>
-    </svg>
-  );
-}
-function FuelIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 6h14v12H5z"/><path d="M9 6V4h6v2"/>
-    </svg>
-  );
+/** Next time the clock reads "HH:MM", as a datetime-local value: today if still ahead, else tomorrow. */
+function nextAt(clock: string): string {
+  const [h, m] = clock.split(":").map(Number);
+  if (h == null || m == null || Number.isNaN(h) || Number.isNaN(m)) return "";
+  const at = new Date();
+  at.setHours(h, m, 0, 0);
+  if (at.getTime() < Date.now()) at.setDate(at.getDate() + 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(h)}:${pad(m)}`;
 }
 
 // ─── Main page ───────────────────────────────────────────────────────────────
@@ -634,6 +108,7 @@ export default function PlannerPage() {
     allowedSurfaces: DEFAULT_SURFACES,
     fuelType: "",
     category: "",
+    maxCrosswindKt: "",
   });
 
   // ── Departure state ──
@@ -754,12 +229,12 @@ export default function PlannerPage() {
       setShowProfileForm(false);
       const created = res.data as AircraftProfile;
       setSelectedProfileId(created.id);
-      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES, fuelType: "", category: "" });
+      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES, fuelType: "", category: "", maxCrosswindKt: "" });
     },
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; fuelType?: string | null; category?: string | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; fuelType?: string | null; category?: string | null; maxCrosswindKt?: number | null }) =>
       apiClient.put(`/planner/profiles/${id}`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
   });
@@ -831,6 +306,7 @@ export default function PlannerPage() {
       allowedSurfaces: profileForm.allowedSurfaces,
       fuelType: profileForm.fuelType || null,
       category: profileForm.category || null,
+      maxCrosswindKt: profileForm.maxCrosswindKt.trim() === "" ? null : parseInt(profileForm.maxCrosswindKt),
     });
   };
 
@@ -839,6 +315,7 @@ export default function PlannerPage() {
       searchMode, tripScope, reserveMinutes: String(reserveMinutes), sortBy,
       departureGroundMinutes, arrivalGroundMinutes, minDistanceKm, fuelPricePerLiter, stayMinutes,
       ...(excludeNight ? { excludeNight: "true" } : {}),
+      departureClock: clockOf(departureTime),
       maxTimeMinutes: String(maxTimeMinutes), minTimeMinutes, maxCost: String(maxCost), minCost, viewMode,
     };
     if (departureAerodrome) {
@@ -852,7 +329,7 @@ export default function PlannerPage() {
       if (value) params[key] = "true";
     }
     return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== ""));
-  }, [arrivalGroundMinutes, departureAerodrome, departureGroundMinutes, excludeNight, filters, fuelPricePerLiter, maxCost, maxTimeMinutes, minCost, minDistanceKm, minTimeMinutes, reserveMinutes, searchMode, selectedProfileId, sortBy, stayMinutes, tripScope, viewMode]);
+  }, [arrivalGroundMinutes, departureAerodrome, departureGroundMinutes, departureTime, excludeNight, filters, fuelPricePerLiter, maxCost, maxTimeMinutes, minCost, minDistanceKm, minTimeMinutes, reserveMinutes, searchMode, selectedProfileId, sortBy, stayMinutes, tripScope, viewMode]);
 
   const applySavedPlannerSearch = useCallback(async (saved: SavedSearchItem) => {
     const params = saved.params ?? {};
@@ -865,6 +342,7 @@ export default function PlannerPage() {
     setArrivalGroundMinutes(params["arrivalGroundMinutes"] ?? "0");
     setStayMinutes(params["stayMinutes"] ?? "60");
     setExcludeNight(params["excludeNight"] === "true");
+    setDepartureTime(params["departureClock"] ? nextAt(params["departureClock"]) : "");
     setMinDistanceKm(params["minDistanceKm"] ?? "0");
     setFuelPricePerLiter(params["fuelPricePerLiter"] ?? "");
     setMaxTimeMinutes(Number(params["maxTimeMinutes"] ?? "60"));
@@ -1011,6 +489,13 @@ export default function PlannerPage() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
 
+  // Usable range circles for the map: the reserve is taken off like the API does.
+  const mapRanges = (() => {
+    if (!selectedProfile) return null;
+    const usable = Math.max(0, selectedProfile.fuelRange - (reserveMinutes / 60) * selectedProfile.tas);
+    return { oneWayNm: usable, roundTripNm: tripScope === "round_trip" ? usable / 2 : null };
+  })();
+
   // Same trip settings as the search, so the briefing matches the result.
   const briefingHref = (() => {
     if (!departureAerodrome || !selectedProfileId) return null;
@@ -1053,35 +538,6 @@ export default function PlannerPage() {
     downloadFile(`planner-${new Date().toISOString().slice(0, 10)}.csv`, lines.join("\n"), "text/csv;charset=utf-8");
   };
 
-  const handleExportBriefing = () => {
-    if (!sortedResults || sortedResults.length === 0) return;
-    const briefing = [
-      "BRIEFING PLANIFICATEUR NAVVENTURA",
-      `Date: ${new Date().toLocaleString("fr-FR")}`,
-      `Depart: ${departureAerodrome?.name ?? "-"}`,
-      `Profile: ${selectedProfile?.name ?? "-"}`,
-      `Mode: ${searchMode}`, `Scope: ${tripScope}`,
-      `Resultats: ${sortedResults.length}`, "",
-      ...sortedResults.slice(0, 30).map((r, i) =>
-        `${i + 1}. ${r.aerodrome.name} (${r.aerodrome.icaoCode ?? "N/A"}) - ${formatNm(r.distanceNm)} - ${formatFlightTime(r.tripTimeHours)} - ${formatEuros(r.estimatedCost)}`
-      ),
-      "", "Rappel: verifier AIP/NOTAM/METEO avant le vol.",
-    ].join("\n");
-    downloadFile(`briefing-${new Date().toISOString().slice(0, 10)}.txt`, briefing, "text/plain;charset=utf-8");
-  };
-
-  const handleExportPdf = () => {
-    if (!sortedResults || sortedResults.length === 0) return;
-    const rows = sortedResults.slice(0, 50).map((r) =>
-      `<tr><td>${escapeHtml(r.aerodrome.name)}</td><td>${escapeHtml(r.aerodrome.icaoCode ?? "")}</td><td>${r.distanceNm} NM</td><td>${r.tripTimeHours} h</td><td>${r.estimatedCost} EUR</td></tr>`
-    ).join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Briefing PDF</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:20px;margin:0 0 8px}p{margin:0 0 12px;color:#555}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f7f7f7}</style></head><body><h1>Briefing vol</h1><p>${escapeHtml(departureAerodrome?.name ?? "-")} - ${escapeHtml(selectedProfile?.name ?? "-")} - ${new Date().toLocaleString("fr-FR")}</p><table><thead><tr><th>Destination</th><th>ICAO</th><th>Distance</th><th>Temps</th><th>Cout</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-  };
-
   // ── Unauthenticated guard ──
   if (!user) {
     return (
@@ -1109,497 +565,7 @@ export default function PlannerPage() {
   // ── Render ──
   return (
     <>
-      <style>{`
-        .planner-layout {
-          display: grid;
-          grid-template-columns: 320px 1fr;
-          gap: 24px;
-          align-items: start;
-        }
-        .planner-sidebar {
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-          padding-right: 4px;
-          padding-bottom: 24px;
-          font-size: 13px;
-        }
-        .planner-panel {
-          background: white;
-          border: 1px solid var(--ink-200);
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        .planner-panel-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 18px;
-          border-bottom: 1px solid var(--ink-200);
-        }
-        .planner-panel-head.collapsed-head {
-          border-bottom: 0;
-        }
-        .planner-panel-head-l {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: var(--ink-500);
-        }
-        .planner-panel-title {
-          font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: var(--ink-800);
-        }
-        .planner-panel-body {
-          padding: 18px 18px 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .planner-panel-link {
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--horizon-700);
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          background: none;
-          border: 0;
-          padding: 0;
-        }
-        .planner-input {
-          height: 40px;
-          width: 100%;
-          padding: 0 12px 0 36px;
-          background: var(--paper-50);
-          border: 1px solid var(--ink-200);
-          border-radius: 8px;
-          font-family: var(--f-sans);
-          font-size: 13px;
-          color: var(--ink-950);
-          transition: all .15s;
-        }
-        .planner-input.no-ico { padding-left: 12px; }
-        .planner-input::placeholder { color: var(--ink-500); }
-        .planner-input:focus {
-          outline: none;
-          border-color: var(--horizon-700);
-          background: white;
-          box-shadow: 0 0 0 3px var(--horizon-100);
-        }
-        .planner-input-wrap { position: relative; }
-        .planner-input-wrap .ico-abs {
-          position: absolute; left: 12px; top: 50%;
-          transform: translateY(-50%); color: var(--ink-500);
-          pointer-events: none;
-        }
-        .planner-input-clear {
-          position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-          width: 22px; height: 22px; border-radius: 50%;
-          display: grid; place-items: center;
-          background: var(--ink-200); color: var(--ink-700);
-          cursor: pointer; border: 0;
-        }
-        .planner-dep-selected {
-          padding: 12px 14px;
-          background: var(--horizon-100);
-          border: 1px solid var(--horizon-600);
-          border-radius: 8px;
-          display: flex; flex-direction: column; gap: 2px;
-        }
-        .planner-dep-name {
-          display: flex; align-items: center; gap: 8px;
-        }
-        .planner-dep-name strong {
-          font-size: 13px; color: var(--horizon-900); font-weight: 600;
-        }
-        .planner-dep-meta {
-          font-size: 11px; color: var(--horizon-800); opacity: 0.85;
-          font-family: var(--f-mono);
-        }
-        .planner-badge-oaci {
-          font-family: var(--f-mono);
-          font-weight: 500;
-          background: white;
-          color: var(--ink-950);
-          border: 1px solid var(--ink-300);
-          letter-spacing: 0.08em;
-          height: 20px; font-size: 10px;
-          display: inline-flex; align-items: center;
-          padding: 0 7px; border-radius: 4px;
-        }
-        .planner-ac-item {
-          display: flex; align-items: center; gap: 12px;
-          padding: 12px 14px;
-          border: 1px solid var(--ink-200);
-          border-radius: 8px;
-          background: var(--paper-50);
-          cursor: pointer;
-          transition: all .15s;
-        }
-        .planner-ac-item:hover { border-color: var(--ink-400); }
-        .planner-ac-item.active {
-          background: var(--horizon-100);
-          border-color: var(--horizon-600);
-        }
-        .planner-ac-badge {
-          width: 30px; height: 30px; border-radius: 6px;
-          background: white; border: 1px solid var(--ink-200);
-          display: grid; place-items: center;
-          color: var(--ink-700); flex-shrink: 0;
-        }
-        .planner-ac-item.active .planner-ac-badge {
-          border-color: var(--horizon-600); color: var(--horizon-700);
-        }
-        .planner-ac-name {
-          font-size: 13px; font-weight: 600; color: var(--ink-950);
-          display: flex; align-items: center; gap: 6px;
-        }
-        .planner-ac-specs {
-          font-size: 11px; color: var(--ink-500);
-          font-family: var(--f-mono); margin-top: 2px;
-        }
-        .planner-ac-del {
-          width: 28px; height: 28px; border-radius: 6px;
-          background: transparent; border: 0; cursor: pointer;
-          color: var(--ink-400); display: grid; place-items: center;
-          flex-shrink: 0;
-        }
-        .planner-ac-del:hover { color: oklch(0.45 0.15 25); background: var(--paper-100); }
-        .planner-seg {
-          display: flex;
-          background: var(--paper-100);
-          border: 1px solid var(--ink-200);
-          border-radius: 8px;
-          padding: 3px; gap: 3px;
-        }
-        .planner-seg button {
-          flex: 1; height: 30px;
-          background: transparent; border: 0; border-radius: 6px;
-          font-size: 12px; font-weight: 500; color: var(--ink-700);
-          cursor: pointer; transition: all .15s; font-family: inherit;
-        }
-        .planner-seg button:hover { color: var(--ink-950); }
-        .planner-seg button.active {
-          background: white; color: var(--ink-950);
-          box-shadow: 0 1px 2px rgba(20,30,50,.06), 0 1px 1px rgba(20,30,50,.04);
-        }
-        .planner-seg.small button { height: 26px; font-size: 11px; }
-        .planner-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .planner-field-label {
-          font-size: 11px; color: var(--ink-500); margin-bottom: 4px; font-weight: 500;
-        }
-        .planner-field-suffix { position: relative; }
-        .planner-field-suffix .suffix {
-          position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-          font-size: 11px; color: var(--ink-500); font-family: var(--f-mono);
-          pointer-events: none;
-        }
-        .planner-field-suffix .planner-input { padding-right: 36px; font-family: var(--f-mono); }
-        .planner-check {
-          display: flex; align-items: center; gap: 8px;
-          font-size: 13px; color: var(--ink-800); cursor: pointer; padding: 4px 0;
-        }
-        .planner-check input { display: none; }
-        .planner-check-box {
-          width: 16px; height: 16px; border-radius: 4px;
-          border: 1.5px solid var(--ink-300);
-          display: grid; place-items: center;
-          background: white; flex-shrink: 0;
-          transition: all .15s;
-        }
-        .planner-check input:checked + .planner-check-box {
-          background: var(--horizon-700); border-color: var(--horizon-700);
-        }
-        .planner-check input:checked + .planner-check-box::after {
-          content: "";
-          width: 8px; height: 5px;
-          border-left: 2px solid white; border-bottom: 2px solid white;
-          transform: rotate(-45deg) translate(1px, -1px);
-        }
-        .planner-pill {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 6px 10px;
-          font-size: 12px; font-weight: 500;
-          border: 1px solid var(--ink-300); border-radius: 999px;
-          color: var(--ink-700); background: white;
-          cursor: pointer; transition: all .15s;
-          font-family: inherit;
-        }
-        .planner-pill:hover { border-color: var(--ink-400); }
-        .planner-pill.active {
-          background: var(--horizon-100);
-          border-color: var(--horizon-600);
-          color: var(--horizon-900);
-        }
-        .planner-pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
-        .planner-eyebrow {
-          font-size: 11px; font-weight: 600;
-          text-transform: uppercase; letter-spacing: 0.12em;
-          color: var(--ink-500);
-        }
-        .planner-btn-primary {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          height: 44px; padding: 0 18px; width: 100%;
-          border-radius: 8px; font-family: var(--f-sans); font-size: 14px; font-weight: 500;
-          cursor: pointer; border: 0;
-          background: var(--horizon-700); color: white;
-          transition: background .15s;
-        }
-        .planner-btn-primary:hover { background: var(--horizon-900); }
-        .planner-btn-primary:disabled {
-          opacity: 0.5; cursor: not-allowed;
-        }
-        .planner-btn-secondary {
-          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-          height: 32px; padding: 0 10px;
-          border-radius: 8px; font-family: var(--f-sans); font-size: 12px; font-weight: 500;
-          cursor: pointer;
-          background: white; color: var(--ink-950);
-          border: 1px solid var(--ink-300);
-          transition: all .15s;
-        }
-        .planner-btn-secondary:hover {
-          background: var(--paper-100); border-color: var(--ink-400);
-        }
-        .planner-btn-ghost {
-          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-          height: 32px; padding: 0 10px;
-          border-radius: 8px; font-family: var(--f-sans); font-size: 12px; font-weight: 500;
-          cursor: pointer; background: transparent; color: var(--ink-700); border: 0;
-          transition: all .15s;
-        }
-        .planner-btn-ghost:hover { background: var(--paper-100); color: var(--ink-950); }
-        .planner-suggestions {
-          position: absolute; z-index: 20; width: 100%; margin-top: 4px;
-          background: white; border: 1px solid var(--ink-200);
-          border-radius: 8px; overflow: hidden;
-          box-shadow: 0 12px 32px -12px rgba(20,30,50,.18);
-        }
-        .planner-suggestion-item {
-          width: 100%; text-align: left; padding: 10px 14px;
-          background: none; border: 0; cursor: pointer;
-          border-bottom: 1px solid var(--ink-100);
-          font-family: inherit;
-        }
-        .planner-suggestion-item:last-child { border-bottom: 0; }
-        .planner-suggestion-item:hover { background: var(--paper-50); }
-        .planner-surface-btn {
-          font-size: 11px; border-radius: 4px;
-          padding: 4px 8px; border: 1px solid var(--ink-300);
-          background: white; color: var(--ink-700);
-          cursor: pointer; font-family: inherit; transition: all .15s;
-        }
-        .planner-surface-btn.active {
-          background: var(--horizon-700); color: white; border-color: var(--horizon-700);
-        }
-        .planner-home-shortcut {
-          width: 100%; text-align: left; font-size: 12px; font-weight: 500;
-          border: 1px dashed var(--horizon-600); border-radius: 6px;
-          padding: 8px 12px; color: var(--horizon-700);
-          background: transparent; cursor: pointer; font-family: inherit;
-          transition: background .15s;
-        }
-        .planner-home-shortcut:hover { background: var(--horizon-50); }
-
-        /* Results */
-        .planner-results-head {
-          display: flex; align-items: center; justify-content: space-between;
-          gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
-        }
-        .planner-results-count { font-size: 13px; color: var(--ink-700); }
-        .planner-results-count strong { color: var(--ink-950); font-weight: 600; }
-        .planner-results-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .planner-warning {
-          padding: 10px 14px;
-          background: oklch(0.95 0.05 80);
-          border: 1px solid oklch(0.85 0.08 80);
-          border-radius: 8px;
-          font-size: 12px; color: oklch(0.45 0.10 80);
-          display: flex; align-items: center; gap: 8px;
-          margin-bottom: 16px;
-        }
-        .planner-error {
-          padding: 12px 16px;
-          background: oklch(0.96 0.04 25);
-          border: 1px solid oklch(0.87 0.08 25);
-          border-radius: 8px;
-          font-size: 13px; color: oklch(0.45 0.15 25);
-          margin-bottom: 16px;
-        }
-        .planner-empty {
-          background: white; border: 1px solid var(--ink-200);
-          border-radius: 12px; padding: 64px 32px; text-align: center;
-        }
-        .planner-region {
-          background: white; border: 1px solid var(--ink-200);
-          border-radius: 12px; overflow: hidden; margin-bottom: 14px;
-        }
-        .planner-region-head {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 14px 20px;
-          background: var(--paper-50); border-bottom: 1px solid var(--ink-200);
-          cursor: pointer;
-          font-family: var(--f-mono); font-size: 11px; font-weight: 600;
-          text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-800);
-        }
-        .planner-region.collapsed .planner-region-head { border-bottom: 0; }
-        .planner-region-count {
-          display: inline-grid; place-items: center;
-          min-width: 22px; height: 20px; padding: 0 6px;
-          background: white; border: 1px solid var(--ink-300);
-          border-radius: 999px; font-size: 11px; font-weight: 600;
-          color: var(--ink-700); font-family: var(--f-sans); letter-spacing: 0;
-        }
-        .planner-region-chevron { color: var(--ink-500); transition: transform .2s; }
-        .planner-region.collapsed .planner-region-chevron { transform: rotate(-90deg); }
-        .result-row {
-          display: grid; grid-template-columns: 36px 1fr auto;
-          gap: 14px; padding: 16px 20px; align-items: center;
-          border-bottom: 1px solid var(--ink-100);
-          cursor: pointer; transition: background .15s;
-          text-decoration: none;
-        }
-        .result-row:last-child { border-bottom: 0; }
-        .result-row:hover { background: var(--paper-50); }
-        .result-ico {
-          width: 36px; height: 36px; border-radius: 6px;
-          background: var(--paper-100); border: 1px solid var(--ink-200);
-          display: grid; place-items: center; color: var(--ink-700);
-        }
-        .result-ico.ulm { background: var(--terrain-100); border-color: oklch(0.80 0.06 130); color: var(--terrain-800); }
-        .result-ico.hydro { background: oklch(0.94 0.05 220); border-color: oklch(0.82 0.06 220); color: oklch(0.45 0.12 220); }
-        .result-main { min-width: 0; }
-        .result-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-        .result-name { font-size: 14px; font-weight: 600; color: var(--ink-950); letter-spacing: 0.01em; }
-        .result-city { font-size: 13px; color: var(--ink-500); }
-        .result-line { display: flex; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink-500); gap: 0; }
-        .result-line span { display: inline-flex; align-items: center; gap: 4px; }
-        .result-line .mono { color: var(--ink-700); font-size: 12px; font-family: var(--f-mono); }
-        .result-line .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-300); margin: 0 10px; }
-        .result-amen { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-        .amen {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 11px; color: var(--ink-700);
-          padding: 3px 8px 3px 7px; border: 1px solid var(--ink-200);
-          border-radius: 999px; background: var(--paper-50);
-        }
-        .amen svg { width: 11px; height: 11px; stroke-width: 1.8; flex-shrink: 0; }
-        .amen.fuel { color: var(--horizon-900); background: var(--horizon-100); border-color: oklch(0.85 0.04 250); }
-        .result-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-        .result-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-        .result-price-val {
-          font-family: var(--f-serif); font-weight: 500;
-          font-size: 20px; line-height: 1; color: var(--ink-950); letter-spacing: -0.01em;
-        }
-        .result-price-val .unit { font-family: var(--f-sans); font-size: 12px; color: var(--ink-500); font-weight: 500; margin-left: 2px; }
-        .result-price-sub { font-size: 11px; color: var(--ink-500); font-family: var(--f-mono); }
-        .result-right > svg { color: var(--ink-400); }
-        .result-row:hover .result-right > svg { color: var(--horizon-700); }
-        .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-        .badge-oaci { font-family: var(--f-mono); font-weight: 500; background: var(--paper-100); color: var(--ink-950); border: 1px solid var(--ink-300); letter-spacing: 0.08em; height: 20px; font-size: 10px; }
-        .badge-vfr { background: var(--vfr-100); color: var(--vfr-700); }
-        .badge-warn { background: oklch(0.95 0.06 75); color: oklch(0.45 0.12 60); }
-        .badge-night { background: oklch(0.93 0.04 270); color: oklch(0.38 0.12 270); }
-        .badge-vfr::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--vfr-500); }
-
-        /* Mobile FAB + drawer */
-        .planner-fab {
-          display: none; position: fixed; right: 16px; bottom: 20px; z-index: 200;
-          height: 48px; padding: 0 20px; border-radius: 999px;
-          background: var(--ink-950); color: white; border: 0;
-          box-shadow: 0 4px 24px rgba(20,30,50,.35);
-          font-size: 14px; font-weight: 600;
-          align-items: center; gap: 8px; cursor: pointer; font-family: inherit;
-        }
-        .planner-scrim {
-          position: fixed; inset: 0;
-          background: rgba(20,30,50,.5); z-index: 100;
-        }
-        .planner-sidebar-mobile-head {
-          display: none; align-items: center; justify-content: space-between;
-          padding-bottom: 14px; margin-bottom: 4px;
-          border-bottom: 1px solid var(--ink-200);
-        }
-        .planner-saved-panel {
-          background: white; border: 1px solid var(--ink-200); border-radius: 12px;
-          padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
-        }
-        .planner-saved-label {
-          display: flex; align-items: center; gap: 8px;
-          font-size: 12px; font-weight: 600; text-transform: uppercase;
-          letter-spacing: 0.1em; color: var(--ink-800);
-        }
-        .planner-saved-select {
-          height: 38px; width: 100%;
-          background: var(--paper-50); border: 1px solid var(--ink-200);
-          border-radius: 8px; font-family: var(--f-sans); font-size: 13px;
-          color: var(--ink-950); padding: 0 12px;
-        }
-
-        /* Create profile form */
-        .planner-form { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--ink-200); border-radius: 10px; background: var(--paper-50); }
-
-        /* View toggle — large touch targets */
-        .planner-view-toggle {
-          display: flex; gap: 8px; margin-left: 6px;
-        }
-        .planner-view-btn {
-          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-          height: 36px; padding: 0 14px; min-width: 72px;
-          border-radius: 8px; font-family: var(--f-sans); font-size: 13px; font-weight: 500;
-          cursor: pointer; border: 1px solid var(--ink-300);
-          background: white; color: var(--ink-700);
-          transition: all .15s;
-        }
-        .planner-view-btn.active { background: var(--ink-950); color: white; border-color: var(--ink-950); }
-        .planner-view-btn:not(.active):hover { background: var(--paper-100); }
-
-        @media (max-width: 1200px) {
-          .planner-layout { grid-template-columns: 290px 1fr; gap: 20px; }
-        }
-        @media (max-width: 960px) {
-          .planner-page-wrap { padding: 20px 16px 32px !important; }
-          .planner-page-title { font-size: 24px !important; }
-          .planner-page-sub { margin-left: 0 !important; font-size: 13px !important; }
-          .planner-page-title-ico { width: 32px !important; height: 32px !important; }
-          .planner-layout { grid-template-columns: 1fr; gap: 16px; }
-          /* Sidebar rendered inline on mobile/tablet — no overlay, no FAB */
-          .planner-sidebar {
-            display: flex !important;
-            flex-direction: column;
-            gap: 12px;
-            width: 100%;
-            box-sizing: border-box;
-          }
-          .planner-scrim { display: none !important; }
-          .planner-fab { display: none !important; }
-          .planner-sidebar-mobile-head { display: none !important; }
-          .planner-sidebar .planner-input,
-          .planner-sidebar .planner-saved-select,
-          .planner-sidebar select { background: white; }
-          .result-row { grid-template-columns: 32px 1fr auto; padding: 12px 14px; }
-          .planner-results-head { flex-direction: column; align-items: flex-start; gap: 10px; }
-          .planner-results-tools { width: 100%; }
-        }
-        @media (max-width: 640px) {
-          .planner-page-wrap { padding: 16px 12px 24px !important; }
-          .planner-page-title { font-size: 22px !important; gap: 10px !important; }
-          .planner-page-sub { display: none !important; }
-          .result-row { grid-template-columns: 1fr; gap: 6px; padding: 12px; }
-          .result-ico { display: none; }
-          .result-chevron { display: none; }
-          .result-right { width: 100%; justify-content: flex-start; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--ink-200); }
-          .result-price-val { font-size: 16px; }
-          .planner-region-head { padding: 10px 12px; }
-          .planner-results-tools { gap: 6px; flex-wrap: wrap; }
-          .planner-view-btn { height: 40px; min-width: 80px; font-size: 14px; }
-        }
-      `}</style>
+      <style>{PLANNER_CSS}</style>
 
       {/* Mobile scrim */}
       <div
@@ -1865,6 +831,13 @@ export default function PlannerPage() {
                       </select>
                     </div>
                     <div>
+                      <div className="planner-field-label">Vent de travers max.</div>
+                      <div className="planner-field-suffix">
+                        <input className="planner-input no-ico" type="number" min={0} max={60} autoComplete="off" name="planner-aircraft-crosswind" placeholder="Non renseigné" value={profileForm.maxCrosswindKt} onChange={(e) => setProfileForm((f) => ({ ...f, maxCrosswindKt: e.target.value }))} />
+                        <span className="suffix">kt</span>
+                      </div>
+                    </div>
+                    <div>
                       <div className="planner-field-label">Revêtements acceptés</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {["ASPHALT", "CONCRETE", "GRASS", "GRAVEL", "DIRT"].map((s) => (
@@ -1936,6 +909,24 @@ export default function PlannerPage() {
                               {AIRCRAFT_CATEGORIES.map((c) => (
                                 <option key={c.value} value={c.value}>{`Taxes : ${c.value ? c.label : "catégorie non renseignée"}`}</option>
                               ))}
+                            </select>
+                          )}
+                          {selectedProfileId === p.id && (
+                            <select
+                              className="planner-input no-ico"
+                              style={{ marginTop: 6, height: 30, fontSize: 12 }}
+                              value={p.maxCrosswindKt ?? ""}
+                              aria-label="Vent de travers maximal"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateProfileMutation.mutate({ id: p.id, maxCrosswindKt: e.target.value === "" ? null : Number(e.target.value) })}
+                            >
+                              <option value="">Vent de travers max. : non renseigné</option>
+                              {[8, 10, 12, 15, 17, 20, 25].map((kt) => (
+                                <option key={kt} value={kt}>{`Vent de travers max. : ${kt} kt`}</option>
+                              ))}
+                              {p.maxCrosswindKt != null && ![8, 10, 12, 15, 17, 20, 25].includes(p.maxCrosswindKt) && (
+                                <option value={p.maxCrosswindKt}>{`Vent de travers max. : ${p.maxCrosswindKt} kt`}</option>
+                              )}
                             </select>
                           )}
                         </div>
@@ -2181,6 +1172,14 @@ export default function PlannerPage() {
                     <button className={cn("planner-pill", filters.fuelJetA1 && "active")} onClick={() => toggleFilter("fuelJetA1")}>Jet A1</button>
                   </div>
                 </div>
+                <div>
+                  <div className="planner-eyebrow" style={{ marginBottom: 8 }}>Sur le terrain</div>
+                  <div className="planner-pill-group">
+                    <button className={cn("planner-pill", filters.pavedRunway && "active")} onClick={() => toggleFilter("pavedRunway")} title="Asphalte ou béton, assez longue pour l'avion">Piste en dur</button>
+                    <button className={cn("planner-pill", filters.hasHangar && "active")} onClick={() => toggleFilter("hasHangar")} title="Hangars signalés par openAIP, ou place signalée par un membre">Hangar</button>
+                    <button className={cn("planner-pill", filters.hasWebcam && "active")} onClick={() => toggleFilter("hasWebcam")}>Webcam</button>
+                  </div>
+                </div>
                 <label className="planner-check">
                   <input type="checkbox" checked={filters.excludeVisited} onChange={() => toggleFilter("excludeVisited")} />
                   <span className="planner-check-box"></span>
@@ -2263,8 +1262,6 @@ export default function PlannerPage() {
                 </div>
                 <div className="planner-results-tools">
                   <button className="planner-btn-secondary" onClick={handleExportCsv}><IcoDownload />CSV</button>
-                  <button className="planner-btn-secondary" onClick={handleExportBriefing}><IcoDownload />Briefing</button>
-                  <button className="planner-btn-secondary" onClick={handleExportPdf}><IcoDownload />PDF</button>
                   <div className="planner-view-toggle">
                     <button className={cn("planner-view-btn", viewMode === "list" && "active")} onClick={() => setViewMode("list")}>
                       <svg style={{width:14,height:14,flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
@@ -2292,7 +1289,7 @@ export default function PlannerPage() {
 
             {/* Map view */}
             {viewMode === "map" && sortedResults !== null && (
-              <PlannerMap departure={departureAerodrome} results={sortedResults} />
+              <PlannerMap departure={departureAerodrome} results={sortedResults} ranges={mapRanges} />
             )}
 
             {/* List view */}

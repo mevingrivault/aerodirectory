@@ -613,6 +613,7 @@ model AircraftProfile {
   allowedSurfaces SurfaceType[]
   fuelType        FuelType? // what it burns; null = never plan a refuel
   category        AircraftCategory? // picks the landing fee members reported; null = fee unknown
+  maxCrosswindKt  Int? // briefing warns above it; null = no check
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 

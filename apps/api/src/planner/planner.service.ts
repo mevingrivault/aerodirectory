@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { AirspaceService } from "../airspace/airspace.service";
 import {
   initialBearing,
   type AircraftProfileInput,
@@ -8,8 +9,21 @@ import {
   type BriefingTrip,
   type PlannerQueryInput,
   type PlannerResult,
+  type RouteAirspace,
+  type RouteObstacle,
 } from "@aerodirectory/shared";
-import { buildDestinationWhere, checkNight, computeTrip, estimateLeg } from "./planner.calc";
+import { buildDestinationWhere, checkNight, computeRoute, computeTrip, estimateLeg, stayNights, type RoutePoint } from "./planner.calc";
+import {
+  ROUTE_AIRSPACE_FLOOR_FT,
+  ROUTE_AIRSPACE_TYPES,
+  ROUTE_OBSTACLE_CORRIDOR_NM,
+  legBoxes,
+  routeEntryNm,
+  routeOffset,
+} from "./route-hazards";
+
+/** Highest obstacles kept along a briefing route, out of all those in the corridor. */
+const ROUTE_OBSTACLES_KEPT = 10;
 
 const BRIEFING_FIELD_SELECT = {
   id: true,
@@ -28,7 +42,10 @@ function magnetic(trueCourse: number, declination: number | null): number | null
 
 @Injectable()
 export class PlannerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly airspaces: AirspaceService,
+  ) {}
 
   // ─── Aircraft Profiles ──────────────────────────────
 
@@ -92,7 +109,10 @@ export class PlannerService {
     const results: PlannerResult[] = [];
     for (const ad of reachable) {
       const report = reports.get(ad.id);
-      const leg = estimateLeg(profile, input, { ...ad, landingFee: report?.landingFee?.amount });
+      const parkingNights = stayNights(input, computeTrip(profile, input, ad));
+      const fee = report?.landingFee;
+      const landingFee = fee ? fee.amount + parkingNights * (fee.parkingPerNight ?? 0) : null;
+      const leg = estimateLeg(profile, input, { ...ad, landingFee });
       if (!leg) continue;
       const night = checkNight(input, leg, departure, ad);
       if (input.excludeNight && night?.nightOperation) continue;
@@ -119,6 +139,7 @@ export class PlannerService {
         },
         ...leg,
         landingFee: report?.landingFee ?? null,
+        parkingNights,
         fuelPrice: report?.fuelPrice ?? null,
         arrivalAt: night?.arrivalAt ?? null,
         returnAt: night?.returnAt ?? null,
@@ -137,31 +158,49 @@ export class PlannerService {
     return results;
   }
 
-  /** The trip between two given fields, computed even when out of reach so the briefing can say so. */
+  /**
+   * The trip from the departure through the stops to the destination (and
+   * straight back for a round trip), computed even when out of reach so the
+   * briefing can say so.
+   */
   async briefing(userId: string, input: BriefingQueryInput): Promise<BriefingTrip> {
-    const [profile, departure, destination] = await Promise.all([
+    const ids = [input.departureId, ...input.viaIds, input.destinationId];
+    const [profile, fields] = await Promise.all([
       this.prisma.aircraftProfile.findFirst({ where: { id: input.profileId, userId } }),
-      this.prisma.aerodrome.findUnique({ where: { id: input.departureId }, select: BRIEFING_FIELD_SELECT }),
-      this.prisma.aerodrome.findUnique({
-        where: { id: input.destinationId },
+      this.prisma.aerodrome.findMany({
+        where: { id: { in: [...new Set(ids)] } },
         select: { ...BRIEFING_FIELD_SELECT, fuels: { where: { available: true }, select: { type: true } } },
       }),
     ]);
     if (!profile) throw new NotFoundException("Aircraft profile not found");
-    if (!departure || !destination) throw new NotFoundException("Aérodrome introuvable.");
+    const byId = new Map(fields.map((f) => [f.id, f]));
+    const route = ids.map((id) => byId.get(id));
+    if (route.some((f) => !f)) throw new NotFoundException("Aérodrome introuvable.");
+    const fieldsInOrder = route as NonNullable<(typeof route)[number]>[];
 
-    const report = (await this.memberReports([destination.id], profile)).get(destination.id);
-    const trip = { ...input, departureLat: departure.latitude, departureLng: departure.longitude };
-    const estimate = computeTrip(profile, trip, { ...destination, landingFee: report?.landingFee?.amount });
-    const night = checkNight(trip, estimate, departure, destination);
+    const reports = await this.memberReports([...new Set(ids.slice(1))], profile);
+    const points: (RoutePoint & (typeof fieldsInOrder)[number])[] = fieldsInOrder.map((f) => ({
+      ...f,
+      landingFee: reports.get(f.id)?.landingFee?.amount ?? null,
+      parkingPerNight: reports.get(f.id)?.landingFee?.parkingPerNight ?? null,
+    }));
+    if (input.tripScope === "round_trip") points.push(points[0]!);
 
-    const trueCourse = initialBearing(departure.latitude, departure.longitude, destination.latitude, destination.longitude);
-    const returnTrueCourse = initialBearing(destination.latitude, destination.longitude, departure.latitude, departure.longitude);
-    const { fuels: _fuels, ...destinationField } = destination;
+    const estimate = computeRoute(profile, input, points);
+    const legs = estimate.legs.map((leg, i) => {
+      const from = points[i]!;
+      const to = points[i + 1]!;
+      const trueCourse = initialBearing(from.latitude, from.longitude, to.latitude, to.longitude);
+      return { ...leg, trueCourse, magneticCourse: magnetic(trueCourse, from.magneticDeclination) };
+    });
+    const hazards = await this.routeHazards(points);
+    const field = ({ fuels: _fuels, ...f }: (typeof fieldsInOrder)[number]): BriefingField => f;
+    const destination = fieldsInOrder[fieldsInOrder.length - 1]!;
 
     return {
-      departure: departure satisfies BriefingField,
-      destination: destinationField satisfies BriefingField,
+      departure: field(fieldsInOrder[0]!),
+      destination: field(destination),
+      stops: fieldsInOrder.slice(1, -1).map(field),
       aircraft: {
         name: profile.name,
         tas: profile.tas,
@@ -169,21 +208,65 @@ export class PlannerService {
         fuelRange: profile.fuelRange,
         fuelType: profile.fuelType,
         category: profile.category,
+        maxCrosswindKt: profile.maxCrosswindKt,
       },
       tripScope: input.tripScope,
       reserveMinutes: input.reserveMinutes,
+      stayMinutes: input.stayMinutes,
       ...estimate,
-      trueCourse,
-      returnTrueCourse,
-      magneticCourse: magnetic(trueCourse, departure.magneticDeclination),
-      returnMagneticCourse: magnetic(returnTrueCourse, destination.magneticDeclination),
-      landingFee: report?.landingFee ?? null,
-      fuelPrice: report?.fuelPrice ?? null,
+      legs,
+      landingFee: reports.get(destination.id)?.landingFee ?? null,
+      fuelPrice: reports.get(destination.id)?.fuelPrice ?? null,
       departureTime: input.departureTime ?? null,
-      arrivalAt: night?.arrivalAt ?? null,
-      returnAt: night?.returnAt ?? null,
-      nightOperation: night?.nightOperation ?? null,
+      ...hazards,
     };
+  }
+
+  /** Low airspaces the straight route enters, and the highest obstacles close to it, in route order. */
+  private async routeHazards(points: RoutePoint[]) {
+    const airspaces: RouteAirspace[] = [];
+    for (const a of await this.airspaces.findAll()) {
+      if (!ROUTE_AIRSPACE_TYPES.has(a.type)) continue;
+      if (a.lowerLimitFt != null && a.lowerLimitFt > ROUTE_AIRSPACE_FLOOR_FT) continue;
+      const alongNm = routeEntryNm(points, a.geometry);
+      if (alongNm == null) continue;
+      airspaces.push({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        icaoClass: a.icaoClass,
+        lowerLimit: a.lowerLimit,
+        upperLimit: a.upperLimit,
+        onRequest: a.onRequest,
+        onDemand: a.onDemand,
+        alongNm: Math.round(alongNm * 10) / 10,
+      });
+    }
+    airspaces.sort((a, b) => a.alongNm - b.alongNm);
+
+    const candidates = await this.prisma.obstacle.findMany({
+      where: { OR: legBoxes(points, ROUTE_OBSTACLE_CORRIDOR_NM) },
+      select: { id: true, name: true, type: true, latitude: true, longitude: true, heightM: true, elevationM: true },
+    });
+    const near = candidates
+      .map((o) => ({ ...o, ...routeOffset(points, o) }))
+      .filter((o) => o.offsetNm <= ROUTE_OBSTACLE_CORRIDOR_NM);
+    const top = (o: (typeof near)[number]) => o.elevationM ?? o.heightM ?? 0;
+    const obstacles: RouteObstacle[] = near
+      .sort((a, b) => top(b) - top(a))
+      .slice(0, ROUTE_OBSTACLES_KEPT)
+      .sort((a, b) => a.alongNm - b.alongNm)
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        type: o.type,
+        heightM: o.heightM,
+        elevationM: o.elevationM,
+        alongNm: Math.round(o.alongNm * 10) / 10,
+        offsetNm: Math.round(o.offsetNm * 10) / 10,
+      }));
+
+    return { airspaces, obstacles, obstacleCount: near.length, obstacleCorridorNm: ROUTE_OBSTACLE_CORRIDOR_NM };
   }
 
   /**

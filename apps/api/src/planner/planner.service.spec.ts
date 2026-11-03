@@ -39,7 +39,7 @@ function build(rows: unknown[]) {
     aerodrome: { findMany: vi.fn().mockResolvedValue([aerodrome("near", 1), aerodrome("far", 10)]) },
     communityInfo: { findMany: vi.fn().mockResolvedValue(rows) },
   };
-  return { prisma, service: new PlannerService(prisma as never) };
+  return { prisma, service: new PlannerService(prisma as never, {} as never) };
 }
 
 const input = {
@@ -84,7 +84,7 @@ describe("PlannerService.plan with member reports", () => {
 });
 
 describe("PlannerService.briefing", () => {
-  const field = (id: string, latitude: number, longitude: number, magneticDeclination: number | null) => ({
+  const field = (id: string, latitude: number, longitude: number, magneticDeclination: number | null, fuels: string[] = []) => ({
     id,
     name: id,
     icaoCode: null,
@@ -92,24 +92,24 @@ describe("PlannerService.briefing", () => {
     longitude,
     elevation: 500,
     magneticDeclination,
+    fuels: fuels.map((type) => ({ type })),
   });
 
-  function buildBriefing(found: { profile?: unknown; destination?: unknown }) {
+  function buildBriefing(found: { profile?: unknown; fields?: unknown[]; airspaces?: unknown[]; obstacles?: unknown[] }) {
     const prisma = {
-      aircraftProfile: { findFirst: vi.fn().mockResolvedValue("profile" in found ? found.profile : profile) },
-      aerodrome: {
-        findUnique: vi.fn(({ where }: { where: { id: string } }) =>
-          Promise.resolve(where.id === "dep" ? field("dep", 0, 0, 2) : (found.destination ?? null)),
-        ),
-      },
+      aircraftProfile: { findFirst: vi.fn().mockResolvedValue("profile" in found ? found.profile : { ...profile, name: "F-GXXX", maxCrosswindKt: 15 }) },
+      aerodrome: { findMany: vi.fn().mockResolvedValue(found.fields ?? []) },
       communityInfo: { findMany: vi.fn().mockResolvedValue([]) },
+      obstacle: { findMany: vi.fn().mockResolvedValue(found.obstacles ?? []) },
     };
-    return { prisma, service: new PlannerService(prisma as never) };
+    const airspaces = { findAll: vi.fn().mockResolvedValue(found.airspaces ?? []) };
+    return { prisma, service: new PlannerService(prisma as never, airspaces as never) };
   }
   const query = {
     profileId: "p1",
     departureId: "dep",
     destinationId: "dest",
+    viaIds: [] as string[],
     tripScope: "round_trip" as const,
     reserveMinutes: 0,
     departureGroundMinutes: 0,
@@ -117,27 +117,63 @@ describe("PlannerService.briefing", () => {
     stayMinutes: 60,
   };
 
-  it("gives the courses both ways, true and magnetic", async () => {
-    const { service } = buildBriefing({ destination: { ...field("dest", 0, 1, null), fuels: [] } });
+  it("gives each leg its true and magnetic course", async () => {
+    const { service } = buildBriefing({ fields: [field("dep", 0, 0, 2), field("dest", 0, 1, null)] });
     const trip = await service.briefing("u1", query);
 
-    expect(trip.trueCourse).toBe(90);
-    expect(trip.returnTrueCourse).toBe(270);
-    expect(trip.magneticCourse).toBe(88); // 2° east
-    expect(trip.returnMagneticCourse).toBeNull(); // unknown at the destination
+    expect(trip.legs.map((l) => [l.fromId, l.toId, l.trueCourse, l.magneticCourse])).toEqual([
+      ["dep", "dest", 90, 88], // 2° east at the departure
+      ["dest", "dep", 270, null], // unknown at the destination
+    ]);
     expect(trip.withinRange).toBe(true);
+    expect(trip.stops).toEqual([]);
+    expect(trip.aircraft.maxCrosswindKt).toBe(15);
+  });
+
+  it("flies through the stops in order", async () => {
+    const { service } = buildBriefing({ fields: [field("dest", 0, 2, null), field("via", 0, 1, null), field("dep", 0, 0, null)] });
+    const trip = await service.briefing("u1", { ...query, viaIds: ["via"], tripScope: "outbound" });
+
+    expect(trip.legs.map((l) => l.toId)).toEqual(["via", "dest"]);
+    expect(trip.stops.map((s) => s.id)).toEqual(["via"]);
+    expect(trip.distanceNm).toBeCloseTo(120, 0);
   });
 
   it("still answers for a field out of reach, and says so", async () => {
-    const { service } = buildBriefing({ destination: { ...field("dest", 0, 5, null), fuels: [] } });
+    const { service } = buildBriefing({ fields: [field("dep", 0, 0, null), field("dest", 0, 5, null)] });
     const trip = await service.briefing("u1", query);
 
-    expect(trip.distanceNm).toBeGreaterThan(290);
+    expect(trip.distanceNm).toBeGreaterThan(590);
     expect(trip.withinRange).toBe(false);
+  });
+
+  it("lists the low airspaces crossed and the obstacles near the route, in route order", async () => {
+    const square = (lon: number) => ({ type: "Polygon", coordinates: [[[lon, -0.1], [lon + 0.1, -0.1], [lon + 0.1, 0.1], [lon, 0.1], [lon, -0.1]]] });
+    const { service } = buildBriefing({
+      fields: [field("dep", 0, 0, null), field("dest", 0, 1, null)],
+      airspaces: [
+        { id: "tma", name: "TMA", type: 5, icaoClass: "D", lowerLimit: "2500ft", upperLimit: "FL115", lowerLimitFt: 2500, geometry: square(0.6), onRequest: false, onDemand: false },
+        { id: "r", name: "R 1", type: 1, icaoClass: "R", lowerLimit: "SFC", upperLimit: "3000ft", lowerLimitFt: null, geometry: square(0.3), onRequest: false, onDemand: true },
+        { id: "high", name: "high", type: 5, icaoClass: "D", lowerLimit: "FL085", upperLimit: "FL195", lowerLimitFt: 8500, geometry: square(0.3), onRequest: false, onDemand: false },
+        { id: "fir", name: "FIR", type: 8, icaoClass: "G", lowerLimit: "SFC", upperLimit: "UNL", lowerLimitFt: null, geometry: square(0.3), onRequest: false, onDemand: false },
+        { id: "aside", name: "aside", type: 2, icaoClass: "D", lowerLimit: "SFC", upperLimit: "3000ft", lowerLimitFt: null, geometry: { type: "Polygon", coordinates: [[[0.3, 1], [0.4, 1], [0.4, 1.1], [0.3, 1]]] }, onRequest: false, onDemand: false },
+      ],
+      obstacles: [
+        { id: "on", name: null, type: "WIND_TURBINE", latitude: 0.005, longitude: 0.5, heightM: 150, elevationM: 400 },
+        { id: "off", name: null, type: "TOWER", latitude: 0.05, longitude: 0.5, heightM: 200, elevationM: 500 }, // 3 NM off
+      ],
+    });
+    const trip = await service.briefing("u1", { ...query, tripScope: "outbound" });
+
+    expect(trip.airspaces.map((a) => a.id)).toEqual(["r", "tma"]);
+    expect(trip.airspaces[0]!.alongNm).toBeCloseTo(18, 0);
+    expect(trip.obstacles.map((o) => o.id)).toEqual(["on"]);
+    expect(trip.obstacles[0]!.offsetNm).toBeCloseTo(0.3, 1);
+    expect(trip.obstacleCount).toBe(1);
   });
 
   it("refuses another member's aircraft and unknown fields", async () => {
     await expect(buildBriefing({ profile: null }).service.briefing("u1", query)).rejects.toThrow(/profile/i);
-    await expect(buildBriefing({}).service.briefing("u1", query)).rejects.toThrow(/introuvable/);
+    await expect(buildBriefing({ fields: [field("dep", 0, 0, null)] }).service.briefing("u1", query)).rejects.toThrow(/introuvable/);
   });
 });
