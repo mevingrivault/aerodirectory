@@ -8,6 +8,11 @@ import { cn, formatNm, formatFlightTime, formatEuros } from "@/lib/utils";
 import Link from "next/link";
 import type { PlannerResult, SavedSearchItem } from "@aerodirectory/shared";
 import { popupContent } from "@/lib/map-popup";
+import { formatPricePerLiter, isStale } from "@/lib/community-info";
+
+/** "14:35", in the visitor's time zone. */
+const formatClock = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const formatDay = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { timeZone: "UTC" });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -21,6 +26,7 @@ interface AircraftProfile {
   minRunwayLength: number;
   allowedSurfaces: string[];
   fuelType: string | null;
+  category: string | null;
 }
 
 interface AerodromeOption {
@@ -66,6 +72,13 @@ const AIRCRAFT_FUELS = [
   { value: "UL91", label: "UL91" },
   { value: "SP98", label: "SP98" },
   { value: "JET_A1", label: "Jet A1" },
+];
+/** Picks the landing fee members reported; same keys as FEE_CATEGORIES. */
+const AIRCRAFT_CATEGORIES = [
+  { value: "", label: "Non renseignée" },
+  { value: "ULM", label: "ULM" },
+  { value: "LIGHT", label: "Avion ≤ 1,5 t" },
+  { value: "HEAVY", label: "Avion > 1,5 t" },
 ];
 const FUEL_SHORT_LABELS: Record<string, string> = { AVGAS_100LL: "100LL", UL91: "UL91", SP98: "SP98", JET_A1: "Jet A1" };
 
@@ -436,6 +449,7 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
             {r.aerodrome.ppr && <span className="badge badge-warn" title="Prior Permission Required : prévenir le terrain avant de venir">PPR</span>}
             {r.aerodrome.privateUse && <span className="badge badge-warn">Privé</span>}
             {r.aerodrome.skydiveActivity && <span className="badge badge-warn">Parachutisme</span>}
+            {r.nightOperation && <span className="badge badge-night" title="Un décollage ou un atterrissage tombe pendant la nuit aéronautique (coucher du soleil + 30 min)">Nuit aéro</span>}
             {r.aerodrome.city && <span className="result-city">{r.aerodrome.city}</span>}
           </div>
           <div className="result-line">
@@ -457,6 +471,34 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               </>
             )}
           </div>
+          {(r.arrivalAt || r.landingFee || r.fuelPrice) && (
+            <div className="result-line">
+              {r.arrivalAt && (
+                <span>
+                  Arrivée <span className="mono">{formatClock(r.arrivalAt)}</span>
+                  {r.returnAt && <> · retour <span className="mono">{formatClock(r.returnAt)}</span></>}
+                </span>
+              )}
+              {r.landingFee && (
+                <>
+                  {r.arrivalAt && <span className="sep" />}
+                  <span title={`D'après un membre, constaté le ${formatDay(r.landingFee.observedAt)}`}>
+                    Taxe <span className="mono">{r.landingFee.amount === 0 ? "gratuite" : formatEuros(r.landingFee.amount)}</span>
+                    {isStale({ kind: "LANDING_FEE", observedAt: r.landingFee.observedAt }) && " (à vérifier)"}
+                  </span>
+                </>
+              )}
+              {r.fuelPrice && (
+                <>
+                  {(r.arrivalAt || r.landingFee) && <span className="sep" />}
+                  <span title={`D'après un membre, constaté le ${formatDay(r.fuelPrice.observedAt)}`}>
+                    ⛽ <span className="mono">{formatPricePerLiter(r.fuelPrice.pricePerLiter)}</span>
+                    {isStale({ kind: "FUEL_PRICE", observedAt: r.fuelPrice.observedAt }) && " (à vérifier)"}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
           {r.refuelRequired && (
             <div className="result-line" style={{ color: "oklch(0.45 0.12 60)" }}>
               ⛽ Retour possible seulement en refaisant le plein sur place
@@ -506,7 +548,7 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               <div className="result-price-val">
                 {r.estimatedCost.toFixed(2).replace(".", ",")} <span className="unit">€</span>
               </div>
-              <div className="result-price-sub">estimé</div>
+              <div className="result-price-sub">{r.landingFee ? "estimé, taxe incluse" : "estimé"}</div>
             </div>
           )}
           <svg style={{width:16,height:16,flexShrink:0,color:"var(--ink-400)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -578,6 +620,7 @@ export default function PlannerPage() {
     minRunwayLength: "",
     allowedSurfaces: DEFAULT_SURFACES,
     fuelType: "",
+    category: "",
   });
 
   // ── Departure state ──
@@ -600,6 +643,10 @@ export default function PlannerPage() {
   const [fuelPricePerLiter, setFuelPricePerLiter] = useState("");
   const [departureGroundMinutes, setDepartureGroundMinutes] = useState("0");
   const [arrivalGroundMinutes, setArrivalGroundMinutes] = useState("0");
+  // Local date and time from <input type="datetime-local">; "" = no night check.
+  const [departureTime, setDepartureTime] = useState("");
+  const [stayMinutes, setStayMinutes] = useState("60");
+  const [excludeNight, setExcludeNight] = useState(false);
   const [minDistanceKm, setMinDistanceKm] = useState("0");
 
   // ── Filters ──
@@ -694,13 +741,13 @@ export default function PlannerPage() {
       setShowProfileForm(false);
       const created = res.data as AircraftProfile;
       setSelectedProfileId(created.id);
-      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES, fuelType: "" });
+      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES, fuelType: "", category: "" });
     },
   });
 
-  const updateProfileFuelMutation = useMutation({
-    mutationFn: ({ id, fuelType }: { id: string; fuelType: string | null }) =>
-      apiClient.put(`/planner/profiles/${id}`, { fuelType }),
+  const updateProfileMutation = useMutation({
+    mutationFn: ({ id, ...data }: { id: string; fuelType?: string | null; category?: string | null }) =>
+      apiClient.put(`/planner/profiles/${id}`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
   });
 
@@ -770,13 +817,15 @@ export default function PlannerPage() {
       minRunwayLength: parseInt(profileForm.minRunwayLength) || 0,
       allowedSurfaces: profileForm.allowedSurfaces,
       fuelType: profileForm.fuelType || null,
+      category: profileForm.category || null,
     });
   };
 
   const buildPlannerSearchParams = useCallback(() => {
     const params: Record<string, string> = {
       searchMode, tripScope, reserveMinutes: String(reserveMinutes), sortBy,
-      departureGroundMinutes, arrivalGroundMinutes, minDistanceKm, fuelPricePerLiter,
+      departureGroundMinutes, arrivalGroundMinutes, minDistanceKm, fuelPricePerLiter, stayMinutes,
+      ...(excludeNight ? { excludeNight: "true" } : {}),
       maxTimeMinutes: String(maxTimeMinutes), minTimeMinutes, maxCost: String(maxCost), minCost, viewMode,
     };
     if (departureAerodrome) {
@@ -790,7 +839,7 @@ export default function PlannerPage() {
       if (value) params[key] = "true";
     }
     return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== ""));
-  }, [arrivalGroundMinutes, departureAerodrome, departureGroundMinutes, filters, fuelPricePerLiter, maxCost, maxTimeMinutes, minCost, minDistanceKm, minTimeMinutes, reserveMinutes, searchMode, selectedProfileId, sortBy, tripScope, viewMode]);
+  }, [arrivalGroundMinutes, departureAerodrome, departureGroundMinutes, excludeNight, filters, fuelPricePerLiter, maxCost, maxTimeMinutes, minCost, minDistanceKm, minTimeMinutes, reserveMinutes, searchMode, selectedProfileId, sortBy, stayMinutes, tripScope, viewMode]);
 
   const applySavedPlannerSearch = useCallback(async (saved: SavedSearchItem) => {
     const params = saved.params ?? {};
@@ -801,6 +850,8 @@ export default function PlannerPage() {
     setViewMode((params["viewMode"] as "list" | "map") || "list");
     setDepartureGroundMinutes(params["departureGroundMinutes"] ?? "0");
     setArrivalGroundMinutes(params["arrivalGroundMinutes"] ?? "0");
+    setStayMinutes(params["stayMinutes"] ?? "60");
+    setExcludeNight(params["excludeNight"] === "true");
     setMinDistanceKm(params["minDistanceKm"] ?? "0");
     setFuelPricePerLiter(params["fuelPricePerLiter"] ?? "");
     setMaxTimeMinutes(Number(params["maxTimeMinutes"] ?? "60"));
@@ -857,6 +908,15 @@ export default function PlannerPage() {
       arrivalGroundMinutes: parseInt(arrivalGroundMinutes) || 0,
       sortBy,
     };
+
+    if (departureTime) {
+      const at = new Date(departureTime); // datetime-local is read as local time
+      if (!Number.isNaN(at.getTime())) {
+        payload.departureTime = at.toISOString();
+        payload.stayMinutes = Math.min(1440, Math.max(0, parseInt(stayMinutes) || 0));
+        if (excludeNight) payload.excludeNight = true;
+      }
+    }
 
     if (searchMode === "time") {
       payload.maxTimeMinutes = maxTimeMinutes;
@@ -1410,6 +1470,7 @@ export default function PlannerPage() {
         .badge-oaci { font-family: var(--f-mono); font-weight: 500; background: var(--paper-100); color: var(--ink-950); border: 1px solid var(--ink-300); letter-spacing: 0.08em; height: 20px; font-size: 10px; }
         .badge-vfr { background: var(--vfr-100); color: var(--vfr-700); }
         .badge-warn { background: oklch(0.95 0.06 75); color: oklch(0.45 0.12 60); }
+        .badge-night { background: oklch(0.93 0.04 270); color: oklch(0.38 0.12 270); }
         .badge-vfr::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--vfr-500); }
 
         /* Mobile FAB + drawer */
@@ -1764,6 +1825,12 @@ export default function PlannerPage() {
                       </select>
                     </div>
                     <div>
+                      <div className="planner-field-label">Catégorie (taxes)</div>
+                      <select className="planner-input no-ico" name="planner-aircraft-category" value={profileForm.category} onChange={(e) => setProfileForm((f) => ({ ...f, category: e.target.value }))}>
+                        {AIRCRAFT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
                       <div className="planner-field-label">Revêtements acceptés</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {["ASPHALT", "CONCRETE", "GRASS", "GRAVEL", "DIRT"].map((s) => (
@@ -1816,10 +1883,24 @@ export default function PlannerPage() {
                               value={p.fuelType ?? ""}
                               aria-label="Carburant de l'avion"
                               onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => updateProfileFuelMutation.mutate({ id: p.id, fuelType: e.target.value || null })}
+                              onChange={(e) => updateProfileMutation.mutate({ id: p.id, fuelType: e.target.value || null })}
                             >
                               {AIRCRAFT_FUELS.map((f) => (
                                 <option key={f.value} value={f.value}>{f.value ? `Carburant : ${f.label}` : "Carburant : non renseigné"}</option>
+                              ))}
+                            </select>
+                          )}
+                          {selectedProfileId === p.id && (
+                            <select
+                              className="planner-input no-ico"
+                              style={{ marginTop: 6, height: 30, fontSize: 12 }}
+                              value={p.category ?? ""}
+                              aria-label="Catégorie pour les taxes"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateProfileMutation.mutate({ id: p.id, category: e.target.value || null })}
+                            >
+                              {AIRCRAFT_CATEGORIES.map((c) => (
+                                <option key={c.value} value={c.value}>{`Taxes : ${c.value ? c.label : "catégorie non renseignée"}`}</option>
                               ))}
                             </select>
                           )}
@@ -1953,6 +2034,28 @@ export default function PlannerPage() {
               </button>
               {showOptions && (
                 <div className="planner-panel-body">
+                  <div className="planner-field-row">
+                    <div>
+                      <div className="planner-field-label">Heure de départ (bloc)</div>
+                      <input className="planner-input no-ico" type="datetime-local" name="planner-departure-time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} />
+                    </div>
+                    {tripScope === "round_trip" && (
+                      <div>
+                        <div className="planner-field-label">Temps sur place</div>
+                        <div className="planner-field-suffix">
+                          <input className="planner-input no-ico" type="number" autoComplete="off" name="planner-stay" min={0} max={1440} value={stayMinutes} onChange={(e) => setStayMinutes(e.target.value)} />
+                          <span className="suffix">min</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {departureTime && (
+                    <label className="planner-check">
+                      <input type="checkbox" checked={excludeNight} onChange={() => setExcludeNight((v) => !v)} />
+                      <span className="planner-check-box"></span>
+                      <span>Exclure les vols qui touchent la nuit aéronautique</span>
+                    </label>
+                  )}
                   <div className="planner-field-row">
                     <div>
                       <div className="planner-field-label">Réserve (min)</div>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FUEL_TYPES, SURFACE_TYPES } from "../constants";
+import { FEE_CATEGORIES } from "./community-info.schema";
 
 export const AircraftProfileSchema = z.object({
   name: z.string().min(1).max(100).trim(),
@@ -10,6 +11,7 @@ export const AircraftProfileSchema = z.object({
   minRunwayLength: z.number().int().nonnegative().max(10000), // meters
   allowedSurfaces: z.array(z.enum(SURFACE_TYPES)).min(1),
   fuelType: z.enum(FUEL_TYPES).nullable().optional(), // what the aircraft burns, to refuel on the way
+  category: z.enum(FEE_CATEGORIES).nullable().optional(), // ULM / up to 1.5 t / over: picks the landing fee
 });
 
 export const PlannerQuerySchema = z.object({
@@ -40,6 +42,12 @@ export const PlannerQuerySchema = z.object({
   maxDistanceNm: z.number().positive().max(5000).optional(),
   sortBy: z.enum(["time", "cost", "distance"]).default("time"),
   excludeVisited: z.boolean().optional(),
+  // Off-block time at the departure field (ISO, UTC). With it, every take-off
+  // and landing is checked against aeronautical night at its field.
+  departureTime: z.string().datetime().optional(),
+  stayMinutes: z.number().int().min(0).max(1440).default(60), // round trip: time on the ground at the destination
+  excludeNight: z.boolean().optional(),
+
   // Private fields need the owner's permission: left out unless asked for.
   includePrivate: z.boolean().optional(),
 

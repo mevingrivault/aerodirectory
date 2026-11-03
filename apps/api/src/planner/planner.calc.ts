@@ -1,5 +1,6 @@
 import type { Prisma } from "@aerodirectory/database";
 import { haversineNm, type PlannerQueryInput } from "@aerodirectory/shared";
+import { computeSunTimes } from "../metar/sun";
 
 /** The aircraft fields the calculation needs. */
 export interface PlannerAircraft {
@@ -16,6 +17,7 @@ export interface PlannerDestination {
   latitude: number;
   longitude: number;
   fuels: { type: string }[]; // available fuels only
+  landingFee?: number | null; // € per landing, from members; added to the cost
 }
 
 export interface LegEstimate {
@@ -114,7 +116,7 @@ export function estimateLeg(
   const tripFuelLiters = fuelUsedLiters * legs;
 
   const fuelCost = round2(tripFuelLiters * (input.fuelPricePerLiter ?? 0));
-  const estimatedCost = round2(fuelCost + round2(tripTimeHours * aircraft.hourlyCost));
+  const estimatedCost = round2(fuelCost + round2(tripTimeHours * aircraft.hourlyCost) + (destination.landingFee ?? 0));
 
   if (input.searchMode === "time" && input.maxTimeMinutes !== undefined && tripTimeHours * 60 > input.maxTimeMinutes) {
     return null;
@@ -133,6 +135,60 @@ export function estimateLeg(
     estimatedCost,
     refuelRequired,
     canRefuel,
+  };
+}
+
+export interface Place {
+  latitude: number;
+  longitude: number;
+}
+
+export interface NightCheck {
+  arrivalAt: string;
+  returnAt: string | null;
+  nightOperation: boolean;
+}
+
+/** Outside [sunrise − 30 min, sunset + 30 min] at that field on that day. */
+export function isAeronauticalNight(at: Date, place: Place): boolean {
+  const sun = computeSunTimes(at.toISOString().slice(0, 10), place.latitude, place.longitude);
+  if (!sun.aeronauticalDayStart || !sun.aeronauticalDayEnd) return false; // no sunset at French latitudes
+  const t = at.getTime();
+  return t < Date.parse(sun.aeronauticalDayStart) || t > Date.parse(sun.aeronauticalDayEnd);
+}
+
+/**
+ * Timeline from off-block at the departure field: taxi out, flight, taxi in,
+ * then for a round trip the stay and the same way back. Each take-off and
+ * landing is checked against aeronautical night at its own field.
+ */
+export function checkNight(
+  input: PlannerQueryInput,
+  leg: Pick<LegEstimate, "timeHours">,
+  departure: Place,
+  destination: Place,
+): NightCheck | null {
+  if (!input.departureTime) return null;
+  const minute = 60_000;
+  const taxiOut = (input.departureGroundMinutes ?? 0) * minute;
+  const taxiIn = (input.arrivalGroundMinutes ?? 0) * minute;
+  const flight = leg.timeHours * 3_600_000;
+
+  const takeOff = Date.parse(input.departureTime) + taxiOut;
+  const landing = takeOff + flight;
+  const events: [number, Place][] = [[takeOff, departure], [landing, destination]];
+  let returnLanding: number | null = null;
+
+  if ((input.tripScope ?? "round_trip") === "round_trip") {
+    const returnTakeOff = landing + taxiIn + (input.stayMinutes ?? 60) * minute + taxiOut;
+    returnLanding = returnTakeOff + flight;
+    events.push([returnTakeOff, destination], [returnLanding, departure]);
+  }
+
+  return {
+    arrivalAt: new Date(landing).toISOString(),
+    returnAt: returnLanding == null ? null : new Date(returnLanding).toISOString(),
+    nightOperation: events.some(([at, place]) => isAeronauticalNight(new Date(at), place)),
   };
 }
 

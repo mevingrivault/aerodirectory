@@ -592,8 +592,17 @@ model CommunityInfo {
 
 // ─── Flight Planner ──────────────────────────────────────
 
+// Same categories as the landing fees members report (FEE_CATEGORIES).
+enum AircraftCategory {
+  ULM
+  LIGHT // aeroplane up to 1.5 t
+  HEAVY // aeroplane over 1.5 t
+
+  @@schema("public")
+}
+
 model AircraftProfile {
-  id              String        @id @default(cuid())
+  id              String            @id @default(cuid())
   userId          String
   name            String // e.g. "My C172"
   tas             Float // knots
@@ -603,8 +612,9 @@ model AircraftProfile {
   minRunwayLength Int // meters
   allowedSurfaces SurfaceType[]
   fuelType        FuelType? // what it burns; null = never plan a refuel
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  category        AircraftCategory? // picks the landing fee members reported; null = fee unknown
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

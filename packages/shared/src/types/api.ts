@@ -51,6 +51,15 @@ export interface PlannerResult {
   tripFuelLiters: number;  // total trip fuel  (accounts for outbound/round_trip)
   refuelRequired: boolean; // round trip that only works by refuelling at the destination
   canRefuel: boolean;      // the destination sells the aircraft's fuel
+  /** Newest approved member report for the profile's category; included in estimatedCost. */
+  landingFee: { amount: number; parkingPerNight: number | null; observedAt: string } | null;
+  /** Newest approved member price at the destination for the aircraft's fuel. */
+  fuelPrice: { pricePerLiter: number; observedAt: string } | null;
+  /** Only with a departure time: landing at the destination, and back home for a round trip. */
+  arrivalAt: string | null;
+  returnAt: string | null;
+  /** A take-off or landing falls in aeronautical night; null without a departure time. */
+  nightOperation: boolean | null;
 }
 
 export interface AerodexTypeStats {
