@@ -1,12 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { Prisma, type VisitStatus } from "@aerodirectory/database";
-import {
-  haversineNm,
-  type AircraftProfileInput,
-  type PlannerQueryInput,
-  type PlannerResult,
+import type {
+  AircraftProfileInput,
+  PlannerQueryInput,
+  PlannerResult,
 } from "@aerodirectory/shared";
+import { buildDestinationWhere, estimateLeg } from "./planner.calc";
 
 @Injectable()
 export class PlannerService {
@@ -58,128 +57,18 @@ export class PlannerService {
     });
     if (!profile) throw new NotFoundException("Aircraft profile not found");
 
-    const reserveHours = (input.reserveMinutes ?? 30) / 60;
-    const isRoundTrip = (input.tripScope ?? "round_trip") === "round_trip";
-    const scopeMultiplier = isRoundTrip ? 2 : 1;
-
-    // Ground procedures: departure + arrival overhead, doubled for round trip
-    const groundTimeHours =
-      ((input.departureGroundMinutes ?? 0) + (input.arrivalGroundMinutes ?? 0)) /
-      60 *
-      scopeMultiplier;
-
-    // Subtract reserve from total range to get usable range
-    const reserveNm = reserveHours * profile.tas;
-    const usableRangeNm = Math.max(0, profile.fuelRange - reserveNm);
-    const maxOneWayNm = isRoundTrip ? usableRangeNm / 2 : usableRangeNm;
-
-    const filters = input.filters ?? {};
-
-    // Build fuel type filter (OR logic: has any of the required types)
-    const requiredFuelTypes: string[] = [];
-    if (filters.fuel100LL) requiredFuelTypes.push("AVGAS_100LL");
-    if (filters.fuelSP98) requiredFuelTypes.push("SP98");
-    const fuelsClause =
-      requiredFuelTypes.length > 0
-        ? {
-            fuels: {
-              some: {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                type: { in: requiredFuelTypes as any },
-                available: true,
-              },
-            },
-          }
-        : {};
-
-    const visitsClause = input.excludeVisited
-      ? {
-          visits: {
-            none: {
-              userId,
-              status: { in: ["VISITED", "FAVORITE"] as VisitStatus[] },
-            },
-          },
-        }
-      : {};
-
-    const aerodromes = (await this.prisma.aerodrome.findMany({
-      where: {
-        status: "OPEN",
-        runways: {
-          some: {
-            length: { gte: profile.minRunwayLength },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            surface: { in: profile.allowedSurfaces as any },
-          },
-        },
-        ...(filters.hasRestaurant ? { hasRestaurant: true } : {}),
-        ...(filters.hasTransport ? { hasTransport: true } : {}),
-        ...(filters.hasBikes ? { hasBikes: true } : {}),
-        ...(filters.hasAccommodation ? { hasAccommodation: true } : {}),
-        ...fuelsClause,
-        ...visitsClause,
-      },
+    const aerodromes = await this.prisma.aerodrome.findMany({
+      where: buildDestinationWhere(profile, input, userId),
       include: {
-        runways: true,
-        fuels: { where: { available: true } },
+        runways: { select: { length: true } },
+        fuels: { where: { available: true }, select: { type: true } },
       },
-    })) as Prisma.AerodromeGetPayload<{
-      include: {
-        runways: true;
-        fuels: { where: { available: true } };
-      };
-    }>[];
+    });
 
-    const fuelPricePerLiter = input.fuelPricePerLiter ?? 0;
     const results: PlannerResult[] = [];
-
     for (const ad of aerodromes) {
-      const distanceNm = haversineNm(
-        input.departureLat,
-        input.departureLng,
-        ad.latitude,
-        ad.longitude,
-      );
-
-      // Skip departure aerodrome itself and anything beyond range
-      if (distanceNm < 0.5) continue;
-      if (input.minDistanceNm && distanceNm < input.minDistanceNm) continue;
-      if (distanceNm > maxOneWayNm) continue;
-      if (input.maxDistanceNm && distanceNm > input.maxDistanceNm) continue;
-
-      const timeHours = distanceNm / profile.tas;
-      const tripTimeHours = round2(timeHours * scopeMultiplier + groundTimeHours);
-      const fuelUsedLiters = timeHours * profile.fuelConsumption;
-      const tripFuelLiters = fuelUsedLiters * scopeMultiplier;
-
-      // Cost: hourly operating cost (includes ground time) + optional separate fuel cost
-      const fuelCost = round2(tripFuelLiters * fuelPricePerLiter);
-      const operatingCost = round2(tripTimeHours * profile.hourlyCost);
-      const estimatedCost = round2(fuelCost + operatingCost);
-
-      // Apply time constraint
-      if (
-        input.searchMode === "time" &&
-        input.maxTimeMinutes !== undefined &&
-        tripTimeHours * 60 > input.maxTimeMinutes
-      ) {
-        continue;
-      }
-
-      // Apply cost constraint
-      if (
-        input.searchMode === "cost" &&
-        input.maxCost !== undefined &&
-        estimatedCost > input.maxCost
-      ) {
-        continue;
-      }
-
-      const maxRunwayLength =
-        ad.runways.length > 0
-          ? Math.max(...ad.runways.map((r) => r.length))
-          : null;
+      const leg = estimateLeg(profile, input, ad);
+      if (!leg) continue;
 
       results.push({
         aerodrome: {
@@ -196,19 +85,15 @@ export class PlannerService {
           hasBikes: ad.hasBikes,
           hasAccommodation: ad.hasAccommodation,
           fuels: ad.fuels.map((f) => f.type),
-          maxRunwayLength,
+          maxRunwayLength: ad.runways.length > 0 ? Math.max(...ad.runways.map((r) => r.length)) : null,
+          ppr: ad.ppr,
+          privateUse: ad.privateUse,
+          skydiveActivity: ad.skydiveActivity,
         },
-        distanceNm: round1(distanceNm),
-        timeHours: round2(timeHours),
-        fuelUsedLiters: round1(fuelUsedLiters),
-        fuelCost,
-        estimatedCost,
-        tripTimeHours: round2(tripTimeHours),
-        tripFuelLiters: round1(tripFuelLiters),
+        ...leg,
       });
     }
 
-    // Sort
     if (input.sortBy === "cost") {
       results.sort((a, b) => a.estimatedCost - b.estimatedCost);
     } else if (input.sortBy === "distance") {
@@ -220,9 +105,3 @@ export class PlannerService {
     return results;
   }
 }
-
-// ─── Helpers ────────────────────────────────────────
-
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
-const round2 = (n: number) => Math.round(n * 100) / 100;

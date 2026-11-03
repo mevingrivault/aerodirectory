@@ -38,6 +38,9 @@ export interface PlannerResult {
     hasAccommodation: boolean;
     fuels: string[];
     maxRunwayLength: number | null;
+    ppr: boolean;
+    privateUse: boolean;
+    skydiveActivity: boolean;
   };
   distanceNm: number;
   timeHours: number;       // one-way flight time
@@ -46,6 +49,8 @@ export interface PlannerResult {
   estimatedCost: number;   // total trip cost (hourlyCost × tripTime + fuelCost)
   tripTimeHours: number;   // total trip time (accounts for outbound/round_trip)
   tripFuelLiters: number;  // total trip fuel  (accounts for outbound/round_trip)
+  refuelRequired: boolean; // round trip that only works by refuelling at the destination
+  canRefuel: boolean;      // the destination sells the aircraft's fuel
 }
 
 export interface AerodexTypeStats {

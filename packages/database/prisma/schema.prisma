@@ -602,6 +602,7 @@ model AircraftProfile {
   fuelRange       Float // nautical miles
   minRunwayLength Int // meters
   allowedSurfaces SurfaceType[]
+  fuelType        FuelType? // what it burns; null = never plan a refuel
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

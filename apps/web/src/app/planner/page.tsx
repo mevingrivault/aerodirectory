@@ -20,6 +20,7 @@ interface AircraftProfile {
   fuelRange: number;
   minRunwayLength: number;
   allowedSurfaces: string[];
+  fuelType: string | null;
 }
 
 interface AerodromeOption {
@@ -38,9 +39,35 @@ interface PlannerFilters {
   hasBikes: boolean;
   hasAccommodation: boolean;
   fuel100LL: boolean;
+  fuelUL91: boolean;
   fuelSP98: boolean;
+  fuelJetA1: boolean;
   excludeVisited: boolean;
+  includePrivate: boolean;
 }
+
+const NO_FILTERS: PlannerFilters = {
+  hasRestaurant: false,
+  hasTransport: false,
+  hasBikes: false,
+  hasAccommodation: false,
+  fuel100LL: false,
+  fuelUL91: false,
+  fuelSP98: false,
+  fuelJetA1: false,
+  excludeVisited: false,
+  includePrivate: false,
+};
+
+/** Fuel an aircraft burns; "" = not given, the planner never counts on refuelling. */
+const AIRCRAFT_FUELS = [
+  { value: "", label: "Non renseigné" },
+  { value: "AVGAS_100LL", label: "100LL" },
+  { value: "UL91", label: "UL91" },
+  { value: "SP98", label: "SP98" },
+  { value: "JET_A1", label: "Jet A1" },
+];
+const FUEL_SHORT_LABELS: Record<string, string> = { AVGAS_100LL: "100LL", UL91: "UL91", SP98: "SP98", JET_A1: "Jet A1" };
 
 type SearchMode = "time" | "cost" | "unlimited";
 type TripScope = "outbound" | "round_trip";
@@ -406,6 +433,9 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               <span className="badge badge-oaci">{r.aerodrome.icaoCode}</span>
             )}
             <span className="badge badge-vfr">Ouvert</span>
+            {r.aerodrome.ppr && <span className="badge badge-warn" title="Prior Permission Required : prévenir le terrain avant de venir">PPR</span>}
+            {r.aerodrome.privateUse && <span className="badge badge-warn">Privé</span>}
+            {r.aerodrome.skydiveActivity && <span className="badge badge-warn">Parachutisme</span>}
             {r.aerodrome.city && <span className="result-city">{r.aerodrome.city}</span>}
           </div>
           <div className="result-line">
@@ -427,6 +457,11 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               </>
             )}
           </div>
+          {r.refuelRequired && (
+            <div className="result-line" style={{ color: "oklch(0.45 0.12 60)" }}>
+              ⛽ Retour possible seulement en refaisant le plein sur place
+            </div>
+          )}
           {(r.aerodrome.hasRestaurant || r.aerodrome.hasAccommodation || r.aerodrome.hasTransport || r.aerodrome.hasBikes || r.aerodrome.fuels.length > 0) && (
             <div className="result-amen">
               {r.aerodrome.hasRestaurant && (
@@ -454,7 +489,7 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
                 </span>
               )}
               {r.aerodrome.fuels.map((fuel: string) => {
-                const label = fuel === "AVGAS_100LL" ? "100LL" : fuel === "SP98" ? "SP98" : fuel === "UL91" ? "UL91" : null;
+                const label = FUEL_SHORT_LABELS[fuel] ?? null;
                 return label ? (
                   <span key={fuel} className="amen fuel">
                     <FuelIcon />
@@ -542,6 +577,7 @@ export default function PlannerPage() {
     fuelRange: "",
     minRunwayLength: "",
     allowedSurfaces: DEFAULT_SURFACES,
+    fuelType: "",
   });
 
   // ── Departure state ──
@@ -567,15 +603,7 @@ export default function PlannerPage() {
   const [minDistanceKm, setMinDistanceKm] = useState("0");
 
   // ── Filters ──
-  const [filters, setFilters] = useState<PlannerFilters>({
-    hasRestaurant: false,
-    hasTransport: false,
-    hasBikes: false,
-    hasAccommodation: false,
-    fuel100LL: false,
-    fuelSP98: false,
-    excludeVisited: false,
-  });
+  const [filters, setFilters] = useState<PlannerFilters>(NO_FILTERS);
 
   // ── Sort + view ──
   const [sortBy, setSortBy] = useState<SortBy>("time");
@@ -666,8 +694,14 @@ export default function PlannerPage() {
       setShowProfileForm(false);
       const created = res.data as AircraftProfile;
       setSelectedProfileId(created.id);
-      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES });
+      setProfileForm({ name: "", tas: "", fuelConsumption: "", hourlyCost: "", fuelRange: "", minRunwayLength: "", allowedSurfaces: DEFAULT_SURFACES, fuelType: "" });
     },
+  });
+
+  const updateProfileFuelMutation = useMutation({
+    mutationFn: ({ id, fuelType }: { id: string; fuelType: string | null }) =>
+      apiClient.put(`/planner/profiles/${id}`, { fuelType }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
   });
 
   const deleteProfileMutation = useMutation({
@@ -735,6 +769,7 @@ export default function PlannerPage() {
       fuelRange: parseFloat(profileForm.fuelRange),
       minRunwayLength: parseInt(profileForm.minRunwayLength) || 0,
       allowedSurfaces: profileForm.allowedSurfaces,
+      fuelType: profileForm.fuelType || null,
     });
   };
 
@@ -772,15 +807,11 @@ export default function PlannerPage() {
     setMinTimeMinutes(params["minTimeMinutes"] ?? "");
     setMaxCost(Number(params["maxCost"] ?? "100"));
     setMinCost(params["minCost"] ?? "");
-    setFilters({
-      hasRestaurant: params["hasRestaurant"] === "true",
-      hasTransport: params["hasTransport"] === "true",
-      hasBikes: params["hasBikes"] === "true",
-      hasAccommodation: params["hasAccommodation"] === "true",
-      fuel100LL: params["fuel100LL"] === "true",
-      fuelSP98: params["fuelSP98"] === "true",
-      excludeVisited: params["excludeVisited"] === "true",
-    });
+    setFilters(
+      Object.fromEntries(
+        Object.keys(NO_FILTERS).map((key) => [key, params[key] === "true"]),
+      ) as unknown as PlannerFilters,
+    );
     if (params["profileId"]) setSelectedProfileId(params["profileId"]);
     if (params["departureId"]) {
       try {
@@ -849,8 +880,9 @@ export default function PlannerPage() {
       if (v) (activeFilters as Record<string, boolean>)[k] = true;
     }
     if (Object.keys(activeFilters).length > 0) {
-      const { excludeVisited, ...destinationFilters } = activeFilters as PlannerFilters;
+      const { excludeVisited, includePrivate, ...destinationFilters } = activeFilters as PlannerFilters;
       if (excludeVisited) payload.excludeVisited = true;
+      if (includePrivate) payload.includePrivate = true;
       if (Object.keys(destinationFilters).length > 0) payload.filters = destinationFilters;
     }
 
@@ -1377,6 +1409,7 @@ export default function PlannerPage() {
         .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
         .badge-oaci { font-family: var(--f-mono); font-weight: 500; background: var(--paper-100); color: var(--ink-950); border: 1px solid var(--ink-300); letter-spacing: 0.08em; height: 20px; font-size: 10px; }
         .badge-vfr { background: var(--vfr-100); color: var(--vfr-700); }
+        .badge-warn { background: oklch(0.95 0.06 75); color: oklch(0.45 0.12 60); }
         .badge-vfr::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--vfr-500); }
 
         /* Mobile FAB + drawer */
@@ -1725,6 +1758,12 @@ export default function PlannerPage() {
                       <input className="planner-input no-ico" type="number" autoComplete="off" name="planner-aircraft-runway" placeholder="0" value={profileForm.minRunwayLength} onChange={(e) => setProfileForm((f) => ({ ...f, minRunwayLength: e.target.value }))} />
                     </div>
                     <div>
+                      <div className="planner-field-label">Carburant</div>
+                      <select className="planner-input no-ico" name="planner-aircraft-fueltype" value={profileForm.fuelType} onChange={(e) => setProfileForm((f) => ({ ...f, fuelType: e.target.value }))}>
+                        {AIRCRAFT_FUELS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
                       <div className="planner-field-label">Revêtements acceptés</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {["ASPHALT", "CONCRETE", "GRASS", "GRAVEL", "DIRT"].map((s) => (
@@ -1767,7 +1806,23 @@ export default function PlannerPage() {
                             {p.name}
                             {selectedProfileId === p.id && <IcoCheck />}
                           </div>
-                          <div className="planner-ac-specs">{p.tas} kt · {p.fuelConsumption} L/h · {p.fuelRange} NM</div>
+                          <div className="planner-ac-specs">
+                            {p.tas} kt · {p.fuelConsumption} L/h · {p.fuelRange} NM{p.fuelType ? ` · ${FUEL_SHORT_LABELS[p.fuelType] ?? p.fuelType}` : ""}
+                          </div>
+                          {selectedProfileId === p.id && (
+                            <select
+                              className="planner-input no-ico"
+                              style={{ marginTop: 6, height: 30, fontSize: 12 }}
+                              value={p.fuelType ?? ""}
+                              aria-label="Carburant de l'avion"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateProfileFuelMutation.mutate({ id: p.id, fuelType: e.target.value || null })}
+                            >
+                              {AIRCRAFT_FUELS.map((f) => (
+                                <option key={f.value} value={f.value}>{f.value ? `Carburant : ${f.label}` : "Carburant : non renseigné"}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                         <button
                           className="planner-ac-del"
@@ -1958,7 +2013,7 @@ export default function PlannerPage() {
                     )}
                   </span>
                 </div>
-                <button className="planner-panel-link" onClick={() => setFilters({ hasRestaurant: false, hasTransport: false, hasBikes: false, hasAccommodation: false, fuel100LL: false, fuelSP98: false, excludeVisited: false })}>
+                <button className="planner-panel-link" onClick={() => setFilters(NO_FILTERS)}>
                   Réinitialiser
                 </button>
               </div>
@@ -1984,13 +2039,20 @@ export default function PlannerPage() {
                   <div className="planner-eyebrow" style={{ marginBottom: 8 }}>Carburant</div>
                   <div className="planner-pill-group">
                     <button className={cn("planner-pill", filters.fuel100LL && "active")} onClick={() => toggleFilter("fuel100LL")}>100LL</button>
+                    <button className={cn("planner-pill", filters.fuelUL91 && "active")} onClick={() => toggleFilter("fuelUL91")}>UL91</button>
                     <button className={cn("planner-pill", filters.fuelSP98 && "active")} onClick={() => toggleFilter("fuelSP98")}>SP98</button>
+                    <button className={cn("planner-pill", filters.fuelJetA1 && "active")} onClick={() => toggleFilter("fuelJetA1")}>Jet A1</button>
                   </div>
                 </div>
                 <label className="planner-check">
                   <input type="checkbox" checked={filters.excludeVisited} onChange={() => toggleFilter("excludeVisited")} />
                   <span className="planner-check-box"></span>
                   <span>Exclure les terrains déjà visités</span>
+                </label>
+                <label className="planner-check">
+                  <input type="checkbox" checked={filters.includePrivate} onChange={() => toggleFilter("includePrivate")} />
+                  <span className="planner-check-box"></span>
+                  <span>Inclure les terrains privés (accord du propriétaire requis)</span>
                 </label>
               </div>
             </div>

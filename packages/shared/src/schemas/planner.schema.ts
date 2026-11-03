@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SURFACE_TYPES } from "../constants";
+import { FUEL_TYPES, SURFACE_TYPES } from "../constants";
 
 export const AircraftProfileSchema = z.object({
   name: z.string().min(1).max(100).trim(),
@@ -9,6 +9,7 @@ export const AircraftProfileSchema = z.object({
   fuelRange: z.number().positive().max(5000),       // nm
   minRunwayLength: z.number().int().nonnegative().max(10000), // meters
   allowedSurfaces: z.array(z.enum(SURFACE_TYPES)).min(1),
+  fuelType: z.enum(FUEL_TYPES).nullable().optional(), // what the aircraft burns, to refuel on the way
 });
 
 export const PlannerQuerySchema = z.object({
@@ -39,6 +40,8 @@ export const PlannerQuerySchema = z.object({
   maxDistanceNm: z.number().positive().max(5000).optional(),
   sortBy: z.enum(["time", "cost", "distance"]).default("time"),
   excludeVisited: z.boolean().optional(),
+  // Private fields need the owner's permission: left out unless asked for.
+  includePrivate: z.boolean().optional(),
 
   // Destination filters
   filters: z
@@ -48,7 +51,9 @@ export const PlannerQuerySchema = z.object({
       hasBikes: z.boolean().optional(),
       hasAccommodation: z.boolean().optional(),
       fuel100LL: z.boolean().optional(),
+      fuelUL91: z.boolean().optional(),
       fuelSP98: z.boolean().optional(),
+      fuelJetA1: z.boolean().optional(),
     })
     .optional(),
 });
