@@ -83,7 +83,7 @@ pnpm infra:up
 
 # Run the automated setup (installs deps, creates .env files, migrates, seeds)
 pnpm install
-pnpm setup
+pnpm run setup        # not `pnpm setup`: that is pnpm's own command (it edits your shell profile)
 
 # Start development servers
 pnpm dev
@@ -99,7 +99,7 @@ pnpm infra:up
 pnpm install
 
 # Copy environment file and distribute to all packages
-# (or just run pnpm setup which does this automatically)
+# (or just run `pnpm run setup`, which does this automatically)
 cp .env.development .env
 cp .env.development packages/database/.env
 cp .env.development apps/api/.env
@@ -127,7 +127,7 @@ npm install -g pnpm
 
 # in the repo
 pnpm infra:up
-pnpm setup
+pnpm run setup        # not `pnpm setup`: that is pnpm's own command (it edits your shell profile)
 pnpm dev
 ```
 

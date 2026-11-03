@@ -111,6 +111,9 @@ to the code.
   `prisma migrate diff --from-schema <old> --to-schema prisma/schema.prisma --script`,
   with `"public".` names and `IF NOT EXISTS` where possible. `ALTER TYPE …
   ADD VALUE` is fine as long as the same file does not use the new value.
+  Every schema change needs its migration, enum values included: after
+  `pnpm db:migrate` locally, `prisma migrate diff --from-config-datasource
+  --to-schema prisma/schema.prisma --script` must print an empty migration.
 - Text from openAIP, OSM, Nominatim or Wikimedia is user-editable upstream:
   never put it in HTML strings (MapLibre `setHTML`, `innerHTML`); build DOM
   nodes (`apps/web/src/lib/map-popup.ts`). The CSP allows inline scripts.

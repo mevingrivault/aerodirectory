@@ -24,7 +24,7 @@ If `apps/api/.env` or `apps/web/.env.local` is missing, or the database is
 empty:
 
 ```bash
-pnpm setup         # copies .env.development everywhere, installs, migrates, seeds
+pnpm run setup     # copies .env.development everywhere, installs, migrates, seeds
 ```
 
 **Never** run `pnpm setup:remote` or use `.env.remote.local` without the

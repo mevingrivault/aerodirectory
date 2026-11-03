@@ -1,6 +1,18 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 
-const prisma = new PrismaClient();
+// Same connection as prisma.config.ts: packages/database/.env, or the local default.
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env: fall back below
+}
+const pool = new pg.Pool({
+  connectionString: process.env["DATABASE_URL"] ?? "postgresql://postgres:postgres@localhost:5432/aerodirectory?schema=public",
+});
+// Prisma 7 needs a driver adapter; a bare `new PrismaClient()` throws.
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 /**
  * Seeds the database with sample French aerodromes.
@@ -201,4 +213,7 @@ main()
     console.error("Seed failed:", e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  });

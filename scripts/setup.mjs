@@ -4,7 +4,7 @@
  * AeroDirectory — Automated Development Setup
  *
  * Usage: pnpm bootstrap
- *        pnpm setup
+ *        pnpm run setup     (`pnpm setup` alone runs pnpm's built-in command)
  *        pnpm setup:remote
  *        node scripts/setup.mjs [--remote]
  *
