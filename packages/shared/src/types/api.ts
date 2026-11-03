@@ -589,3 +589,44 @@ export interface AdminCommunityInfoListItem {
   aerodrome: { id: string; name: string; icaoCode: string | null };
   user: { id: string; displayName: string | null; email: string };
 }
+
+export interface BriefingField {
+  id: string;
+  name: string;
+  icaoCode: string | null;
+  latitude: number;
+  longitude: number;
+  elevation: number | null;
+  magneticDeclination: number | null;
+}
+
+/** POST /planner/briefing: the trip between two given fields, reachable or not. */
+export interface BriefingTrip {
+  departure: BriefingField;
+  destination: BriefingField;
+  aircraft: { name: string; tas: number; fuelConsumption: number; fuelRange: number; fuelType: string | null; category: string | null };
+  tripScope: "outbound" | "round_trip";
+  reserveMinutes: number;
+  distanceNm: number;
+  trueCourse: number;
+  returnTrueCourse: number;
+  /** True course minus the departure's declination (east positive); null when unknown. */
+  magneticCourse: number | null;
+  returnMagneticCourse: number | null;
+  timeHours: number;
+  fuelUsedLiters: number;
+  tripTimeHours: number;
+  tripFuelLiters: number;
+  usableRangeNm: number;
+  withinRange: boolean;
+  refuelRequired: boolean;
+  canRefuel: boolean;
+  fuelCost: number;
+  estimatedCost: number;
+  landingFee: PlannerResult["landingFee"];
+  fuelPrice: PlannerResult["fuelPrice"];
+  departureTime: string | null;
+  arrivalAt: string | null;
+  returnAt: string | null;
+  nightOperation: boolean | null;
+}

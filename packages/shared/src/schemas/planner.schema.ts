@@ -66,5 +66,20 @@ export const PlannerQuerySchema = z.object({
     .optional(),
 });
 
+/** One trip between two given fields, for the briefing: computed even when out of reach. */
+export const BriefingQuerySchema = z.object({
+  profileId: z.string().cuid(),
+  departureId: z.string().min(1).max(50),
+  destinationId: z.string().min(1).max(50),
+  tripScope: z.enum(["outbound", "round_trip"]).default("round_trip"),
+  reserveMinutes: z.number().int().min(0).max(120).default(30),
+  departureGroundMinutes: z.number().int().min(0).max(60).default(0),
+  arrivalGroundMinutes: z.number().int().min(0).max(60).default(0),
+  fuelPricePerLiter: z.number().nonnegative().max(10).optional(),
+  departureTime: z.string().datetime().optional(),
+  stayMinutes: z.number().int().min(0).max(1440).default(60),
+});
+
+export type BriefingQueryInput = z.infer<typeof BriefingQuerySchema>;
 export type AircraftProfileInput = z.infer<typeof AircraftProfileSchema>;
 export type PlannerQueryInput = z.infer<typeof PlannerQuerySchema>;

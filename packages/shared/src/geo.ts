@@ -25,3 +25,14 @@ export function haversineNm(lat1: number, lon1: number, lat2: number, lon2: numb
 export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   return haversine(lat1, lon1, lat2, lon2, EARTH_RADIUS_M);
 }
+
+/** Initial great-circle bearing from A to B, in whole degrees true (0–359). */
+export function initialBearing(latA: number, lonA: number, latB: number, lonB: number): number {
+  const rad = Math.PI / 180;
+  const φ1 = latA * rad;
+  const φ2 = latB * rad;
+  const Δλ = (lonB - lonA) * rad;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return Math.round(((Math.atan2(y, x) / rad) + 360) % 360) % 360;
+}

@@ -1,11 +1,30 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import type {
-  AircraftProfileInput,
-  PlannerQueryInput,
-  PlannerResult,
+import {
+  initialBearing,
+  type AircraftProfileInput,
+  type BriefingField,
+  type BriefingQueryInput,
+  type BriefingTrip,
+  type PlannerQueryInput,
+  type PlannerResult,
 } from "@aerodirectory/shared";
-import { buildDestinationWhere, checkNight, estimateLeg } from "./planner.calc";
+import { buildDestinationWhere, checkNight, computeTrip, estimateLeg } from "./planner.calc";
+
+const BRIEFING_FIELD_SELECT = {
+  id: true,
+  name: true,
+  icaoCode: true,
+  latitude: true,
+  longitude: true,
+  elevation: true,
+  magneticDeclination: true,
+} as const;
+
+/** Magnetic = true − declination (east positive), in [0, 360). */
+function magnetic(trueCourse: number, declination: number | null): number | null {
+  return declination == null ? null : Math.round((((trueCourse - declination) % 360) + 360) % 360) % 360;
+}
 
 @Injectable()
 export class PlannerService {
@@ -116,6 +135,55 @@ export class PlannerService {
     }
 
     return results;
+  }
+
+  /** The trip between two given fields, computed even when out of reach so the briefing can say so. */
+  async briefing(userId: string, input: BriefingQueryInput): Promise<BriefingTrip> {
+    const [profile, departure, destination] = await Promise.all([
+      this.prisma.aircraftProfile.findFirst({ where: { id: input.profileId, userId } }),
+      this.prisma.aerodrome.findUnique({ where: { id: input.departureId }, select: BRIEFING_FIELD_SELECT }),
+      this.prisma.aerodrome.findUnique({
+        where: { id: input.destinationId },
+        select: { ...BRIEFING_FIELD_SELECT, fuels: { where: { available: true }, select: { type: true } } },
+      }),
+    ]);
+    if (!profile) throw new NotFoundException("Aircraft profile not found");
+    if (!departure || !destination) throw new NotFoundException("Aérodrome introuvable.");
+
+    const report = (await this.memberReports([destination.id], profile)).get(destination.id);
+    const trip = { ...input, departureLat: departure.latitude, departureLng: departure.longitude };
+    const estimate = computeTrip(profile, trip, { ...destination, landingFee: report?.landingFee?.amount });
+    const night = checkNight(trip, estimate, departure, destination);
+
+    const trueCourse = initialBearing(departure.latitude, departure.longitude, destination.latitude, destination.longitude);
+    const returnTrueCourse = initialBearing(destination.latitude, destination.longitude, departure.latitude, departure.longitude);
+    const { fuels: _fuels, ...destinationField } = destination;
+
+    return {
+      departure: departure satisfies BriefingField,
+      destination: destinationField satisfies BriefingField,
+      aircraft: {
+        name: profile.name,
+        tas: profile.tas,
+        fuelConsumption: profile.fuelConsumption,
+        fuelRange: profile.fuelRange,
+        fuelType: profile.fuelType,
+        category: profile.category,
+      },
+      tripScope: input.tripScope,
+      reserveMinutes: input.reserveMinutes,
+      ...estimate,
+      trueCourse,
+      returnTrueCourse,
+      magneticCourse: magnetic(trueCourse, departure.magneticDeclination),
+      returnMagneticCourse: magnetic(returnTrueCourse, destination.magneticDeclination),
+      landingFee: report?.landingFee ?? null,
+      fuelPrice: report?.fuelPrice ?? null,
+      departureTime: input.departureTime ?? null,
+      arrivalAt: night?.arrivalAt ?? null,
+      returnAt: night?.returnAt ?? null,
+      nightOperation: night?.nightOperation ?? null,
+    };
   }
 
   /**

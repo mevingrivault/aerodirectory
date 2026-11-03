@@ -6,6 +6,7 @@ import { CacheService } from "../common/cache.service";
 import { Prisma } from "@aerodirectory/database";
 import { distanceToArea, nearestPointOnLine, type AreaGeometry } from "../services/importers/ign/protected-areas.geometry";
 import {
+  initialBearing,
   haversineKm,
   type AerodromeCreateInput,
   type AerodromeUpdateInput,
@@ -34,16 +35,7 @@ export function windRose(counts: number[][], calm: number, observations: number)
   return { sectors, calm: pct(calm), prevailingHeading: prevailing.heading, observations };
 }
 
-/** Initial great-circle bearing from A to B, in whole degrees true (0–359). */
-export function initialBearing(latA: number, lonA: number, latB: number, lonB: number): number {
-  const rad = Math.PI / 180;
-  const φ1 = latA * rad;
-  const φ2 = latB * rad;
-  const Δλ = (lonB - lonA) * rad;
-  const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-  return Math.round(((Math.atan2(y, x) / rad) + 360) % 360) % 360;
-}
+export { initialBearing };
 
 export interface AdminActor {
   adminId: string;

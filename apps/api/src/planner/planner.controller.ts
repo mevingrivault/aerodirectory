@@ -7,6 +7,8 @@ import {
   Param,
   Body,
   Query,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import { PlannerService } from "./planner.service";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
@@ -15,6 +17,8 @@ import { CurrentUser } from "../common/decorators";
 import {
   AircraftProfileSchema,
   PlannerQuerySchema,
+  BriefingQuerySchema,
+  type BriefingQueryInput,
   type AircraftProfileInput,
   type PlannerQueryInput,
 } from "@aerodirectory/shared";
@@ -62,6 +66,15 @@ export class PlannerController {
   }
 
   // ─── Flight plan calculation ─────────────────────────
+
+  @Post("briefing")
+  @HttpCode(HttpStatus.OK)
+  async briefing(
+    @CurrentUser() user: { sub: string },
+    @Body(new ZodValidationPipe(BriefingQuerySchema)) body: BriefingQueryInput,
+  ) {
+    return ok(await this.planner.briefing(user.sub, body));
+  }
 
   @Post("calculate")
   async calculate(

@@ -82,3 +82,62 @@ describe("PlannerService.plan with member reports", () => {
     expect(result!.nightOperation).toBeNull();
   });
 });
+
+describe("PlannerService.briefing", () => {
+  const field = (id: string, latitude: number, longitude: number, magneticDeclination: number | null) => ({
+    id,
+    name: id,
+    icaoCode: null,
+    latitude,
+    longitude,
+    elevation: 500,
+    magneticDeclination,
+  });
+
+  function buildBriefing(found: { profile?: unknown; destination?: unknown }) {
+    const prisma = {
+      aircraftProfile: { findFirst: vi.fn().mockResolvedValue("profile" in found ? found.profile : profile) },
+      aerodrome: {
+        findUnique: vi.fn(({ where }: { where: { id: string } }) =>
+          Promise.resolve(where.id === "dep" ? field("dep", 0, 0, 2) : (found.destination ?? null)),
+        ),
+      },
+      communityInfo: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    return { prisma, service: new PlannerService(prisma as never) };
+  }
+  const query = {
+    profileId: "p1",
+    departureId: "dep",
+    destinationId: "dest",
+    tripScope: "round_trip" as const,
+    reserveMinutes: 0,
+    departureGroundMinutes: 0,
+    arrivalGroundMinutes: 0,
+    stayMinutes: 60,
+  };
+
+  it("gives the courses both ways, true and magnetic", async () => {
+    const { service } = buildBriefing({ destination: { ...field("dest", 0, 1, null), fuels: [] } });
+    const trip = await service.briefing("u1", query);
+
+    expect(trip.trueCourse).toBe(90);
+    expect(trip.returnTrueCourse).toBe(270);
+    expect(trip.magneticCourse).toBe(88); // 2° east
+    expect(trip.returnMagneticCourse).toBeNull(); // unknown at the destination
+    expect(trip.withinRange).toBe(true);
+  });
+
+  it("still answers for a field out of reach, and says so", async () => {
+    const { service } = buildBriefing({ destination: { ...field("dest", 0, 5, null), fuels: [] } });
+    const trip = await service.briefing("u1", query);
+
+    expect(trip.distanceNm).toBeGreaterThan(290);
+    expect(trip.withinRange).toBe(false);
+  });
+
+  it("refuses another member's aircraft and unknown fields", async () => {
+    await expect(buildBriefing({ profile: null }).service.briefing("u1", query)).rejects.toThrow(/profile/i);
+    await expect(buildBriefing({}).service.briefing("u1", query)).rejects.toThrow(/introuvable/);
+  });
+});

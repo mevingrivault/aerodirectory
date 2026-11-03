@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
 import type { NotificationItem } from "@aerodirectory/shared";
 import {
+  ClipboardList,
   Plane,
   Search,
   Map,
@@ -29,6 +30,7 @@ const navLinks = (isAuthenticated: boolean) => [
     ? [
         { href: "/aerodex", icon: BookOpen, label: "Carnet" },
         { href: "/planner", icon: Navigation, label: "Planificateur" },
+        { href: "/briefing", icon: ClipboardList, label: "Briefing" },
       ]
     : []),
 ];

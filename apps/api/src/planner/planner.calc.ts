@@ -81,33 +81,42 @@ export function buildDestinationWhere(
   };
 }
 
-/**
- * Time, fuel and cost to a destination, or null when it is out of reach or
- * breaks the query's limits. Straight line, no wind.
- *
- * The reserve is taken off the range. Without refuelling, a round trip must
- * fit in the usable range; when the destination sells the aircraft's fuel,
- * each leg only has to.
- */
-export function estimateLeg(
-  aircraft: PlannerAircraft,
-  input: PlannerQueryInput,
-  destination: PlannerDestination,
-): LegEstimate | null {
-  const distanceNm = haversineNm(input.departureLat, input.departureLng, destination.latitude, destination.longitude);
-  if (distanceNm < 0.5) return null; // the departure field itself
-  if (input.minDistanceNm && distanceNm < input.minDistanceNm) return null;
-  if (input.maxDistanceNm && distanceNm > input.maxDistanceNm) return null;
+/** What a trip needs from the query, whether it comes from the planner or a briefing. */
+export type TripInput = Pick<
+  PlannerQueryInput,
+  | "departureLat"
+  | "departureLng"
+  | "tripScope"
+  | "reserveMinutes"
+  | "departureGroundMinutes"
+  | "arrivalGroundMinutes"
+  | "fuelPricePerLiter"
+  | "departureTime"
+  | "stayMinutes"
+>;
 
+export interface TripEstimate extends LegEstimate {
+  usableRangeNm: number;
+  /** One tank covers the trip, or each leg of it when the destination sells the aircraft's fuel. */
+  withinRange: boolean;
+}
+
+/**
+ * Time, fuel and cost to a destination, reachable or not. Straight line,
+ * no wind. The reserve is taken off the range. Without refuelling, a round
+ * trip must fit in the usable range; when the destination sells the
+ * aircraft's fuel, each leg only has to.
+ */
+export function computeTrip(aircraft: PlannerAircraft, input: TripInput, destination: PlannerDestination): TripEstimate {
+  const distanceNm = haversineNm(input.departureLat, input.departureLng, destination.latitude, destination.longitude);
   const isRoundTrip = (input.tripScope ?? "round_trip") === "round_trip";
   const legs = isRoundTrip ? 2 : 1;
   const reserveNm = ((input.reserveMinutes ?? 30) / 60) * aircraft.tas;
   const usableRangeNm = Math.max(0, aircraft.fuelRange - reserveNm);
 
   const canRefuel = aircraft.fuelType != null && destination.fuels.some((f) => f.type === aircraft.fuelType);
-  if (distanceNm > usableRangeNm) return null;
   const refuelRequired = isRoundTrip && distanceNm * 2 > usableRangeNm;
-  if (refuelRequired && !canRefuel) return null;
+  const withinRange = distanceNm <= usableRangeNm && (!refuelRequired || canRefuel);
 
   const groundTimeHours = (((input.departureGroundMinutes ?? 0) + (input.arrivalGroundMinutes ?? 0)) / 60) * legs;
   const timeHours = distanceNm / aircraft.tas;
@@ -117,13 +126,6 @@ export function estimateLeg(
 
   const fuelCost = round2(tripFuelLiters * (input.fuelPricePerLiter ?? 0));
   const estimatedCost = round2(fuelCost + round2(tripTimeHours * aircraft.hourlyCost) + (destination.landingFee ?? 0));
-
-  if (input.searchMode === "time" && input.maxTimeMinutes !== undefined && tripTimeHours * 60 > input.maxTimeMinutes) {
-    return null;
-  }
-  if (input.searchMode === "cost" && input.maxCost !== undefined && estimatedCost > input.maxCost) {
-    return null;
-  }
 
   return {
     distanceNm: round1(distanceNm),
@@ -135,7 +137,31 @@ export function estimateLeg(
     estimatedCost,
     refuelRequired,
     canRefuel,
+    usableRangeNm: round1(usableRangeNm),
+    withinRange,
   };
+}
+
+/** computeTrip, or null when the destination is out of reach or breaks the query's limits. */
+export function estimateLeg(
+  aircraft: PlannerAircraft,
+  input: PlannerQueryInput,
+  destination: PlannerDestination,
+): LegEstimate | null {
+  const trip = computeTrip(aircraft, input, destination);
+  const distanceNm = trip.distanceNm;
+  if (distanceNm < 0.5) return null; // the departure field itself
+  if (input.minDistanceNm && distanceNm < input.minDistanceNm) return null;
+  if (input.maxDistanceNm && distanceNm > input.maxDistanceNm) return null;
+  if (!trip.withinRange) return null;
+  if (input.searchMode === "time" && input.maxTimeMinutes !== undefined && trip.tripTimeHours * 60 > input.maxTimeMinutes) {
+    return null;
+  }
+  if (input.searchMode === "cost" && input.maxCost !== undefined && trip.estimatedCost > input.maxCost) {
+    return null;
+  }
+  const { usableRangeNm: _range, withinRange: _within, ...leg } = trip;
+  return leg;
 }
 
 export interface Place {
@@ -163,7 +189,7 @@ export function isAeronauticalNight(at: Date, place: Place): boolean {
  * landing is checked against aeronautical night at its own field.
  */
 export function checkNight(
-  input: PlannerQueryInput,
+  input: TripInput,
   leg: Pick<LegEstimate, "timeHours">,
   departure: Place,
   destination: Place,

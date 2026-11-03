@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { cn, formatNm, formatFlightTime, formatEuros } from "@/lib/utils";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { PlannerResult, SavedSearchItem } from "@aerodirectory/shared";
 import { popupContent } from "@/lib/map-popup";
 import { formatPricePerLiter, isStale } from "@/lib/community-info";
@@ -427,7 +428,8 @@ function PlannerMap({ departure, results }: { departure: AerodromeOption | null;
 
 // ─── ResultRow ───────────────────────────────────────────────────────────────
 
-function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope: TripScope }) {
+function ResultRow({ result: r, tripScope, briefingHref }: { result: PlannerResult; tripScope: TripScope; briefingHref: string | null }) {
+  const router = useRouter();
   const displayTime = tripScope === "round_trip" ? r.tripTimeHours : r.timeHours;
   const displayFuel = tripScope === "round_trip" ? r.tripFuelLiters : r.fuelUsedLiters;
   const isUlm = false;
@@ -550,6 +552,17 @@ function ResultRow({ result: r, tripScope }: { result: PlannerResult; tripScope:
               </div>
               <div className="result-price-sub">{r.landingFee ? "estimé, taxe incluse" : "estimé"}</div>
             </div>
+          )}
+          {briefingHref && (
+            <button
+              type="button"
+              className="planner-btn-secondary"
+              style={{ height: 30, fontSize: 12 }}
+              // The row is a link to the sheet: open the briefing instead.
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`${briefingHref}&to=${r.aerodrome.id}`); }}
+            >
+              Briefing
+            </button>
           )}
           <svg style={{width:16,height:16,flexShrink:0,color:"var(--ink-400)"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="m9 18 6-6-6-6"/>
@@ -997,6 +1010,27 @@ export default function PlannerPage() {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
+
+  // Same trip settings as the search, so the briefing matches the result.
+  const briefingHref = (() => {
+    if (!departureAerodrome || !selectedProfileId) return null;
+    const qs = new URLSearchParams({
+      from: departureAerodrome.id,
+      profile: selectedProfileId,
+      scope: tripScope,
+      reserve: String(reserveMinutes),
+      gdep: String(parseInt(departureGroundMinutes) || 0),
+      garr: String(parseInt(arrivalGroundMinutes) || 0),
+    });
+    const fuelPrice = parseFloat(fuelPricePerLiter);
+    if (fuelPrice > 0) qs.set("fuel", String(fuelPrice));
+    const at = departureTime ? new Date(departureTime) : null;
+    if (at && !Number.isNaN(at.getTime())) {
+      qs.set("dep", at.toISOString());
+      qs.set("stay", String(parseInt(stayMinutes) || 0));
+    }
+    return `/briefing?${qs.toString()}`;
+  })();
 
   const downloadFile = (filename: string, content: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -2321,7 +2355,7 @@ export default function PlannerPage() {
                           {!isCollapsed && (
                             <div>
                               {items.map((r) => (
-                                <ResultRow key={r.aerodrome.id} result={r} tripScope={tripScope} />
+                                <ResultRow key={r.aerodrome.id} result={r} tripScope={tripScope} briefingHref={briefingHref} />
                               ))}
                             </div>
                           )}
