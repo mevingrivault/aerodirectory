@@ -132,6 +132,54 @@ export class CommunityInfoService {
     return created;
   }
 
+  /**
+   * "Still valid": a member saw the same thing again. The newest approved
+   * entry is copied with today's date, published at once since nothing but
+   * the date changes. Webcams have no date that matters.
+   */
+  async confirm(userId: string, aerodromeId: string, id: string, ip?: string) {
+    const info = await this.prisma.communityInfo.findFirst({
+      where: { id, aerodromeId, contentStatus: "APPROVED", kind: { not: "WEBCAM" } },
+      select: { id: true, kind: true, key: true, data: true },
+    });
+    if (!info) throw new NotFoundException("Information introuvable.");
+
+    const latest = await this.prisma.communityInfo.findFirst({
+      where: { aerodromeId, kind: info.kind, key: info.key, contentStatus: "APPROVED" },
+      orderBy: [{ observedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, observedAt: true },
+    });
+    if (latest?.id !== info.id) {
+      throw new ConflictException("Une information plus récente a été publiée entre-temps.");
+    }
+    const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+    if (latest.observedAt.getTime() >= today.getTime()) {
+      throw new ConflictException("Cette information a déjà été confirmée aujourd'hui.");
+    }
+
+    const created = await this.prisma.communityInfo.create({
+      data: {
+        userId,
+        aerodromeId,
+        kind: info.kind,
+        key: info.key,
+        data: info.data as Prisma.InputJsonValue,
+        observedAt: today,
+        contentStatus: "APPROVED",
+      },
+      select: { id: true, observedAt: true },
+    });
+
+    await this.audit.log({
+      userId,
+      action: "COMMUNITY_INFO_PROPOSE",
+      ip,
+      metadata: { communityInfoId: created.id, aerodromeId, kind: info.kind, key: info.key, confirms: info.id },
+    });
+
+    return { id: created.id, observedAt: created.observedAt.toISOString() };
+  }
+
   async listForAdmin(query: AdminCommunityInfosQueryInput) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;

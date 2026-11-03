@@ -3,7 +3,7 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, ExternalLink, Plus, Send } from "lucide-react";
+import { Camera, Check, ExternalLink, Plus, Send } from "lucide-react";
 import {
   FEE_CATEGORIES,
   FUEL_TYPES,
@@ -42,15 +42,50 @@ function observedLine(item: CommunityInfoItem) {
   return `constaté le ${date}${item.user.displayName ? ` par ${item.user.displayName}` : ""}`;
 }
 
-function InfoRow({ item }: { item: CommunityInfoItem }) {
+const observedToday = (item: CommunityInfoItem) => item.observedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
+
+function InfoRow({ item, aerodromeId, loggedIn }: { item: CommunityInfoItem; aerodromeId: string; loggedIn: boolean }) {
+  const queryClient = useQueryClient();
+  const solveAltcha = useAltchaAuto();
+  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  const [error, setError] = useState("");
   const stale = isStale(item);
+
+  // Same data, seen again today: published at once, since only the date changes.
+  const confirm = async () => {
+    setState("sending");
+    setError("");
+    try {
+      const altcha = await solveAltcha();
+      await apiClient.post(`/aerodromes/${aerodromeId}/community-info/${item.id}/confirm`, {}, altcha ? { "x-altcha": altcha } : undefined);
+      setState("done");
+      await queryClient.invalidateQueries({ queryKey: ["aerodrome-community-info", aerodromeId] });
+    } catch (err) {
+      setState("idle");
+      setError(err instanceof Error ? err.message : "Confirmation impossible.");
+    }
+  };
+
   return (
-    <div style={row}>
+    <div style={{ ...row, flexWrap: "wrap" }}>
       <span style={{ color: stale ? "var(--ink-500)" : "var(--ink-800)" }}>{communityInfoSummary(item)}</span>
       <span style={meta}>
         {stale && <span style={{ color: "oklch(0.55 0.13 60)", fontWeight: 600, marginRight: 6 }}>À vérifier</span>}
         {observedLine(item)}
+        {loggedIn && !observedToday(item) && state !== "done" && (
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={state === "sending"}
+            title="Vous avez constaté la même chose aujourd'hui"
+            style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, border: "1px solid var(--ink-200)", background: "white", fontSize: 11, color: "var(--ink-700)", cursor: "pointer", fontFamily: "inherit" }}
+          >
+            <Check className="h-3 w-3" /> {state === "sending" ? "Envoi…" : "Toujours valable"}
+          </button>
+        )}
+        {state === "done" && <span style={{ marginLeft: 8, color: "var(--terrain-700, green)" }}>Merci, confirmé</span>}
       </span>
+      {error && <span style={{ width: "100%", fontSize: 11, color: "oklch(0.5 0.18 25)" }}>{error}</span>}
     </div>
   );
 }
@@ -106,13 +141,13 @@ export function CommunityInfoSection({
       {groups.map((g) => (
         <div key={g.kind} style={{ marginBottom: 16 }}>
           <p style={groupTitle}>{g.title}</p>
-          {g.items.map((item) => <InfoRow key={item.id} item={item} />)}
+          {g.items.map((item) => <InfoRow key={item.id} item={item} aerodromeId={aerodromeId} loggedIn={loggedIn} />)}
         </div>
       ))}
       {info && <div style={{ marginBottom: 16 }}><WebcamLinks info={info} /></div>}
 
       <p style={{ fontSize: 11, color: "var(--ink-500)", margin: "0 0 12px" }}>
-        Informations partagées par les membres et vérifiées par un administrateur avant publication. Les prix changent : confirmez auprès du terrain.
+        Informations partagées par les membres et vérifiées par un administrateur avant publication ; « Toujours valable » redate une information sans la modifier. Les prix changent : confirmez auprès du terrain.
       </p>
 
       {!loggedIn ? (

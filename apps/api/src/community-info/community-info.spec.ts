@@ -89,3 +89,44 @@ describe("CommunityInfoService.propose", () => {
     expect(prisma.communityInfo.create).not.toHaveBeenCalled();
   });
 });
+
+describe("CommunityInfoService.confirm", () => {
+  const entry = { id: "ci1", kind: "FUEL_PRICE", key: "AVGAS_100LL", data: { fuelType: "AVGAS_100LL", pricePerLiter: 2.95 } };
+  const build = (latest: { id: string; observedAt: Date } | null, found: unknown = entry) => {
+    const prisma = {
+      communityInfo: {
+        findFirst: vi.fn().mockResolvedValueOnce(found).mockResolvedValueOnce(latest),
+        create: vi.fn().mockResolvedValue({ id: "ci2", observedAt: new Date() }),
+      },
+    };
+    const audit = { log: vi.fn() };
+    return { prisma, audit, service: new CommunityInfoService(prisma as never, audit as never, {} as never) };
+  };
+
+  it("republishes the same data dated today, with the confirmation traced", async () => {
+    const { service, prisma, audit } = build({ id: "ci1", observedAt: new Date("2026-01-10T00:00:00Z") });
+    await service.confirm("u2", "ad1", "ci1");
+
+    expect(prisma.communityInfo.findFirst).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ where: { id: "ci1", aerodromeId: "ad1", contentStatus: "APPROVED", kind: { not: "WEBCAM" } } }),
+    );
+    expect(prisma.communityInfo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "u2",
+          data: entry.data,
+          contentStatus: "APPROVED",
+          observedAt: new Date(`${today}T00:00:00Z`),
+        }),
+      }),
+    );
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ confirms: "ci1" }) }));
+  });
+
+  it("only confirms the newest entry, once a day", async () => {
+    await expect(build({ id: "newer", observedAt: new Date("2026-01-10") }).service.confirm("u2", "ad1", "ci1")).rejects.toBeInstanceOf(ConflictException);
+    await expect(build({ id: "ci1", observedAt: new Date(`${today}T00:00:00Z`) }).service.confirm("u2", "ad1", "ci1")).rejects.toBeInstanceOf(ConflictException);
+    await expect(build(null, null).service.confirm("u2", "ad1", "ci1")).rejects.toThrow(/introuvable/);
+  });
+});

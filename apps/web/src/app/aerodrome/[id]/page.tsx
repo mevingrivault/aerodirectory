@@ -702,6 +702,8 @@ export default function AerodromeDetailPage() {
   const [optimisticVisitStatus, setOptimisticVisitStatus] = useState<string | null>(null);
   const [visitActionStarted, setVisitActionStarted] = useState(false);
   const [isVisitUpdating, setIsVisitUpdating] = useState(false);
+  // Just added to the Aérodex: invite the member to update what they saw there.
+  const [visitPrompt, setVisitPrompt] = useState(false);
 
   const addToListMutation = useMutation({
     mutationFn: (listId: string) =>
@@ -772,6 +774,7 @@ export default function AerodromeDetailPage() {
 
     try {
       await apiClient.put(`/visits/${id}`, { status: nextStatus });
+      setVisitPrompt(nextStatus === "VISITED" && currentVisitStatus !== "VISITED" && currentVisitStatus !== "FAVORITE");
       await Promise.all([
         refetchVisit(),
         queryClient.invalidateQueries({ queryKey: ["visits"] }),
@@ -1195,6 +1198,25 @@ export default function AerodromeDetailPage() {
       <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">
 
         {/* TABS */}
+        {visitPrompt && (
+          <div role="status" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: "12px 16px", marginBottom: 16, borderRadius: 10, border: "1px solid var(--brass-200, oklch(0.88 0.06 85))", background: "var(--brass-50, oklch(0.97 0.03 85))", fontSize: 13 }}>
+            <span style={{ flex: 1, minWidth: 220 }}>
+              Ajouté à votre Aérodex. Vous y étiez récemment ? Un prix, une taxe ou un hangar à confirmer ou à corriger aide les prochains pilotes.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("infos");
+                setVisitPrompt(false);
+                setTimeout(() => document.getElementById("infos-pratiques")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+              }}
+              style={{ height: 32, padding: "0 12px", borderRadius: 8, border: "1px solid var(--ink-300)", background: "white", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Mettre à jour les infos pratiques
+            </button>
+            <button type="button" aria-label="Fermer" onClick={() => setVisitPrompt(false)} style={{ background: "transparent", border: 0, cursor: "pointer", fontSize: 18, lineHeight: 1, color: "var(--ink-500)" }}>×</button>
+          </div>
+        )}
         <div role="tablist" className="sticky top-16 z-20 -mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-(--ink-200) bg-(--paper-50) px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           {([
             { key: "infos",      label: "Infos" },
@@ -1432,7 +1454,7 @@ export default function AerodromeDetailPage() {
                   </div>
                 </section>
 
-                <section style={{ marginBottom: 20 }}>
+                <section id="infos-pratiques" style={{ marginBottom: 20, scrollMarginTop: 120 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                     <div style={{ ...sectionMark, background: "var(--brass-100)", color: "var(--brass-700)" }}><Info className="h-3.5 w-3.5" /></div>
                     <h2 style={sectionH2}>Infos pratiques</h2>

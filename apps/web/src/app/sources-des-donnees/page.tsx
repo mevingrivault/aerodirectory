@@ -196,7 +196,9 @@ export default function SourcesPage() {
               Aucune source ouverte ne publie les prix carburant ou les taxes des aérodromes français : ces
               informations viennent uniquement des pilotes qui y sont passés. Chacune porte la date à laquelle elle
               a été constatée. La plus récente remplace la précédente, et un prix de plus de six mois ou une taxe
-              de plus d&apos;un an est signalé « À vérifier ». Confirmez toujours auprès du terrain.
+              de plus d&apos;un an est signalé « À vérifier ». Un membre qui constate la même chose peut la marquer
+              « Toujours valable » : l&apos;information est redatée sans être modifiée, donc sans nouvelle validation.
+              Confirmez toujours auprès du terrain.
             </p>
             <p>
               Les conditions de publication sont décrites dans les <Link href="/cgu" className="underline underline-offset-4">CGU</Link>.

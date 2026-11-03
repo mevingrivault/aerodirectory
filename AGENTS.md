@@ -41,7 +41,9 @@ there.
 
 Fuel prices, fees, hangars and member webcam links are not imported: members
 propose them (`community-info/`, moderated, dated) and the sheet shows the
-newest approved entry per kind and key.
+newest approved entry per kind and key. "Toujours valable" (`:id/confirm`)
+copies the newest approved entry with today's date, published without review
+since only the date changes.
 
 Runtime calls to outside services: CheckWX (METAR/TAF, `metar/`) and HEAD
 requests to the SIA for the current AIRAC cycle's VAC/AD 2 (`sia/`), both

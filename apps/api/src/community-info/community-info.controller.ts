@@ -36,6 +36,18 @@ export class CommunityInfoController {
   ) {
     return ok(await this.communityInfo.propose(user.sub, aerodromeId, body, req.ip));
   }
+
+  @UseGuards(AltchaGuard)
+  @Throttle({ short: { limit: 3, ttl: 60000 }, medium: { limit: 20, ttl: 3600000 } })
+  @Post(":id/confirm")
+  async confirm(
+    @CurrentUser() user: { sub: string },
+    @Param("aerodromeId") aerodromeId: string,
+    @Param("id") id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return ok(await this.communityInfo.confirm(user.sub, aerodromeId, id, req.ip));
+  }
 }
 
 @Controller("admin/community-infos")
